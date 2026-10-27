@@ -226,6 +226,11 @@ public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
                     .setPrettyPrinting()
                     .create();
             ProtocolMultiChannelMappings mappings = new ProtocolMultiChannelMappings();
+            // Preserve proxy mappings for versions no longer supported by Fabric.
+            for (int protocol : new int[]{755, 756}) {
+                final ProtocolMultiChannelMappings.VersionMapping retained = ProtocolMultiChannelMappings.INSTANCE.mappings.get(protocol);
+                if (retained != null) mappings.mappings.put(protocol, retained);
+            }
             Path path = Path.of("channelMappings.json");
             try {
                 mappings = gson.fromJson(Files.readString(path), ProtocolMultiChannelMappings.class);
