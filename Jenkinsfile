@@ -9,7 +9,7 @@ pipeline {
         }
         stage('Build') {
             tools {
-                jdk "OpenJDK 21"
+                jdk "OpenJDK 25"
             }
             steps {
                 withMaven(

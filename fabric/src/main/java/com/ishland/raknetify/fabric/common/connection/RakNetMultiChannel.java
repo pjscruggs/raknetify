@@ -29,7 +29,10 @@ import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.MappingResolver;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.HashSet;
+import java.util.Properties;
 import java.util.Set;
 
 public class RakNetMultiChannel {
@@ -37,21 +40,34 @@ public class RakNetMultiChannel {
     private RakNetMultiChannel() {
     }
 
+    private static final Properties packetNames = loadPacketNames();
+
+    private static Properties loadPacketNames() {
+        final Properties names = new Properties();
+        try (InputStream input = RakNetMultiChannel.class.getResourceAsStream("/raknetify-packet-names.properties")) {
+            if (input != null) names.load(input);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to load packet names", e);
+        }
+        return names;
+    }
+
     private static Set<Class<?>> createClassSet(String[] classNames) {
         final MappingResolver mappingResolver = FabricLoader.getInstance().getMappingResolver();
         final boolean isIntermediaryNamespace = mappingResolver.getCurrentRuntimeNamespace().equals("intermediary");
         final HashSet<Class<?>> classHashSet = new HashSet<>();
         for (String className : classNames) {
-            final String intermediary = mappingResolver.mapClassName("intermediary", className.replace('/', '.'));
-            if (!isIntermediaryNamespace && intermediary.equals(className))
-                //noinspection RedundantStringFormatCall
-                System.err.println("Raknetify: Warning: Failed to remap %s for raknet multi-channel".formatted(intermediary));
-            try {
-                classHashSet.add(Class.forName(intermediary, false, RakNetMultiChannel.class.getClassLoader()));
-            } catch (ClassNotFoundException e) {
-                if (Boolean.getBoolean("raknetify.printNotFoundClasses")) {
-                    //noinspection RedundantStringFormatCall
-                    System.out.println("Raknetify: Warning: %s not found for raknet multi-channel".formatted(intermediary));
+            final String sourceName = className.replace('/', '.');
+            final String mappedName = mappingResolver.mapClassName("intermediary", sourceName);
+            final String names = mappedName.equals(sourceName) && !isIntermediaryNamespace
+                    ? packetNames.getProperty(sourceName, mappedName) : mappedName;
+            for (String name : names.split(",")) {
+                try {
+                    classHashSet.add(Class.forName(name, false, RakNetMultiChannel.class.getClassLoader()));
+                } catch (ClassNotFoundException e) {
+                    if (Boolean.getBoolean("raknetify.printNotFoundClasses")) {
+                        System.out.println("Raknetify: Warning: %s not found for raknet multi-channel".formatted(name));
+                    }
                 }
             }
         }
@@ -89,6 +105,9 @@ public class RakNetMultiChannel {
 
     // Primarily used for interactions independent to world
     private static final Set<Class<?>> channel1 = createClassSet(new String[]{
+            "net/minecraft/class_1_71", // LowDiskSpaceWarningS2CPacket
+            "net/minecraft/class_1_130", // SetGameRuleC2SPacket
+            "net/minecraft/class_1_132", // GameRuleValuesS2CPacket
             "net/minecraft/class_2629", // BossBarS2C
             "net/minecraft/class_5888", // ClearTitleS2C
             "net/minecraft/class_5903", // SubtitleS2C
@@ -181,6 +200,9 @@ public class RakNetMultiChannel {
 
     // Entities related stuff
     private static final Set<Class<?>> channel2 = createClassSet(new String[]{
+            "net/minecraft/class_1_126", // AttackC2SPacket
+            "net/minecraft/class_1_1438", // HandSwingC2SPacket
+            "net/minecraft/class_1_1444", // SwingAnimationS2CPacket
             "net/minecraft/class_5890", // EndCombatS2C
             "net/minecraft/class_5891", // EnterCombatS2C
             "net/minecraft/class_2716", // EntitiesDestroyS2C
@@ -250,6 +272,7 @@ public class RakNetMultiChannel {
 
     // Primarily used for interactions dependent to world
     private static final Set<Class<?>> channel3 = createClassSet(new String[]{
+            "net/minecraft/class_1_133", // SpectateEntityC2SPacket
             "net/minecraft/class_2884", // SpectatorTeleportC2S
             "net/minecraft/class_2793", // TeleportConfirmC2S
 
@@ -320,6 +343,7 @@ public class RakNetMultiChannel {
 
     // Primarily for packets not very critical to interactions
     private static final Set<Class<?>> channel4 = createClassSet(new String[]{
+            "net/minecraft/class_1_1290", // PostEffectsS2CPacket
             "net/minecraft/class_2683", // MapUpdateS2C
             "net/minecraft/class_2660", // PlaySoundIdS2C
             "net/minecraft/class_2765", // PlaySoundFromEntityS2C
@@ -332,6 +356,7 @@ public class RakNetMultiChannel {
 
     // Used for worlds
     private static final Set<Class<?>> channel7 = createClassSet(new String[]{
+            "net/minecraft/class_1_1680", // AddTransientBlockS2CPacket
             "net/minecraft/class_5194", // JigsawGeneratingC2S
             "net/minecraft/class_2693", // SignEditorOpenS2C
             "net/minecraft/class_2877", // UpdateSignC2S
