@@ -138,6 +138,7 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
                     compressedFrameData.release();
                     if (payload != null) payload.release();
                 }
+                return;
             } else if (compressedFrameData.getPacketId() == compressedPacketId && compressedFrameData.getReliability().isReliable && compressedFrameData.getReliability().isOrdered && !compressedFrameData.getReliability().isSequenced && inflaters[compressedFrameData.getOrderChannel()] != null) {
                 final int orderChannel = compressedFrameData.getOrderChannel();
                 final Inflater inflater = inflaters[orderChannel];
