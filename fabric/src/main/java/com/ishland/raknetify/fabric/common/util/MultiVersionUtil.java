@@ -62,6 +62,7 @@ public class MultiVersionUtil {
 
     public static final VarHandle ServerPlayNetworkHandler$connection;
     public static final VarHandle ClientPlayNetworkHandler$connection;
+    private static final VarHandle ClientConnection$encrypted;
     public static final VarHandle ServerPlayerEntity$pingMillis1_20_1;
     public static final Class<?> clazzNetworkStatePacketHandler;
     public static final VarHandle NetworkStatePacketHandler$backingHandler1_20_2;
@@ -76,6 +77,11 @@ public class MultiVersionUtil {
     static {
         try {
             final MappingResolver resolver = FabricLoader.getInstance().getMappingResolver();
+
+            final Field encrypted = getOrNull(() -> ClientConnection.class.getDeclaredField(
+                    resolver.mapFieldName(INTERMEDIARY, "net.minecraft.class_2535", "field_11647", "Z")), NoSuchFieldException.class);
+            ClientConnection$encrypted = encrypted == null ? null : MethodHandles
+                    .privateLookupIn(ClientConnection.class, MethodHandles.lookup()).unreflectVarHandle(encrypted);
 
             {
                 final List<Field> connFields = tryLocateFields(ServerPlayNetworkHandler.class, ClientConnection.class, false);
@@ -252,6 +258,12 @@ public class MultiVersionUtil {
     }
 
     public static void init() {
+    }
+
+    public static void setEncrypted(ClientConnection connection, boolean encrypted) {
+        if (ClientConnection$encrypted != null) {
+            ClientConnection$encrypted.set(connection, encrypted);
+        }
     }
 
     public static Class<?> tryLocateClass(String name) {

@@ -26,6 +26,7 @@ package com.ishland.raknetify.fabric.mixin.common.encryption;
 
 import com.ishland.raknetify.common.connection.MultiChannelingStreamingCompression;
 import com.ishland.raknetify.common.connection.MultiChannellingEncryption;
+import com.ishland.raknetify.fabric.common.util.MultiVersionUtil;
 import io.netty.channel.Channel;
 import net.minecraft.network.ClientConnection;
 import net.minecraft.network.encryption.PacketDecryptor;
@@ -45,16 +46,13 @@ import javax.crypto.Cipher;
 public class MixinClientConnection {
 
     @Shadow
-    private boolean encrypted;
-
-    @Shadow
     private Channel channel;
 
     @Inject(method = "setupEncryption", at = @At("HEAD"), cancellable = true)
     public void beforeSetupEncryption(Cipher decryptionCipher, Cipher encryptionCipher, CallbackInfo ci) {
         if (this.channel.config() instanceof RakNet.Config) {
             ci.cancel();
-            this.encrypted = true;
+            MultiVersionUtil.setEncrypted((ClientConnection) (Object) this, true);
             try {
                 this.channel.pipeline().remove("decrypt");
                 this.channel.pipeline().remove("encrypt");

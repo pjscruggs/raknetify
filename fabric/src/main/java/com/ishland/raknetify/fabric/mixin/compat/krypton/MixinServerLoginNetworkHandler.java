@@ -25,6 +25,7 @@
 package com.ishland.raknetify.fabric.mixin.compat.krypton;
 
 import com.ishland.raknetify.fabric.mixin.access.IClientConnection;
+import com.ishland.raknetify.fabric.common.util.MultiVersionUtil;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPipeline;
 import net.minecraft.network.ClientConnection;
@@ -76,7 +77,7 @@ public class MixinServerLoginNetworkHandler {
                 Cipher cipher = NetworkEncryptionUtils.cipherFromKey(2, secretKey);
                 Cipher cipher2 = NetworkEncryptionUtils.cipherFromKey(1, secretKey);
 
-                ((IClientConnection) this.connection).setEncrypted(false);
+                MultiVersionUtil.setEncrypted(this.connection, false);
                 this.connection.setupEncryption(cipher, cipher2);
             }
         }

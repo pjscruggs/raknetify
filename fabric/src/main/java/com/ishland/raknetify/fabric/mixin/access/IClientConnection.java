@@ -35,7 +35,4 @@ public interface IClientConnection {
     @Accessor
     Channel getChannel();
 
-    @Accessor
-    void setEncrypted(boolean encrypted);
-
 }

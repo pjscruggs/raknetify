@@ -30,9 +30,15 @@ public class RakNetNetworkTransitionUtil {
 
     static Object handleTransition(Object msg) {
         if (msg instanceof NetworkStateTransitions.DecoderTransitioner transitioner) {
-            return transitioner.andThen(context -> RakNetFabricConnectionUtil.onPipelineReorder(context.pipeline()));
+            return (NetworkStateTransitions.DecoderTransitioner) context -> {
+                transitioner.run(context);
+                RakNetFabricConnectionUtil.onPipelineReorder(context.pipeline());
+            };
         } else if (msg instanceof NetworkStateTransitions.EncoderTransitioner transitioner) {
-            return transitioner.andThen(context -> RakNetFabricConnectionUtil.onPipelineReorder(context.pipeline()));
+            return (NetworkStateTransitions.EncoderTransitioner) context -> {
+                transitioner.run(context);
+                RakNetFabricConnectionUtil.onPipelineReorder(context.pipeline());
+            };
         }
         return msg;
     }
