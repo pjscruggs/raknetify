@@ -128,7 +128,7 @@ def prepare_client(session, version, name, game, source):
         for item in classes.rglob('*.class'):
             archive.write(item, item.relative_to(classes).as_posix())
     (folder / 'options.txt').write_text(
-        'renderDistance:2\nsimulationDistance:2\nmaxFps:30\npauseOnLostFocus:false\n'
+        'renderDistance:2\nsimulationDistance:5\nmaxFps:30\npauseOnLostFocus:false\n'
         'soundCategory_master:0.0\nskipMultiplayerWarning:true\nonboardAccessibility:false\ngraphicsMode:0\n')
     return folder, classpath, profile['mainClass'], game['assetIndex']['id']
 
