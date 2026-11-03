@@ -145,6 +145,17 @@ def prepare_backend(session, version, name, port, game):
     return folder, jar
 
 
+def install_backend_selector(folder, velocity):
+    classes = folder / 'selector-classes'
+    classes.mkdir()
+    subprocess.run([binary(JAVA25, 'javac'), '-proc:none', '-cp', str(velocity),
+                    '-d', str(classes), str(ROOT / 'BackendSelector.java')], check=True)
+    with zipfile.ZipFile(folder / 'plugins/backend-selector.jar', 'w', zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr('velocity-plugin.json', json.dumps(dict(
+            id='backend-selector', name='Backend Selector', version='1', main='localchecks.BackendSelector')))
+        archive.write(classes / 'localchecks/BackendSelector.class', 'localchecks/BackendSelector.class')
+
+
 def prepare_proxy(session, source):
     folder = session / 'proxy'
     (folder / 'plugins').mkdir(parents=True)
@@ -152,11 +163,11 @@ def prepare_proxy(session, source):
     shutil.copy2(mod, folder / 'plugins' / mod.name)
     jar = download(dict(url=f'https://fill-data.papermc.io/v1/objects/{VELOCITY_SHA256}/velocity-4.3.0-44.jar',
                         sha256=VELOCITY_SHA256), session / 'libraries/velocity.jar')
+    install_backend_selector(folder, jar)
     (folder / 'velocity.toml').write_text(
         'config-version = "2.9"\nbind = "127.0.0.1:25723"\nonline-mode = false\n'
         'force-key-authentication = false\nplayer-info-forwarding-mode = "NONE"\n'
         '[servers]\nlegacy = "127.0.0.1:25721"\nmodern = "127.0.0.1:25722"\ntry = ["legacy"]\n'
-        '[forced-hosts]\nlocalhost = ["modern"]\n"127.0.0.1" = ["legacy"]\n'
         '[advanced]\nlogin-ratelimit = 0\ncompression-threshold = 256\ncompression-level = -1\n'
         '[packet-limiter]\ninterval = 7\npackets-per-second = -1\nbytes-per-second = -1\n'
         'decompressed-bytes-per-second = 5242880\n')
@@ -233,7 +244,6 @@ def report_connection_failure(version, client, result, logs):
 def run_client(processes, version, name, prepared, proxy, proxy_log, assets):
     folder, classpath, main, index = prepared
     user = 'ProbeLegacy' if name == 'legacy' else 'ProbeModern'
-    host = '127.0.0.1' if name == 'legacy' else 'localhost'
     command = java(JAVA21 if name == 'legacy' else JAVA25, '2G') + [
         '-XX:StackShadowPages=32', '--enable-native-access=ALL-UNNAMED',
         '--add-exports=java.base/jdk.internal.misc=ALL-UNNAMED', '-cp', classpath, main,
@@ -241,7 +251,7 @@ def run_client(processes, version, name, prepared, proxy, proxy_log, assets):
         '--assetsDir', str(assets), '--assetIndex', index,
         '--uuid', '00000000000000000000000000000001', '--accessToken', '0',
         '--userType', 'msa', '--versionType', 'release', '--width', '854', '--height', '480',
-        '--quickPlayMultiplayer', f'raknet;{host}:{PROXY_PORT}']
+        '--quickPlayMultiplayer', f'raknet;127.0.0.1:{PROXY_PORT}']
     client, log = processes.start(command, folder, 'client-' + name)
     client.wait(timeout=140)
     result_path = folder / 'probe-result.json'
