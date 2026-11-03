@@ -158,7 +158,9 @@ def install_backend_selector(folder, velocity):
 
 def prepare_proxy(session, source):
     folder = session / 'proxy'
-    (folder / 'plugins').mkdir(parents=True)
+    metrics = folder / 'plugins/bStats'
+    metrics.mkdir(parents=True)
+    (metrics / 'config.txt').write_text('enabled=false\n')
     mod = one_artifact(source, 'velocity')
     shutil.copy2(mod, folder / 'plugins' / mod.name)
     jar = download(dict(url=f'https://fill-data.papermc.io/v1/objects/{VELOCITY_SHA256}/velocity-4.3.0-44.jar',
@@ -167,7 +169,9 @@ def prepare_proxy(session, source):
     (folder / 'velocity.toml').write_text(
         'config-version = "2.9"\nbind = "127.0.0.1:25723"\nonline-mode = false\n'
         'force-key-authentication = false\nplayer-info-forwarding-mode = "NONE"\n'
+        'forwarding-secret-file = "forwarding.secret"\n'
         '[servers]\nlegacy = "127.0.0.1:25721"\nmodern = "127.0.0.1:25722"\ntry = ["legacy"]\n'
+        '[forced-hosts]\n"127.0.0.1" = ["legacy"]\n'
         '[advanced]\nlogin-ratelimit = 0\ncompression-threshold = 256\ncompression-level = -1\n'
         '[packet-limiter]\ninterval = 7\npackets-per-second = -1\nbytes-per-second = -1\n'
         'decompressed-bytes-per-second = 5242880\n')
