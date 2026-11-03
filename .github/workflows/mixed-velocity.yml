@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   mixed-velocity:
@@ -36,9 +37,19 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends xvfb xauth libgl1-mesa-dri libglx-mesa0 libopenal1 libxrandr2 libxinerama1 libxcursor1 libxi6
-      - name: Build the pull request commit
+      - name: Retrieve artifacts from the passing build
+        id: artifacts
+        continue-on-error: true
+        uses: actions/download-artifact@v5
+        with:
+          name: Artifacts
+          path: source
+          run-id: 40459589883
+          github-token: ${{ github.token }}
+      - name: Rebuild if the published artifacts expired
+        if: steps.artifacts.outcome != 'success'
         working-directory: source
-        run: ./gradlew build --no-daemon --max-workers=2 '-Dorg.gradle.jvmargs=-Xmx2G'
+        run: ./gradlew clean build --no-daemon --max-workers=2 '-Dorg.gradle.jvmargs=-Xmx2G'
       - name: Connect both clients through one Velocity instance
         env:
           JAVA21_HOME: ${{ steps.java21.outputs.path }}

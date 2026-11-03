@@ -157,7 +157,9 @@ def prepare_proxy(session, source):
         'force-key-authentication = false\nplayer-info-forwarding-mode = "NONE"\n'
         '[servers]\nlegacy = "127.0.0.1:25721"\nmodern = "127.0.0.1:25722"\ntry = ["legacy"]\n'
         '[forced-hosts]\nlocalhost = ["modern"]\n"127.0.0.1" = ["legacy"]\n'
-        '[advanced]\nlogin-ratelimit = 0\n')
+        '[advanced]\nlogin-ratelimit = 0\ncompression-threshold = 256\ncompression-level = -1\n'
+        '[packet-limiter]\ninterval = 7\npackets-per-second = -1\nbytes-per-second = -1\n'
+        'decompressed-bytes-per-second = 5242880\n')
     return folder, jar
 
 
@@ -211,6 +213,23 @@ def java(home, heap):
             '-Djava.net.preferIPv4Stack=true', '-Draknetify.debug=true']
 
 
+def report_connection_failure(version, client, result, logs):
+    summary = {key: result.get(key) for key in ['udp', 'multichannel', 'chunks', 'passed']}
+    print(f'{version} client exit {client.returncode}. Probe observations {json.dumps(summary)}', flush=True)
+    markers = ('Connecting to ', 'disconnected with reason:', 'logged in via RakNet',
+               'No multi-channel mapping', 'has connected', 'lost connection:',
+               'disconnected while connecting', 'Caused by:', 'Exception:')
+    for log in logs:
+        count = 0
+        for line in read_log(log).splitlines():
+            if any(marker.lower() in line.lower() for marker in markers):
+                clean = re.sub(r'(?:[A-Za-z]:[\\/]|/home/|/tmp/|/opt/|/usr/)[^\s]+', '[path]', line)
+                print(f'{log.name}: {clean[:250]}', flush=True)
+                count += 1
+                if count == 12:
+                    break
+
+
 def run_client(processes, version, name, prepared, proxy, proxy_log, assets):
     folder, classpath, main, index = prepared
     user = 'ProbeLegacy' if name == 'legacy' else 'ProbeModern'
@@ -226,9 +245,10 @@ def run_client(processes, version, name, prepared, proxy, proxy_log, assets):
     client, log = processes.start(command, folder, 'client-' + name)
     client.wait(timeout=140)
     result_path = folder / 'probe-result.json'
-    if not result_path.is_file():
-        raise RuntimeError(f'{version} exited without reporting a connection result')
-    result = json.loads(result_path.read_text())
+    result = json.loads(result_path.read_text()) if result_path.is_file() else {}
+    if client.returncode != 0 or not result.get('passed'):
+        report_connection_failure(version, client, result, [log, proxy_log, processes.session / (name + '.log')])
+        raise RuntimeError(f'{version} connection check failed')
     assert client.returncode == 0 and result['passed'] and result['udp'] and result['multichannel'], version
     assert result['chunks'] > 0 and proxy.poll() is None
     assert f'{user} joined the game' in read_log(processes.session / (name + '.log'))
