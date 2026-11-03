@@ -25,9 +25,11 @@ JAVA25 = Path(os.environ['JAVA_HOME']) / 'bin'
 
 
 def fetch(url):
+    request = urllib.request.Request(url, headers={
+        'User-Agent': 'Raknetify compatibility smoke test (https://github.com/pjscruggs/raknetify)'})
     for attempt in range(3):
         try:
-            with urllib.request.urlopen(url, timeout=45) as response:
+            with urllib.request.urlopen(request, timeout=45) as response:
                 return response.read()
         except OSError:
             if attempt == 2:
@@ -148,7 +150,7 @@ def prepare_proxy(session, source):
     (folder / 'plugins').mkdir(parents=True)
     mod = one_artifact(source, 'velocity')
     shutil.copy2(mod, folder / 'plugins' / mod.name)
-    jar = download(dict(url='https://fill-data.papermc.io/v1/objects/' + VELOCITY_SHA256,
+    jar = download(dict(url=f'https://fill-data.papermc.io/v1/objects/{VELOCITY_SHA256}/velocity-4.3.0-44.jar',
                         sha256=VELOCITY_SHA256), session / 'libraries/velocity.jar')
     (folder / 'velocity.toml').write_text(
         'config-version = "2.9"\nbind = "127.0.0.1:25723"\nonline-mode = false\n'
