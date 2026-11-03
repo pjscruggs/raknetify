@@ -233,10 +233,11 @@ def report_connection_failure(version, client, result, logs):
     print(f'{version} client exit {client.returncode}. Probe observations {json.dumps(summary)}', flush=True)
     markers = ('Connecting to ', 'disconnected with reason:', 'logged in via RakNet',
                'No multi-channel mapping', 'has connected', 'lost connection:',
-               'disconnected while connecting', 'Caused by:', 'Exception:')
+               'disconnected while connecting', 'Caused by:', 'Exception:',
+               'Graphics API', 'Backend API', 'SDL', 'OpenGL', 'GLFW', 'ERROR', 'Stopping')
     for log in logs:
         count = 0
-        for line in read_log(log).splitlines():
+        for line in reversed(read_log(log).splitlines()):
             if any(marker.lower() in line.lower() for marker in markers):
                 clean = re.sub(r'(?:[A-Za-z]:[\\/]|/home/|/tmp/|/opt/|/usr/)[^\s]+', '[path]', line)
                 print(f'{log.name}: {clean[:250]}', flush=True)
@@ -257,8 +258,13 @@ def run_client(processes, version, name, prepared, proxy, proxy_log, assets):
         '--userType', 'msa', '--versionType', 'release', '--width', '854', '--height', '480',
         '--quickPlayMultiplayer', f'raknet;127.0.0.1:{PROXY_PORT}']
     client, log = processes.start(command, folder, 'client-' + name)
-    client.wait(timeout=140)
     result_path = folder / 'probe-result.json'
+    try:
+        client.wait(timeout=140)
+    except subprocess.TimeoutExpired:
+        result = json.loads(result_path.read_text()) if result_path.is_file() else {}
+        report_connection_failure(version, client, result, [log, proxy_log, processes.session / (name + '.log')])
+        raise RuntimeError(f'{version} client timed out') from None
     result = json.loads(result_path.read_text()) if result_path.is_file() else {}
     if client.returncode != 0 or not result.get('passed'):
         report_connection_failure(version, client, result, [log, proxy_log, processes.session / (name + '.log')])
