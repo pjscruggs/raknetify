@@ -34,8 +34,18 @@ import net.fabricmc.loader.api.FabricLoader;
 
 import java.lang.reflect.Constructor;
 
+/**
+ * Installs optional ViaFabric translation handlers without linking ViaVersion classes when the mod is absent.
+ */
 public class ViaFabricCompatInjector {
 
+    /**
+     * Builds ViaFabric's translation pipeline around the Minecraft codecs when ViaFabric is installed.
+     * Client connections also receive hostname protocol parsing. Reflection failures are logged.
+     *
+     * @param channel RakNet application channel with Minecraft codec or configuration handlers
+     * @param isClientSide whether this endpoint is the connecting Minecraft client
+     */
     public static void inject(Channel channel, boolean isClientSide) {
         Preconditions.checkNotNull(channel);
         if (FabricLoader.getInstance().isModLoaded("viafabric")) {
@@ -77,12 +87,26 @@ public class ViaFabricCompatInjector {
         }
     }
 
+    /**
+     * Locates the active encoder or its protocol-configuration placeholder.
+     *
+     * @param pipeline Minecraft channel pipeline receiving the translation encoder
+     * @return existing handler name before which the translation encoder is inserted
+     * @throws UnsupportedOperationException if neither supported outbound handler is present
+     */
     private static String determineEncoderName(ChannelPipeline pipeline) {
         if (pipeline.get("encoder") != null) return "encoder";
         if (pipeline.get("outbound_config") != null) return "outbound_config";
         throw new UnsupportedOperationException();
     }
 
+    /**
+     * Locates the active decoder or its protocol-configuration placeholder.
+     *
+     * @param pipeline Minecraft channel pipeline receiving the translation decoder
+     * @return existing handler name before which the translation decoder is inserted
+     * @throws UnsupportedOperationException if neither supported inbound handler is present
+     */
     private static String determineDecoderName(ChannelPipeline pipeline) {
         if (pipeline.get("decoder") != null) return "decoder";
         if (pipeline.get("inbound_config") != null) return "inbound_config";

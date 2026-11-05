@@ -28,8 +28,17 @@ import net.minecraft.client.gui.components.debug.DebugScreenDisplayer;
 import java.lang.reflect.Method;
 
 // Load this adapter only on the snapshot, where DebugGroup replaces the identifier-based grouping API.
+/**
+ * Bridges the snapshot's DebugGroup-based HUD API without linking it on earlier modern releases.
+ */
 final class DebugHudLines26_4 {
+    /**
+     * Snapshot HUD group built once for all Raknetify2 diagnostic lines.
+     */
     private static final Object GROUP;
+    /**
+     * Cached snapshot addToGroup method used on each HUD update.
+     */
     private static final Method ADD_LINE;
 
     static {
@@ -44,9 +53,19 @@ final class DebugHudLines26_4 {
         }
     }
 
+    /**
+     * Prevents construction of the snapshot-only HUD adapter.
+     */
     private DebugHudLines26_4() {
     }
 
+    /**
+     * Adds one line to the cached snapshot HUD group through its runtime-resolved API.
+     *
+     * @param lines snapshot debug-screen destination
+     * @param text complete diagnostic line to append
+     * @throws IllegalStateException if the resolved HUD method cannot be invoked
+     */
     static void addLine(DebugScreenDisplayer lines, String text) {
         try {
             ADD_LINE.invoke(lines, GROUP, text);

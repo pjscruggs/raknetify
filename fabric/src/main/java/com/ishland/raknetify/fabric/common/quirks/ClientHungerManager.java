@@ -34,8 +34,19 @@ import net.minecraft.storage.NbtReadView;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 
+/**
+ * Keeps client food consumption from modifying hunger state that should come from server updates.
+ */
 public class ClientHungerManager extends HungerManager {
 
+    /**
+     * Copies existing hunger state into a client-only replacement using the runtime's supported layout.
+     * Older versions use NBT serialization. Newer versions copy accessible mutable public fields.
+     *
+     * @param hungerManager existing client hunger state to preserve
+     * @return replacement that ignores local food-consumption increments
+     * @throws RuntimeException if a legacy hunger-state serialization method cannot be invoked
+     */
     public static ClientHungerManager from(HungerManager hungerManager) {
         ClientHungerManager clientHungerManager = new ClientHungerManager();
         if (RaknetifyFabricMixinPlugin.AFTER_1_21_5) {
@@ -70,10 +81,21 @@ public class ClientHungerManager extends HungerManager {
         return clientHungerManager;
     }
 
+    /**
+     * Ignores local food and saturation increments so server-reported hunger remains authoritative.
+     *
+     * @param food food-level increment intentionally ignored
+     * @param saturationModifier saturation increment factor intentionally ignored
+     */
     public void add(int food, float saturationModifier) {
         // nop
     }
 
+    /**
+     * Ignores client-side consumption of a food component.
+     *
+     * @param foodComponent food properties whose local hunger increment is intentionally suppressed
+     */
     public void eat(FoodComponent foodComponent) {
         // nop
     }

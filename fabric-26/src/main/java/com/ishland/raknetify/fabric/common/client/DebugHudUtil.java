@@ -33,8 +33,16 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.Connection;
 
+/**
+ * Connects the active Minecraft client connection to the shared transport HUD formatter.
+ */
 public class DebugHudUtil {
 
+    /**
+     * Emits transport diagnostics for the active connection or an inactive marker when no RakNet session exists.
+     *
+     * @param consumer destination receiving each complete HUD line in display order
+     */
     public static void getDebugString(Consumer<String> consumer) {
         final ClientPacketListener networkHandler = Minecraft.getInstance().getConnection();
         if (networkHandler != null) {

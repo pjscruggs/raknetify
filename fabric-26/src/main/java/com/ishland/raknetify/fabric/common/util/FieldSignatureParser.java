@@ -32,14 +32,29 @@ import org.spongepowered.asm.util.asm.ASM;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Collects class references from generic field signatures to link packet types with implementation classes.
+ */
 public class FieldSignatureParser extends SignatureVisitor {
 
+    /**
+     * Class types encountered by ASM in signature traversal order.
+     */
     private final List<Type> results = new ArrayList<>();
 
+    /**
+     * Creates an ASM visitor using the API level supported by the installed Mixin environment.
+     */
     private FieldSignatureParser() {
         super(ASM.API_VERSION);
     }
 
+    /**
+     * Extracts referenced class types from a generic field signature without loading those classes.
+     *
+     * @param signature JVM field signature, or null when the field has no generic signature
+     * @return encountered class types, or an empty list for a missing signature
+     */
     public static List<Type> parse(String signature) {
         if (signature == null || signature.isEmpty()) {
             return List.of();
@@ -49,6 +64,11 @@ public class FieldSignatureParser extends SignatureVisitor {
         return parser.results;
     }
 
+    /**
+     * Records a class reference encountered while ASM traverses the field signature.
+     *
+     * @param name JVM internal class name using slash separators
+     */
     @Override
     public void visitClassType(String name) {
         results.add(Type.getObjectType(name));

@@ -34,20 +34,43 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
+/**
+ * Registers a transport diagnostic entry with Minecraft's configurable debug HUD.
+ */
 public class DebugHudUtil1_21_9 {
 
+    /**
+     * Atomic one-time guard preventing duplicate debug-entry registration.
+     */
     private static final AtomicBoolean initialized = new AtomicBoolean(false);
 
+    /**
+     * Registers the Raknetify debug entry once when this Minecraft version supports its HUD API.
+     */
     public static void init() {
         if (!initialized.compareAndSet(false, true)) return;
 
         Identifier identifier = Identifier.of("raknetify", "raknetify_debug_info");
         IDebugHudEntries.invokeRegister(identifier, new DebugHudEntry() {
+            /**
+             * Appends transport diagnostics without requiring a loaded world or chunk.
+             *
+             * @param lines debug-screen line collector
+             * @param world current client world, unused by transport diagnostics and possibly null
+             * @param clientChunk client-side chunk, unused by transport diagnostics and possibly null
+             * @param chunk server-side chunk, unused by transport diagnostics and possibly null
+             */
             @Override
             public void render(DebugHudLines lines, @Nullable World world, @Nullable WorldChunk clientChunk, @Nullable WorldChunk chunk) {
                 DebugHudUtil.getDebugString(s -> lines.addLineToSection(identifier, s));
             }
 
+            /**
+             * Allows network diagnostics even when Minecraft suppresses detailed world debug information.
+             *
+             * @param reducedDebugInfo whether the server requests reduced debug information
+             * @return true because these lines expose only connection diagnostics
+             */
             @Override
             public boolean canShow(boolean reducedDebugInfo) {
                 return true;

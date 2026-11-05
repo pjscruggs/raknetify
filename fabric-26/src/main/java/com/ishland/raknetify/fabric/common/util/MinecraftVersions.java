@@ -29,19 +29,44 @@ import net.fabricmc.loader.api.Version;
 import net.fabricmc.loader.api.VersionParsingException;
 import net.fabricmc.loader.api.metadata.version.VersionPredicate;
 
+/**
+ * Resolves modern Minecraft API boundaries once so incompatible class references remain guarded.
+ */
 public final class MinecraftVersions {
 
+    /**
+     * Minecraft version reported by Fabric Loader for the running instance.
+     */
     private static final Version CURRENT = FabricLoader.getInstance().getModContainer("minecraft")
             .orElseThrow().getMetadata().getVersion();
 
+    /**
+     * Whether packet references introduced in Minecraft 26.2 may be resolved.
+     */
     public static final boolean AT_LEAST_26_2 = matches(">=26.2");
+    /**
+     * Whether packet references introduced in Minecraft 26.3 may be resolved.
+     */
     public static final boolean AT_LEAST_26_3 = matches(">=26.3");
     // Keep this exact snapshot predicate aligned with the Minecraft dependency in fabric.mod.json.
+    /**
+     * Whether the runtime matches the specifically supported 26.4 snapshot API.
+     */
     public static final boolean IS_26_4_SNAPSHOT = matches("26.4-alpha.7");
 
+    /**
+     * Prevents construction of the immutable runtime-version flags.
+     */
     private MinecraftVersions() {
     }
 
+    /**
+     * Evaluates a Fabric version predicate against the running Minecraft version.
+     *
+     * @param predicate Fabric version expression defining an API boundary
+     * @return whether the running version satisfies the expression
+     * @throws ExceptionInInitializerError if an internal predicate is malformed
+     */
     private static boolean matches(String predicate) {
         try {
             return VersionPredicate.parse(predicate).test(CURRENT);

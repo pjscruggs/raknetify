@@ -29,8 +29,18 @@ import java.lang.reflect.Modifier;
 import net.minecraft.world.food.FoodData;
 import net.minecraft.world.food.FoodProperties;
 
+/**
+ * Keeps client food consumption from modifying hunger state that should come from server updates.
+ */
 public class ClientHungerManager extends FoodData {
 
+    /**
+     * Copies accessible mutable public hunger fields into the client-only replacement.
+     * Individual field-copy failures are logged while remaining fields are still attempted.
+     *
+     * @param hungerManager existing client hunger state to preserve
+     * @return replacement that ignores local food-consumption increments
+     */
     public static ClientHungerManager from(FoodData hungerManager) {
         ClientHungerManager clientHungerManager = new ClientHungerManager();
         for (Field field : FoodData.class.getFields()) {
@@ -51,10 +61,21 @@ public class ClientHungerManager extends FoodData {
         return clientHungerManager;
     }
 
+    /**
+     * Ignores local food and saturation increments so server-reported hunger remains authoritative.
+     *
+     * @param food food-level increment intentionally ignored
+     * @param saturationModifier saturation increment factor intentionally ignored
+     */
     public void eat(int food, float saturationModifier) {
         // nop
     }
 
+    /**
+     * Ignores client-side consumption of a food component.
+     *
+     * @param foodComponent food properties whose local hunger increment is intentionally suppressed
+     */
     public void eat(FoodProperties foodComponent) {
         // nop
     }
