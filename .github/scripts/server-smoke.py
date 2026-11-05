@@ -1,6 +1,7 @@
 import argparse
 import json
 import queue
+import re
 import socket
 import struct
 import subprocess
@@ -13,7 +14,7 @@ import shutil
 
 
 MAGIC = bytes.fromhex('00ffff00fefefefefdfdfdfd12345678')
-PROTOCOLS = {'26.1': 775, '26.1.1': 775, '26.1.2': 775, '26.2': 776, '26.3': 777,
+PROTOCOLS = {'1.18.2': 758, '1.21.1': 767, '26.1': 775, '26.1.1': 775, '26.1.2': 775, '26.2': 776, '26.3': 777,
              '26.4-snapshot-7': 1073742169}
 
 
@@ -125,6 +126,8 @@ def check_server(folder, version, native):
         assert process.wait(timeout=45) == 0
         reader.join(timeout=10)
         text = log.read_text()
+        runtime = 'modern' if version.startswith('26.') else 'legacy'
+        assert re.search(r'\braknetify_runtime\s+\S+\.' + runtime + r'\b', text), runtime
         for failure in ('Critical injection failure', 'Mixin apply failed', 'NoClassDefFoundError', 'LEAK:'):
             assert failure not in text, failure
         print('PASS', version, transport, 'startup, TCP status, RakNet UDP response, shutdown', flush=True)
@@ -144,7 +147,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--jar', type=Path, required=True)
     parser.add_argument('--work-dir', type=Path, required=True)
-    parser.add_argument('--versions', nargs='+', default=['26.1', '26.1.1', '26.1.2', '26.2', '26.3', '26.4-snapshot-7'])
+    supported = json.loads((Path(__file__).resolve().parents[2] / 'supported-versions.json').read_text())
+    parser.add_argument('--versions', nargs='+', default=['1.18.2', '1.21.1'] + supported['modern']['gameVersions'])
     args = parser.parse_args()
     for version in args.versions:
         folder = args.work_dir / version
