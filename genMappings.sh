@@ -5,7 +5,16 @@ installer_version=1.1.1
 
 #declare -a vers
 if [[ -z "$@" ]]; then
-  vers=$(python3 -c 'import json; print(" ".join(v for group in json.load(open("supported-versions.json")).values() for v in group["mappingVersions"]))') || exit 1
+  vers=$(python3 - <<'PY'
+import json
+versions = []
+with open('supported-versions.json') as source:
+    for group in json.load(source).values():
+        versions.extend(group['gameVersions'])
+        versions.extend(group.get('additionalMappingVersions', []))
+print(' '.join(dict.fromkeys(versions)))
+PY
+  ) || exit 1
 else
   vers=$@
 fi
