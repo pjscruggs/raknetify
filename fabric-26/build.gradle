@@ -25,7 +25,9 @@ processResources {
     inputs.property 'java', supported.java
     inputs.property 'loader', supported.fabricloader
     filesMatching('fabric.mod.json') {
-        expand version: project.version, minecraft: inputs.properties.minecraft,
+        // Replace the quoted placeholder with a JSON string or array before expanding the other values.
+        filter { line -> line.replace('"${minecraft}"', inputs.properties.minecraft) }
+        expand version: project.version,
                 loader: inputs.properties.loader, java: inputs.properties.java
     }
 }
