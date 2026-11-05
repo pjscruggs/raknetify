@@ -41,20 +41,48 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 
+/**
+ * Wraps Minecraft payloads in RakNet frames and selects their ordering or reliability policy.
+ * The channel event loop owns negotiation and pending writes. Override registration is synchronized
+ * because protocol handlers can be installed from another thread.
+ */
 public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
 
+    /**
+     * Pipeline name used to locate the Minecraft-to-RakNet framing handler.
+     */
     public static final String NAME = "raknetify-simple-multi-channel-data-codec";
 
+    /**
+     * Local outbound marker requesting multichannel negotiation rather than a wire payload.
+     */
     public static final Object SIGNAL_START_MULTICHANNEL = new Object();
 
+    /**
+     * Frame identifier used to wrap and recognize Minecraft payloads.
+     */
     private final int packetId;
 
+    /**
+     * Creates a framing codec before any protocol-specific channel rules are installed.
+     *
+     * @param packetId RakNet frame identifier reserved for Minecraft payloads
+     */
     public RakNetSimpleMultiChannelCodec(int packetId) {
         this.packetId = packetId;
     }
 
+    /**
+     * Channel overrides in precedence order, guarded by this list as a monitor.
+     */
     private final ObjectArrayList<OverrideHandler> handlers = new ObjectArrayList<>();
 
+    /**
+     * Appends an override after the existing rules. Earlier nonzero results take precedence.
+     *
+     * @param handler packet classifier to consult during encoding
+     * @return this codec for chained registration
+     */
     public RakNetSimpleMultiChannelCodec addHandler(OverrideHandler handler) {
         synchronized (handlers) {
             handlers.add(handler);
@@ -62,12 +90,24 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
         return this;
     }
 
+    /**
+     * Removes a classifier when its protocol phase or integration is no longer active.
+     *
+     * @param handler previously registered classifier to remove
+     */
     public void removeHandler(OverrideHandler handler) {
         synchronized (handlers) {
             handlers.remove(handler);
         }
     }
 
+    /**
+     * Finds the first registered classifier assignable to the requested type.
+     *
+     * @param <T> classifier type expected by the caller
+     * @param clazz runtime type used to identify the classifier
+     * @return the first matching classifier, or null when none is installed
+     */
     public <T> T getHandler(Class<T> clazz) {
         synchronized (handlers) {
             for (OverrideHandler handler : handlers) {
@@ -77,11 +117,26 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
         return null;
     }
 
+    /**
+     * Whether the negotiation marker has completed and channel overrides may affect delivery.
+     */
     private boolean isMultichannelEnabled;
 
+    /**
+     * Whether Minecraft writes must wait for the multichannel negotiation marker.
+     */
     private boolean queuePendingWrites = false;
+    /**
+     * Owned encoded frames and their completion promises awaiting negotiation completion.
+     */
     private final Queue<PendingWrite> pendingWrites = new LinkedList<>();
 
+    /**
+     * Fails outstanding negotiation-delayed writes and releases their retained frames.
+     *
+     * @param ctx context being removed from the pipeline
+     * @throws Exception if superclass removal processing fails
+     */
     @Override
     public void handlerRemoved(ChannelHandlerContext ctx) throws Exception {
         super.handlerRemoved(ctx);
@@ -91,6 +146,15 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
         }
     }
 
+    /**
+     * Handles local negotiation markers and transfers Minecraft buffers into routed frames.
+     * Consumed payload buffers are released after encoding. Unrelated pipeline messages pass through.
+     *
+     * @param ctx outbound context used for allocation and frame delivery
+     * @param msg Minecraft payload, local control marker, or unrelated pipeline message
+     * @param promise completion notification for the outgoing write
+     * @throws Exception if forwarding through the superclass fails
+     */
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
         if (this.queuePendingWrites && msg instanceof ByteBuf buf) {
@@ -175,6 +239,14 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
         buf.release();
     }
 
+    /**
+     * Creates a frame using the first applicable channel rule without releasing the input buffer.
+     * Before negotiation, classification still permits dropping packets but delivery stays ordered.
+     *
+     * @param ctx allocator for the new frame
+     * @param buf readable Minecraft payload with its packet ID at the reader index
+     * @return an owned frame, or null for empty payloads or an explicit discard rule
+     */
     private FrameData encode0(ChannelHandlerContext ctx, ByteBuf buf) {
         if (buf.isReadable()) {
             final int packetChannelOverride = getChannelOverride(buf, !isMultichannelEnabled);
@@ -195,6 +267,12 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
         return null;
     }
 
+    /**
+     * Resumes ordinary writes and drains retained frames in their original submission order.
+     * Forwarding failures are reported to the pipeline.
+     *
+     * @param ctx outbound context that receives the queued frames
+     */
     private void flushPendingWrites(ChannelHandlerContext ctx) {
         this.queuePendingWrites = false;
         PendingWrite pendingWrite;
@@ -207,12 +285,24 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
         }
     }
 
+    /**
+     * Checks whether any protocol classifier has been installed for negotiation.
+     *
+     * @return true when at least one override handler is registered
+     */
     protected boolean isMultichannelAvailable() {
         synchronized (handlers) {
             return !handlers.isEmpty();
         }
     }
 
+    /**
+     * Consults classifiers in registration order and uses the first nonzero decision.
+     *
+     * @param buf Minecraft payload inspected without consuming its reader index
+     * @param suppressWarning whether classifiers should suppress unknown-packet diagnostics
+     * @return ordering channel, -1 for reliable unordered, -2 for unreliable, or Integer.MIN_VALUE to discard
+     */
     protected int getChannelOverride(ByteBuf buf, boolean suppressWarning) {
         synchronized (handlers) {
             for (OverrideHandler handler : handlers) {
@@ -223,6 +313,14 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
         return 0;
     }
 
+    /**
+     * Unwraps complete Minecraft frames, consumes negotiation markers, and forwards other traffic.
+     * A forwarded frame retains its own reference before the input reference is released.
+     *
+     * @param ctx inbound context receiving decoded payloads
+     * @param msg incoming frame or unrelated pipeline message
+     * @throws Exception if superclass inbound processing fails
+     */
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         if (msg instanceof FrameData packet && !packet.isFragment() && packet.getDataSize() > 0) {
@@ -242,6 +340,14 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
         super.channelRead(ctx, msg);
     }
 
+    /**
+     * Extracts a Minecraft payload or retains an unrelated frame for a decoder output list.
+     * The caller retains responsibility for releasing the input frame. Negotiation markers produce no output.
+     *
+     * @param ctx decoder context, unused because the frame supplies its own retained payload
+     * @param packet complete, nonfragmented frame to inspect
+     * @param out output list receiving owned payload buffers or retained frames
+     */
     protected void decode(ChannelHandlerContext ctx, FrameData packet, List<Object> out) {
         assert !packet.isFragment();
         if (packet.getDataSize() > 0) {
@@ -255,21 +361,58 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
         }
     }
 
+    /**
+     * Classifies a Minecraft packet without changing the payload reader index.
+     */
     public interface OverrideHandler {
+        /**
+         * Selects a delivery policy while allowing later classifiers to handle the default channel.
+         *
+         * @param buf payload beginning with the Minecraft packet ID, which must remain unconsumed
+         * @param suppressWarning whether an unknown packet should be inspected without a diagnostic
+         * @return zero to defer, a positive ordering channel, -1 for reliable unordered, -2 for unreliable,
+         *     or Integer.MIN_VALUE to discard the packet
+         */
         int getChannelOverride(ByteBuf buf, boolean suppressWarning);
     }
 
+    /**
+     * Uses a protocol-specific packet-ID table and warns once for each unknown packet ID.
+     */
     public static class PacketIdBasedOverrideHandler implements OverrideHandler {
 
+        /**
+         * Packet IDs already reported as unknown, preventing repeated diagnostics on a connection.
+         */
         private final IntOpenHashSet unknownPacketIds = new IntOpenHashSet();
+        /**
+         * Private copy of the packet-ID routes supplied for this protocol direction.
+         */
         private final Int2IntOpenHashMap channelMapping;
+        /**
+         * Human-readable protocol and direction included in unknown-packet diagnostics.
+         */
         private final String descriptiveProtocolStatus;
 
+        /**
+         * Snapshots the routing table so later caller changes do not alter an active classifier.
+         *
+         * @param channelMapping packet IDs mapped to ordering channels or special delivery policies
+         * @param descriptiveProtocolStatus protocol and direction to identify in diagnostics
+         */
         public PacketIdBasedOverrideHandler(Int2IntMap channelMapping, String descriptiveProtocolStatus) {
             this.channelMapping = new Int2IntOpenHashMap(channelMapping);
             this.descriptiveProtocolStatus = descriptiveProtocolStatus;
         }
 
+        /**
+         * Reads the packet ID from a slice and looks up its delivery policy.
+         * An explicit unknown sentinel falls back to channel seven, with at most one warning per ID.
+         *
+         * @param buf Minecraft payload whose reader index remains unchanged
+         * @param suppressWarning whether an unknown ID should be handled silently
+         * @return table policy, or channel seven for an Integer.MAX_VALUE table entry
+         */
         @Override
         public int getChannelOverride(ByteBuf buf, boolean suppressWarning) {
             final ByteBuf slice = buf.slice();
@@ -287,6 +430,12 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
         }
     }
 
+    /**
+     * Keeps an owned frame paired with the write promise while negotiation delays delivery.
+     *
+     * @param frameData encoded frame released on removal or transferred when the queue drains
+     * @param promise completion notification belonging to the original Minecraft write
+     */
     private record PendingWrite(FrameData frameData, ChannelPromise promise) {
     }
 

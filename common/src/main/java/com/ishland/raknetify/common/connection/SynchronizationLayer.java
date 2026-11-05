@@ -56,6 +56,11 @@ import java.util.PriorityQueue;
 
 import static com.ishland.raknetify.common.util.ReflectionUtil.accessible;
 
+/**
+ * Abandons obsolete ordered traffic when Minecraft changes worlds or protocol phases.
+ * A reliable control frame advances the peer ordering and sequence cursors before queued new
+ * traffic resumes. All mutable transport state is accessed on the owning channel event loop.
+ */
 public class SynchronizationLayer extends ChannelDuplexHandler {
 
     // Request structure:
@@ -68,16 +73,46 @@ public class SynchronizationLayer extends ChannelDuplexHandler {
     //
     // Response callback is handled using reliable transport
 
+    /**
+     * Local outbound request and inbound user event indicating an ordering resynchronization.
+     */
     public static final Object SYNC_REQUEST_OBJECT = new Object();
 
+    /**
+     * Transport implementation class containing one inbound ordering channel queue.
+     */
     static final Class<?> CLASS_QUEUE;
+    /**
+     * Transport implementation class retaining fragments of an incomplete frame.
+     */
     static final Class<?> CLASS_FRAME_JOINER_BUILDER;
+    /**
+     * Reflective access to the last delivered index, advanced to skip obsolete ordered packets.
+     */
     static final Field FIELD_QUEUE_LAST_ORDER_INDEX;
+    /**
+     * Transport cleanup method that releases fragments held by an abandoned frame builder.
+     */
     static final Method METHOD_QUEUE_BUILDER_RELEASE;
+    /**
+     * Resolved transport method for clearing an inbound ordered queue.
+     */
     static final Method METHOD_QUEUE_CLEAR;
+    /**
+     * Reflective access to the outgoing frame-set sequence cursor sent in a synchronization marker.
+     */
     static final Field FIELD_RELIABILITY_NEXT_SEND_SEQ_ID;
+    /**
+     * Reflective access to the incoming sequence cursor advanced after a synchronization marker.
+     */
     static final Field FIELD_RELIABILITY_LAST_RECEIVED_SEQ_ID;
+    /**
+     * Reflective access to queue-byte accounting repaired after dropping obsolete frames.
+     */
     static final Field FIELD_RELIABILITY_QUEUED_BYTES;
+    /**
+     * Representative fragment used to determine an incomplete frame's ordering channel.
+     */
     static final Field FIELD_FRAME_JOINER_BUILDER_SAMPLE_PACKET;
 
     static {
@@ -99,26 +134,73 @@ public class SynchronizationLayer extends ChannelDuplexHandler {
         }
     }
 
+    /**
+     * Ordering channels whose pending traffic must survive synchronization.
+     */
     private final IntSet channelToIgnore = new IntOpenHashSet();
 
+    /**
+     * Inbound ordering handler whose per-channel cursors are updated from peer markers.
+     */
     private FrameOrderIn frameOrderIn;
+    /**
+     * Live inbound channel queues copied as references from the transport's internal array.
+     */
     private Object[] frameOrderInQueues;
+    /**
+     * Outbound ordering handler that assigns each channel's packet indices.
+     */
     private FrameOrderOut frameOrderOut;
+    /**
+     * Live transport cursor array used to describe the last index assigned to each channel.
+     */
     private int[] frameOrderOutNextOrderIndex;
+    /**
+     * Transport reliability handler owning queued and unacknowledged frame sets.
+     */
     private ReliabilityHandler reliabilityHandler;
+    /**
+     * Live outgoing priority queue drained while an ordering reset is in progress.
+     */
     private PriorityQueue<Frame> reliabilityHandlerFrameQueue;
+    /**
+     * Live unacknowledged frame sets whose obsolete ordered frames are discarded on reset.
+     */
     private Int2ObjectMap<FrameSet> reliabilityHandlerPendingFrameSets;
+    /**
+     * Inbound reassembly handler that owns incomplete fragmented packets.
+     */
     private FrameJoiner frameJoiner;
+    /**
+     * Live fragment builders inspected and released when their ordering channel is reset.
+     */
     private Int2ObjectOpenHashMap<?> frameJoinerPendingPackets;
+    /**
+     * Number of ordering channels included in each synchronization marker.
+     */
     private int channelsLength;
+    /**
+     * Whether all reflective references to this connection's transport state have been captured.
+     */
     private boolean initialized = false;
 
+    /**
+     * Creates a synchronization handler with explicit channels exempt from packet dropping.
+     *
+     * @param channelsToIgnore ordering-channel indices whose traffic must remain queued across resets
+     */
     public SynchronizationLayer(int... channelsToIgnore) {
         for (int ch : channelsToIgnore) {
             channelToIgnore.add(ch);
         }
     }
 
+    /**
+     * Captures the transport state after propagating channel activation.
+     *
+     * @param ctx newly active channel context
+     * @throws Exception if activation propagation fails
+     */
     @SuppressWarnings("unchecked")
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
@@ -126,6 +208,12 @@ public class SynchronizationLayer extends ChannelDuplexHandler {
         initializeIfNecessary(ctx);
     }
 
+    /**
+     * Captures live transport queues and cursors once the RakNet handlers are available.
+     *
+     * @param ctx connection pipeline containing ordering, reliability, and fragment handlers
+     * @throws RuntimeException if the expected transport internals cannot be accessed
+     */
     private void initializeIfNecessary(ChannelHandlerContext ctx) {
         if (initialized) return;
         try {
@@ -156,6 +244,14 @@ public class SynchronizationLayer extends ChannelDuplexHandler {
         }
     }
 
+    /**
+     * Consumes peer synchronization markers and advances receive cursors past abandoned traffic.
+     * Incomplete fragments on reset channels are released. Other inbound messages pass through unchanged.
+     *
+     * @param ctx inbound context used to publish the reset event and ordinary messages
+     * @param msg synchronization frame or other inbound traffic
+     * @throws Exception if transport cursors or fragment cleanup methods cannot be accessed
+     */
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         initializeIfNecessary(ctx);
@@ -220,10 +316,28 @@ public class SynchronizationLayer extends ChannelDuplexHandler {
         }
     }
 
+    /**
+     * Outbound messages and promises held until the synchronization marker completes.
+     */
     private final ReferenceLinkedOpenHashSet<Pair<ChannelPromise, Object>> queue = new ReferenceLinkedOpenHashSet<>();
+    /**
+     * Surviving unreliable, unordered, or exempt-channel frames temporarily removed from transport queues.
+     */
     private final ObjectArrayList<Frame> queuedFrames = new ObjectArrayList<>();
+    /**
+     * Whether a synchronization marker is outstanding and new writes must wait.
+     */
     private boolean isWaitingForResponse = false;
 
+    /**
+     * Drops obsolete queued traffic for a reset request and delays subsequent writes until its marker completes.
+     * Duplicate reset requests complete immediately while the existing reset remains outstanding.
+     *
+     * @param ctx outbound context used to send the reliable synchronization marker
+     * @param msg local reset marker or message whose ordering must be preserved
+     * @param promise completion notification for accepting the reset or forwarding the message
+     * @throws Exception if transport sequence access or ordinary outbound forwarding fails
+     */
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
         initializeIfNecessary(ctx);
@@ -265,6 +379,12 @@ public class SynchronizationLayer extends ChannelDuplexHandler {
         super.write(ctx, msg, promise);
     }
 
+    /**
+     * Reclaims obsolete ordered frames and temporarily retains traffic exempt from the reset.
+     * Discarded frame promises complete successfully because the phase transition intentionally supersedes them.
+     *
+     * @throws RuntimeException if queued-byte accounting cannot be updated after the drop
+     */
     private void dropSenderPackets() {
         int droppedFrames = 0;
 
@@ -305,6 +425,12 @@ public class SynchronizationLayer extends ChannelDuplexHandler {
         this.reliabilityHandlerPendingFrameSets.clear();
     }
 
+    /**
+     * Restores surviving transport frames and drains new writes after marker completion.
+     * Callbacks arriving off the event loop are rescheduled before touching the queues.
+     *
+     * @param ctx outbound context belonging to the synchronized connection
+     */
     private void flushQueue(ChannelHandlerContext ctx) {
         if (!isWaitingForResponse) {
             if (Constants.DEBUG) System.out.println("Raknetify: Ignoring duplicate call to flushQueue()");

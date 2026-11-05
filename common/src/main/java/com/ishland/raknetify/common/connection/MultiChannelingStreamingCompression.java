@@ -39,35 +39,96 @@ import java.util.zip.DataFormatException;
 import java.util.zip.Deflater;
 import java.util.zip.Inflater;
 
+/**
+ * Maintains independent zlib streams for reliable ordered RakNet channels.
+ * Stream dictionaries persist between packets and restart at explicit channel markers, so
+ * unrelated ordering channels never depend on each other's compression history.
+ */
 public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
 
+    /**
+     * Pipeline name used to locate compression state and statistics.
+     */
     public static final String NAME = "raknetify-multichannel-streaming-compression";
 
+    /**
+     * Control payload advertising support for channel-specific streaming compression.
+     */
     public static final long SERVER_HANDSHAKE = 0x40000010;
+    /**
+     * Ordered control payload that starts a fresh dictionary for its channel.
+     */
     public static final long CHANNEL_START = 0x40000012;
+    /**
+     * Inbound zlib dictionaries indexed by ordering channel, owned by the event loop.
+     */
     private final Inflater[] inflaters = new Inflater[8];
+    /**
+     * Outbound zlib dictionaries indexed by ordering channel, owned by the event loop.
+     */
     private final Deflater[] deflaters = new Deflater[8];
 
+    /**
+     * Reserved channel-exemption set, currently unused by dictionary restart handling.
+     */
     private final IntOpenHashSet channelsToIgnoreWhenReinit = new IntOpenHashSet();
 
+    /**
+     * Reusable scratch space for draining inflated payload bytes without per-packet arrays.
+     */
     private final byte[] inflateBuffer = new byte[256 * 1024];
+    /**
+     * Reusable scratch space for draining compressed output without per-packet arrays.
+     */
     private final byte[] deflateBuffer = new byte[256 * 1024];
 
+    /**
+     * Frame identifier recognized before compression and restored after decompression.
+     */
     private final int rawPacketId;
+    /**
+     * Frame identifier marking payloads that require the channel's inflater.
+     */
     private final int compressedPacketId;
 
+    /**
+     * Cumulative outgoing payload bytes before compression, excluding frame identifiers.
+     */
     private volatile long outBytesRaw = 0L;
+    /**
+     * Cumulative outgoing payload bytes after compression, including small payloads passed through raw.
+     */
     private volatile long outBytesCompressed = 0L;
+    /**
+     * Cumulative compressed payload bytes consumed by inbound inflaters.
+     */
     private volatile long inBytesCompressed = 0L;
+    /**
+     * Cumulative payload bytes produced by inbound inflaters.
+     */
     private volatile long inBytesRaw = 0L;
 
+    /**
+     * Whether the peer has advertised compatible streaming compression.
+     */
     private boolean active = false;
 
+    /**
+     * Creates inactive per-channel compression state awaiting the peer handshake.
+     *
+     * @param rawPacketId frame identifier for uncompressed Minecraft payloads
+     * @param compressedPacketId frame identifier for compressed Minecraft payloads
+     */
     public MultiChannelingStreamingCompression(int rawPacketId, int compressedPacketId) {
         this.rawPacketId = rawPacketId;
         this.compressedPacketId = compressedPacketId;
     }
 
+    /**
+     * Advertises streaming compression support and releases the temporary control payload.
+     *
+     * @param ctx outbound context used to allocate and send the handshake frame
+     */
     private void doServerHandshake(ChannelHandlerContext ctx) {
         final ByteBuf buf = ctx.alloc().buffer().writeLong(SERVER_HANDSHAKE);
         try {
@@ -79,6 +140,12 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
         }
     }
 
+    /**
+     * Sends a dictionary-reset marker on every ordering channel before creating fresh deflaters.
+     * Does nothing until the peer has advertised compression support.
+     *
+     * @param ctx outbound context preserving each marker's order relative to later payloads
+     */
     private void doChannelStart(ChannelHandlerContext ctx) {
         if (!active) return;
         ByteBuf buf = ctx.alloc().buffer().writeLong(CHANNEL_START);
@@ -95,6 +162,11 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
         }
     }
 
+    /**
+     * Replaces one outbound zlib dictionary after releasing its native resources.
+     *
+     * @param channel ordering-channel index whose outgoing stream is restarting
+     */
     private void initDeflater(int channel) {
         if (!active) return;
         if (deflaters[channel] != null) deflaters[channel].end();
@@ -102,6 +174,11 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
         if (Constants.DEBUG) System.out.println("Raknetify: Streaming compression deflater for ch%d is ready".formatted(channel));
     }
 
+    /**
+     * Replaces one inbound zlib dictionary after releasing its native resources.
+     *
+     * @param channel ordering-channel index whose incoming stream is restarting
+     */
     private void initInflater(int channel) {
         if (!active) return;
         if (inflaters[channel] != null) inflaters[channel].end();
@@ -109,12 +186,26 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
         if (Constants.DEBUG) System.out.println("Raknetify: Streaming compression inflater for ch%d is ready".formatted(channel));
     }
 
+    /**
+     * Advertises compression support after forwarding channel activation.
+     *
+     * @param ctx newly active connection context
+     * @throws Exception if activation forwarding fails
+     */
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
         super.channelActive(ctx);
         doServerHandshake(ctx);
     }
 
+    /**
+     * Consumes compression control frames and inflates eligible ordered payloads.
+     * Frames without a matching active dictionary continue through the pipeline unchanged.
+     *
+     * @param ctx inbound context receiving decompressed replacement frames
+     * @param msg incoming frame or unrelated pipeline message
+     * @throws Exception if decompression or superclass inbound processing fails
+     */
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         if (msg instanceof FrameData compressedFrameData) {
@@ -130,6 +221,15 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
         super.channelRead(ctx, msg);
     }
 
+    /**
+     * Compresses eligible ordered payloads and restarts dictionaries after synchronization requests.
+     * Payloads shorter than sixteen bytes retain their raw representation.
+     *
+     * @param ctx outbound context receiving compressed or unchanged frames
+     * @param msg outgoing frame, local synchronization request, or unrelated message
+     * @param promise completion notification transferred to the emitted frame
+     * @throws Exception if superclass outbound processing fails
+     */
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
         if (msg == SynchronizationLayer.SYNC_REQUEST_OBJECT) {
@@ -268,32 +368,70 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
         }
     }
 
+    /**
+     * Reports payload bytes consumed from compressed inbound frames.
+     *
+     * @return cumulative compressed bytes, excluding RakNet frame identifiers
+     */
     public long getInBytesCompressed() {
         return inBytesCompressed;
     }
 
+    /**
+     * Reports payload bytes produced by decompression.
+     *
+     * @return cumulative decompressed inbound bytes
+     */
     public long getInBytesRaw() {
         return inBytesRaw;
     }
 
+    /**
+     * Reports payload bytes emitted through the compression path.
+     *
+     * @return cumulative compressed bytes plus small eligible payloads sent without compression
+     */
     public long getOutBytesCompressed() {
         return outBytesCompressed;
     }
 
+    /**
+     * Reports the original size of outgoing payloads eligible for compression.
+     *
+     * @return cumulative outgoing bytes before compression or small-payload bypass
+     */
     public long getOutBytesRaw() {
         return outBytesRaw;
     }
 
+    /**
+     * Reports whether the peer has completed compression capability negotiation.
+     *
+     * @return true after a compatible server-handshake marker has been received
+     */
     public boolean isActive() {
         return active;
     }
 
+    /**
+     * Once-per-second event-loop task that updates compression ratios.
+     */
     private ScheduledFuture<?> future;
 
+    /**
+     * Starts periodic compression sampling on the connection's event loop.
+     *
+     * @param ctx installed handler context supplying the scheduling event loop
+     */
     public void handlerAdded(ChannelHandlerContext ctx) {
         this.future = ctx.channel().eventLoop().scheduleAtFixedRate(this::tickMetrics, 1000, 1000, TimeUnit.MILLISECONDS);
     }
 
+    /**
+     * Cancels metric sampling and releases all native zlib resources.
+     *
+     * @param ctx removed handler context, unused because resources belong to this instance
+     */
     @Override
     public void handlerRemoved(ChannelHandlerContext ctx) {
         if (future != null) future.cancel(false);
@@ -303,15 +441,42 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
         }
     }
 
+    /**
+     * Previous sample's compressed inbound byte total used to calculate an interval delta.
+     */
     private long lastInBytesCompressed;
+    /**
+     * Previous sample's decompressed inbound byte total used to calculate an interval delta.
+     */
     private long lastInBytesRaw;
+    /**
+     * Previous sample's original outgoing byte total used to calculate an interval delta.
+     */
     private long lastOutBytesRaw;
+    /**
+     * Previous sample's transmitted outgoing byte total used to calculate an interval delta.
+     */
     private long lastOutBytesCompressed;
+    /**
+     * Rolling sixteen-sample history of compressed-to-raw inbound byte ratios.
+     */
     private final DescriptiveStatistics inCompressionRatioStats = new DescriptiveStatistics(16);
+    /**
+     * Rolling sixteen-sample history of compressed-to-raw outbound byte ratios.
+     */
     private final DescriptiveStatistics outCompressionRatioStats = new DescriptiveStatistics(16);
+    /**
+     * Published mean inbound compressed-to-raw ratio, possibly NaN before a nonempty sample.
+     */
     private volatile double inCompressionRatio;
+    /**
+     * Published mean outbound compressed-to-raw ratio, possibly NaN before a nonempty sample.
+     */
     private volatile double outCompressionRatio;
 
+    /**
+     * Samples interval byte ratios, skips idle directions, and publishes rolling means for the HUD.
+     */
     private void tickMetrics() {
         long deltaInBytesCompressed = this.inBytesCompressed - this.lastInBytesCompressed;
         long deltaInBytesRaw = this.inBytesRaw - this.lastInBytesRaw;
@@ -339,10 +504,20 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
 
     }
 
+    /**
+     * Reports the rolling mean size ratio for inbound compressed traffic.
+     *
+     * @return compressed bytes divided by raw bytes, or NaN before a nonempty sample
+     */
     public double getInCompressionRatio() {
         return inCompressionRatio;
     }
 
+    /**
+     * Reports the rolling mean size ratio for outbound traffic eligible for compression.
+     *
+     * @return transmitted bytes divided by original bytes, or NaN before a nonempty sample
+     */
     public double getOutCompressionRatio() {
         return outCompressionRatio;
     }
