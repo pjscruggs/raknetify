@@ -37,14 +37,26 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
 
+/**
+ * Suppresses redundant vanilla packet compression during Fabric API login when streaming compression is active.
+ */
 @Pseudo
 @Mixin(targets = "net.fabricmc.fabric.impl.networking.server.ServerLoginNetworkAddon")
 public class MixinServerLoginNetworkAddon {
 
+    /**
+     * Login connection whose pipeline advertises whether streaming compression was negotiated.
+     */
     @Shadow
     @Final
     private Connection connection;
 
+    /**
+     * Substitutes the disabled vanilla threshold only after RakNet streaming compression is active.
+     *
+     * @param server Minecraft server supplying the normal compression threshold
+     * @return -1 to disable vanilla compression, otherwise the configured server threshold
+     */
     @Dynamic("Pseudo")
     @Redirect(method = "sendCompressionPacket()V", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/MinecraftServer;getCompressionThreshold()I"))
     private int stopCompressionIfStreamingCompressionExists(MinecraftServer server) {

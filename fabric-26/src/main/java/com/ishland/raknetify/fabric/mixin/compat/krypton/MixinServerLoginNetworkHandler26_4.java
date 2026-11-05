@@ -43,13 +43,27 @@ import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 
+/**
+ * Adapts Krypton encryption after the snapshot applies negotiated connection options.
+ */
 @Mixin(ServerLoginPacketListenerImpl.class)
 public class MixinServerLoginNetworkHandler26_4 {
 
+    /**
+     * Snapshot login connection inspected for Krypton stream-cipher handlers.
+     */
     @Shadow
     @Final
     public Connection connection;
 
+    /**
+     * Replaces detected Krypton stream ciphers using the session key captured from the snapshot login method.
+     *
+     * @param options negotiated connection-option flags, unused by cipher replacement
+     * @param ci injection callback after the snapshot enables encryption
+     * @param secretKey session key captured from the target method's local variables
+     * @throws CryptException if constructing replacement Minecraft ciphers fails
+     */
     @Inject(method = "applyConnectionOptions", locals = LocalCapture.CAPTURE_FAILHARD, at = @At(value = "INVOKE", target = "Lnet/minecraft/network/Connection;setEncryptionKey(Ljavax/crypto/Cipher;Ljavax/crypto/Cipher;)V", shift = At.Shift.AFTER))
     private void afterSetupEncryption(byte options, CallbackInfo ci, SecretKey secretKey) throws CryptException {
         final ChannelPipeline pipeline = ((IClientConnection) this.connection).getChannel().pipeline();

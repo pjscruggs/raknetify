@@ -38,11 +38,25 @@ import java.util.List;
 import net.minecraft.network.CipherBase;
 import net.minecraft.network.CipherDecoder;
 
+/**
+ * Passes the inbound handler context to Minecraft's cipher helper for transport-aware processing.
+ */
 @Mixin(CipherDecoder.class)
 public class MixinPacketDecryptor {
 
+    /**
+     * Vanilla cipher-buffer helper whose context is set before each payload is processed.
+     */
     @Shadow @Final private CipherBase cipher;
 
+    /**
+     * Captures the active channel before the cipher helper chooses stream or per-frame processing.
+     *
+     * @param ctx active cipher handler context
+     * @param byteBuf input payload passed to vanilla's cipher helper
+     * @param list vanilla decoder output list, unused by this context hook
+     * @param ci injection callback, left uncancelled so vanilla processing continues
+     */
     @Inject(method = "decode(Lio/netty/channel/ChannelHandlerContext;Lio/netty/buffer/ByteBuf;Ljava/util/List;)V", at = @At("HEAD"))
     private void preDecrypt(ChannelHandlerContext ctx, ByteBuf byteBuf, List<Object> list, CallbackInfo ci) {
         ((PacketEncryptionManagerInterface) this.cipher).setContext(ctx);

@@ -36,11 +36,25 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+/**
+ * Passes the outbound handler context to Minecraft's cipher helper for transport-aware processing.
+ */
 @Mixin(PacketEncryptor.class)
 public class MixinPacketEncryptor {
 
+    /**
+     * Vanilla cipher-buffer helper whose context is set before each payload is processed.
+     */
     @Shadow @Final private PacketEncryptionManager manager;
 
+    /**
+     * Captures the active channel before the cipher helper chooses stream or per-frame processing.
+     *
+     * @param ctx active cipher handler context
+     * @param byteBuf input payload passed to vanilla's cipher helper
+     * @param byteBuf2 vanilla encrypted-output buffer, unused by this context hook
+     * @param ci injection callback, left uncancelled so vanilla processing continues
+     */
     @Inject(method = "encode(Lio/netty/channel/ChannelHandlerContext;Lio/netty/buffer/ByteBuf;Lio/netty/buffer/ByteBuf;)V", at = @At("HEAD"))
     private void preEncrypt(ChannelHandlerContext ctx, ByteBuf byteBuf, ByteBuf byteBuf2, CallbackInfo ci) {
         ((PacketEncryptionManagerInterface) this.manager).setContext(ctx);

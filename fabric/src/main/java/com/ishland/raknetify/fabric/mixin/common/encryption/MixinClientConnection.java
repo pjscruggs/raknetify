@@ -42,12 +42,26 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import javax.crypto.Cipher;
 
+/**
+ * Replaces Minecraft byte-stream ciphers with independent RakNet frame-payload encryption.
+ */
 @Mixin(ClientConnection.class)
 public class MixinClientConnection {
 
+    /**
+     * Minecraft connection pipeline receiving the frame encryption handler.
+     */
     @Shadow
     private Channel channel;
 
+    /**
+     * Installs frame encryption on RakNet connections and cancels vanilla stream-cipher installation.
+     * Existing cipher handlers are removed before replacement so repeated setup does not duplicate them.
+     *
+     * @param decryptionCipher initialized cipher for inbound frame payloads
+     * @param encryptionCipher initialized cipher for outbound frame payloads
+     * @param ci cancellable callback that suppresses vanilla setup only for RakNet
+     */
     @Inject(method = "setupEncryption", at = @At("HEAD"), cancellable = true)
     public void beforeSetupEncryption(Cipher decryptionCipher, Cipher encryptionCipher, CallbackInfo ci) {
         if (this.channel.config() instanceof RakNet.Config) {

@@ -40,14 +40,26 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.lang.reflect.Method;
 
+/**
+ * Suppresses redundant vanilla packet compression during Quilt Standard Libraries login when streaming compression is active.
+ */
 @Pseudo
 @Mixin(targets = "org.quiltmc.qsl.networking.impl.server.ServerLoginNetworkAddon")
 public class MixinServerLoginNetworkAddon {
 
+    /**
+     * Login connection whose pipeline advertises whether streaming compression was negotiated.
+     */
     @Shadow
     @Final
     private ClientConnection connection;
 
+    /**
+     * Substitutes the disabled vanilla threshold only after RakNet streaming compression is active.
+     *
+     * @param server Minecraft server supplying the normal compression threshold
+     * @return -1 to disable vanilla compression, otherwise the configured server threshold
+     */
     @Dynamic("Pseudo")
     @Redirect(method = "sendCompressionPacket()V", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/MinecraftServer;getNetworkCompressionThreshold()I"))
     private int stopCompressionIfStreamingCompressionExists(MinecraftServer server) {

@@ -45,17 +45,37 @@ import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import java.security.PrivateKey;
 
+/**
+ * Replaces Krypton's stream ciphers with RakNet frame encryption after vanilla key negotiation.
+ */
 @Mixin(ServerLoginPacketListenerImpl.class)
 public class MixinServerLoginNetworkHandler {
 
+    /**
+     * Login connection inspected for Krypton cipher handlers.
+     */
     @Shadow
     @Final
     public Connection connection;
 
+    /**
+     * Server supplying the RSA private key used to recover the negotiated session secret.
+     */
     @Shadow @Final private MinecraftServer server;
 
+    /**
+     * Vanilla login challenge retained by the target listener, unused by this compatibility hook.
+     */
     @Shadow @Final private byte[] challenge;
 
+    /**
+     * Detects Krypton cipher handlers and re-enters Minecraft encryption setup with standard ciphers.
+     * The RakNet connection hooks then install frame encryption in their place.
+     *
+     * @param packet client key response containing the encrypted session secret
+     * @param ci injection callback after vanilla encryption setup
+     * @throws CryptException if recovering the session key or creating replacement ciphers fails
+     */
     @Inject(method = "handleKey", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/Connection;setEncryptionKey(Ljavax/crypto/Cipher;Ljavax/crypto/Cipher;)V", shift = At.Shift.AFTER))
     private void afterSetupEncryption(ServerboundKeyPacket packet, CallbackInfo ci) throws CryptException {
         final ChannelPipeline pipeline = ((IClientConnection) this.connection).getChannel().pipeline();
