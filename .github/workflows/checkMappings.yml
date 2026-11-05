@@ -39,7 +39,7 @@ jobs:
         with:
           path: |
             ./run-mappingsGen
-          key: ${{ runner.os }}-mappingsGen-${{ hashFiles('./genMappings.sh') }}
+          key: ${{ runner.os }}-mappingsGen-${{ hashFiles('./genMappings.sh', './.github/scripts/generate-mappings.py', './supported-versions.json') }}
           restore-keys: |
             ${{ runner.os }}-mappingsGen-
       - name: generate mappings
