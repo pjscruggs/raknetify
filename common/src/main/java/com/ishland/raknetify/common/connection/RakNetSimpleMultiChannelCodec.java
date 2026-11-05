@@ -94,36 +94,12 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
         if (this.queuePendingWrites && msg instanceof ByteBuf buf) {
-            final FrameData data = encode0(ctx, buf);
-            if (data != null) {
-                pendingWrites.add(new PendingWrite(data, promise));
-            } else {
-                promise.setSuccess();
-            }
-            buf.release();
+            queueWrite(ctx, buf, promise);
             return;
         }
 
         if (msg == SIGNAL_START_MULTICHANNEL) {
-            promise.trySuccess();
-            if (this.isMultichannelEnabled) return;
-            if (!this.isMultichannelAvailable()) {
-                System.out.println("Raknetify: [MultiChannellingDataCodec] Failed to start multichannel: not available");
-                return;
-            }
-            final ByteBuf buf = ctx.alloc().buffer(1).writeByte(0);
-            try {
-                final FrameData frameData = FrameData.create(ctx.alloc(), Constants.RAKNET_PING_PACKET_ID, buf);
-                frameData.setOrderChannel(7);
-                this.queuePendingWrites = true;
-                ctx.write(frameData).addListener(future -> {
-                    isMultichannelEnabled = true;
-                    if (Constants.DEBUG) System.out.println("Raknetify: [MultiChannellingDataCodec] Started multichannel");
-                    flushPendingWrites(ctx);
-                });
-            } finally {
-                buf.release();
-            }
+            startMultichannel(ctx, promise);
             return;
         }
         if (msg == SynchronizationLayer.SYNC_REQUEST_OBJECT) {
@@ -151,6 +127,52 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
         }
 
         super.write(ctx, msg, promise);
+    }
+
+
+    /**
+     * Starts channel negotiation and holds writes until the ordered marker has been delivered.
+     *
+     * @param ctx outbound context used to send the marker on channel seven
+     * @param promise notification for accepting the local start request, not the peer acknowledgement
+     */
+    private void startMultichannel(ChannelHandlerContext ctx, ChannelPromise promise) {
+        promise.trySuccess();
+        if (this.isMultichannelEnabled) return;
+        if (!this.isMultichannelAvailable()) {
+            System.out.println("Raknetify: [MultiChannellingDataCodec] Failed to start multichannel: not available");
+            return;
+        }
+        final ByteBuf buf = ctx.alloc().buffer(1).writeByte(0);
+        try {
+            final FrameData frameData = FrameData.create(ctx.alloc(), Constants.RAKNET_PING_PACKET_ID, buf);
+            frameData.setOrderChannel(7);
+            this.queuePendingWrites = true;
+            ctx.write(frameData).addListener(future -> {
+                isMultichannelEnabled = true;
+                if (Constants.DEBUG) System.out.println("Raknetify: [MultiChannellingDataCodec] Started multichannel");
+                flushPendingWrites(ctx);
+            });
+        } finally {
+            buf.release();
+        }
+    }
+
+    /**
+     * Holds an encoded packet until multichannel negotiation finishes, completing discarded packets immediately.
+     *
+     * @param ctx allocation context for the encoded frame
+     * @param buf Minecraft packet payload released after encoding
+     * @param promise completion notification retained with an accepted frame
+     */
+    private void queueWrite(ChannelHandlerContext ctx, ByteBuf buf, ChannelPromise promise) {
+        final FrameData data = encode0(ctx, buf);
+        if (data != null) {
+            pendingWrites.add(new PendingWrite(data, promise));
+        } else {
+            promise.setSuccess();
+        }
+        buf.release();
     }
 
     private FrameData encode0(ChannelHandlerContext ctx, ByteBuf buf) {

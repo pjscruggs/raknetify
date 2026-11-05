@@ -35,6 +35,7 @@ import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
 
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.zip.DataFormatException;
 import java.util.zip.Deflater;
 import java.util.zip.Inflater;
 
@@ -119,60 +120,11 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
         if (msg instanceof FrameData compressedFrameData) {
             compressedFrameData.touch();
             if (compressedFrameData.getPacketId() == Constants.RAKNET_STREAMING_COMPRESSION_HANDSHAKE_PACKET_ID) {
-                final int orderChannel = compressedFrameData.getOrderChannel();
-                ByteBuf payload = null;
-                try {
-                    payload = compressedFrameData.createData().skipBytes(1);
-                    if (payload.readableBytes() == 8) {
-                        final long l = payload.readLong();
-                        if (l == CHANNEL_START) {
-                            initInflater(orderChannel);
-                            return;
-                        } else if (l == SERVER_HANDSHAKE) {
-                            active = true;
-                            doChannelStart(ctx);
-                            return;
-                        }
-                    }
-                } finally {
-                    compressedFrameData.release();
-                    if (payload != null) payload.release();
-                }
+                handleHandshake(ctx, compressedFrameData);
                 return;
             } else if (compressedFrameData.getPacketId() == compressedPacketId && compressedFrameData.getReliability().isReliable && compressedFrameData.getReliability().isOrdered && !compressedFrameData.getReliability().isSequenced && inflaters[compressedFrameData.getOrderChannel()] != null) {
-                final int orderChannel = compressedFrameData.getOrderChannel();
-                final Inflater inflater = inflaters[orderChannel];
-                final ByteBuf data = compressedFrameData.createData().skipBytes(1);
-
-                ByteBuf out = null;
-                FrameData rawFrameData = null;
-                try {
-                    inflater.setInput(data.nioBuffer());
-
-                    inBytesCompressed += data.readableBytes();
-
-                    out = ctx.alloc().buffer();
-                    {
-                        int inflatedBytes;
-                        while ((inflatedBytes = inflater.inflate(inflateBuffer)) != 0) {
-                            out.writeBytes(inflateBuffer, 0, inflatedBytes);
-                        }
-                    }
-
-                    inBytesRaw += out.writerIndex();
-
-                    rawFrameData = FrameData.create(ctx.alloc(), rawPacketId, out);
-                    rawFrameData.setReliability(compressedFrameData.getReliability());
-                    rawFrameData.setOrderChannel(orderChannel);
-                    ctx.fireChannelRead(rawFrameData);
-                    rawFrameData = null;
-                    return;
-                } finally {
-                    data.release();
-                    compressedFrameData.release();
-                    if (out != null) out.release();
-                    if (rawFrameData != null) rawFrameData.release();
-                }
+                inflateFrame(ctx, compressedFrameData);
+                return;
             }
         }
         super.channelRead(ctx, msg);
@@ -194,42 +146,126 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
                     return;
                 }
 
-                final int orderChannel = rawFrameData.getOrderChannel();
-                final Deflater deflater = deflaters[orderChannel];
-                final ByteBuf data = rawFrameData.createData().skipBytes(1);
-
-                ByteBuf out = null;
-                FrameData compressedFrameData = null;
-                try {
-                    deflater.setInput(data.nioBuffer());
-
-                    outBytesRaw += data.readableBytes();
-
-                    out = ctx.alloc().buffer();
-                    {
-                        int deflatedBytes;
-                        while ((deflatedBytes = deflater.deflate(deflateBuffer, 0, deflateBuffer.length, Deflater.SYNC_FLUSH)) != 0) {
-                            out.writeBytes(deflateBuffer, 0, deflatedBytes);
-                        }
-                    }
-
-                    outBytesCompressed += out.writerIndex();
-
-                    compressedFrameData = FrameData.create(ctx.alloc(), compressedPacketId, out);
-                    compressedFrameData.setReliability(rawFrameData.getReliability());
-                    compressedFrameData.setOrderChannel(orderChannel);
-                    ctx.write(compressedFrameData, promise);
-                    compressedFrameData = null;
-                    return;
-                } finally {
-                    data.release();
-                    rawFrameData.release();
-                    if (out != null) out.release();
-                    if (compressedFrameData != null) compressedFrameData.release();
-                }
+                deflateFrame(ctx, rawFrameData, promise);
+                return;
             }
         }
         super.write(ctx, msg, promise);
+    }
+
+
+    /**
+     * Consumes a compression control frame and starts the requested channel's stream.
+     *
+     * @param ctx pipeline context used to acknowledge the peer's handshake
+     * @param compressedFrameData control frame whose reference is released on every exit
+     */
+    private void handleHandshake(ChannelHandlerContext ctx, FrameData compressedFrameData) {
+        final int orderChannel = compressedFrameData.getOrderChannel();
+        ByteBuf payload = null;
+        try {
+            payload = compressedFrameData.createData().skipBytes(1);
+            if (payload.readableBytes() == 8) {
+                final long l = payload.readLong();
+                if (l == CHANNEL_START) {
+                    initInflater(orderChannel);
+                    return;
+                } else if (l == SERVER_HANDSHAKE) {
+                    active = true;
+                    doChannelStart(ctx);
+                    return;
+                }
+            }
+        } finally {
+            compressedFrameData.release();
+            if (payload != null) payload.release();
+        }
+    }
+
+    /**
+     * Inflates one ordered frame with that channel's retained dictionary and forwards its payload.
+     *
+     * @param ctx pipeline context that allocates and receives the replacement frame
+     * @param compressedFrameData owned compressed frame, released after decoding or failure
+     * @throws DataFormatException if the peer's compressed stream is invalid
+     */
+    private void inflateFrame(ChannelHandlerContext ctx, FrameData compressedFrameData) throws DataFormatException {
+        final int orderChannel = compressedFrameData.getOrderChannel();
+        final Inflater inflater = inflaters[orderChannel];
+        final ByteBuf data = compressedFrameData.createData().skipBytes(1);
+
+        ByteBuf out = null;
+        FrameData rawFrameData = null;
+        try {
+            inflater.setInput(data.nioBuffer());
+
+            inBytesCompressed += data.readableBytes();
+
+            out = ctx.alloc().buffer();
+            {
+                int inflatedBytes;
+                while ((inflatedBytes = inflater.inflate(inflateBuffer)) != 0) {
+                    out.writeBytes(inflateBuffer, 0, inflatedBytes);
+                }
+            }
+
+            inBytesRaw += out.writerIndex();
+
+            rawFrameData = FrameData.create(ctx.alloc(), rawPacketId, out);
+            rawFrameData.setReliability(compressedFrameData.getReliability());
+            rawFrameData.setOrderChannel(orderChannel);
+            ctx.fireChannelRead(rawFrameData);
+            rawFrameData = null;
+            return;
+        } finally {
+            data.release();
+            compressedFrameData.release();
+            if (out != null) out.release();
+            if (rawFrameData != null) rawFrameData.release();
+        }
+    }
+
+    /**
+     * Compresses one frame without resetting its channel's dictionary between packets.
+     *
+     * @param ctx outbound pipeline context that receives the compressed replacement
+     * @param rawFrameData owned raw frame, released after encoding or failure
+     * @param promise completion notification transferred to the replacement frame
+     */
+    private void deflateFrame(ChannelHandlerContext ctx, FrameData rawFrameData, ChannelPromise promise) {
+        final int orderChannel = rawFrameData.getOrderChannel();
+        final Deflater deflater = deflaters[orderChannel];
+        final ByteBuf data = rawFrameData.createData().skipBytes(1);
+
+        ByteBuf out = null;
+        FrameData compressedFrameData = null;
+        try {
+            deflater.setInput(data.nioBuffer());
+
+            outBytesRaw += data.readableBytes();
+
+            out = ctx.alloc().buffer();
+            {
+                int deflatedBytes;
+                while ((deflatedBytes = deflater.deflate(deflateBuffer, 0, deflateBuffer.length, Deflater.SYNC_FLUSH)) != 0) {
+                    out.writeBytes(deflateBuffer, 0, deflatedBytes);
+                }
+            }
+
+            outBytesCompressed += out.writerIndex();
+
+            compressedFrameData = FrameData.create(ctx.alloc(), compressedPacketId, out);
+            compressedFrameData.setReliability(rawFrameData.getReliability());
+            compressedFrameData.setOrderChannel(orderChannel);
+            ctx.write(compressedFrameData, promise);
+            compressedFrameData = null;
+            return;
+        } finally {
+            data.release();
+            rawFrameData.release();
+            if (out != null) out.release();
+            if (compressedFrameData != null) compressedFrameData.release();
+        }
     }
 
     public long getInBytesCompressed() {

@@ -177,19 +177,7 @@ public class SynchronizationLayer extends ChannelDuplexHandler {
                                             orderIndex
                                     ));
                         FIELD_QUEUE_LAST_ORDER_INDEX.set(frameOrderInQueues[channel], orderIndex);
-                        final ObjectIterator<?> iterator = this.frameJoinerPendingPackets.values().iterator();
-                        while (iterator.hasNext()) {
-                            final Object next = iterator.next();
-                            try {
-                                final Frame frame = (Frame) FIELD_FRAME_JOINER_BUILDER_SAMPLE_PACKET.get(next);
-                                if (frame.getReliability().isOrdered && frame.getOrderChannel() == channel) {
-                                    METHOD_QUEUE_BUILDER_RELEASE.invoke(next);
-                                    iterator.remove();
-                                }
-                            } catch (IllegalAccessException e) {
-                                throw new RuntimeException(e);
-                            }
-                        }
+                        discardPartialFrames(channel);
                     }
                     final int seqId = byteBuf.readInt();
                     if (Constants.DEBUG)
@@ -206,6 +194,30 @@ public class SynchronizationLayer extends ChannelDuplexHandler {
             return;
         }
         ctx.fireChannelRead(msg);
+    }
+
+
+    /**
+     * Releases incomplete ordered frames that belong to a channel being resynchronized.
+     *
+     * @param channel ordering channel whose old sequence has been abandoned
+     * @throws ReflectiveOperationException if the transport's fragment builder cannot be released
+     * @throws RuntimeException if the builder's retained frame cannot be read
+     */
+    private void discardPartialFrames(int channel) throws ReflectiveOperationException {
+        final ObjectIterator<?> iterator = this.frameJoinerPendingPackets.values().iterator();
+        while (iterator.hasNext()) {
+            final Object next = iterator.next();
+            try {
+                final Frame frame = (Frame) FIELD_FRAME_JOINER_BUILDER_SAMPLE_PACKET.get(next);
+                if (frame.getReliability().isOrdered && frame.getOrderChannel() == channel) {
+                    METHOD_QUEUE_BUILDER_RELEASE.invoke(next);
+                    iterator.remove();
+                }
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException(e);
+            }
+        }
     }
 
     private final ReferenceLinkedOpenHashSet<Pair<ChannelPromise, Object>> queue = new ReferenceLinkedOpenHashSet<>();
