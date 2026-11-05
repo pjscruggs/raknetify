@@ -29,7 +29,32 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
-/** Declares which vanilla traffic group must remain ordered with a mod's custom payloads. */
+/**
+ * Declares which vanilla traffic group must remain ordered with a mod's custom payloads.
+ * The available groups are {@code ui} for world-independent menus and interactions,
+ * {@code entity} for entity spawn, removal, and movement, {@code world_interaction} for
+ * inventories and other world-dependent interactions, {@code effects} for sound and particles,
+ * and {@code chunk} for terrain, block, and lighting updates. All groups retain reliable ordered delivery.
+ *
+ * <p>Fabric mods can implement the following provider using only JDK types and list its class under
+ * the {@code raknetify:packet_channels} key in their {@code fabric.mod.json} entrypoints:</p>
+ * <pre>{@code
+ * public final class OrderingProvider implements Consumer<BiConsumer<String, String>> {
+ *     public void accept(BiConsumer<String, String> register) {
+ *         register.accept("example:entity_path", "entity");
+ *     }
+ * }
+ * }</pre>
+ * <p>Fabric does not invoke this entrypoint when Raknetify2 is absent. Providers should only declare
+ * identifiers and groups, without depending on another mod's initialization having finished.
+ * Plugins can call {@link #register(String, String)} during their own initialization instead.</p>
+ *
+ * <p>Each new RakNet connection advertises its declarations before Minecraft traffic. Updated servers
+ * and proxies use peer declarations for custom payloads that have no local rule. This lets a modded
+ * client describe its requirements to a proxy whose backend does not run Raknetify2. Local declarations
+ * take precedence, and rules never affect another connection or classify ordinary vanilla packets.
+ * Older peers ignore the advertisement and retain their existing routing behavior.</p>
+ */
 public final class PacketOrdering {
 
     /** Maximum declarations sent by one endpoint during connection setup. */
