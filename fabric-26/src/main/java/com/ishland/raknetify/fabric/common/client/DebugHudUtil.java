@@ -47,7 +47,7 @@ public class DebugHudUtil {
                 if (channel.config() instanceof RakNet.Config config) {
                     if (config.getMetrics() instanceof SimpleMetricsLogger logger) {
                         consumer.accept(
-                                "[Raknetify] A: true, MTU: %d, RTT: %.2f/%.2fms"
+                                "[Raknetify2] A: true, MTU: %d, RTT: %.2f/%.2fms"
                                         .formatted(config.getMTU(),
                                                 logger.getMeasureRTTns() / 1_000_000.0,
                                                 logger.getMeasureRTTnsStdDev() / 1_000_000.0
@@ -55,28 +55,28 @@ public class DebugHudUtil {
                         final MetricsSynchronizationHandler serverSync = logger.getMetricsSynchronizationHandler();
                         if (serverSync != null && serverSync.isRemoteSupported()) {
                             consumer.accept(
-                                    "[Raknetify] C: BUF: %.2fMB; S: BUF: %.2fMB"
+                                    "[Raknetify2] C: BUF: %.2fMB; S: BUF: %.2fMB"
                                             .formatted(
                                                     logger.getCurrentQueuedBytes() / 1024.0 / 1024.0,
                                                     serverSync.getQueuedBytes() / 1024.0 / 1024.0
                                             ));
                         } else {
                             consumer.accept(
-                                    "[Raknetify] C: BUF: %.2fMB"
+                                    "[Raknetify2] C: BUF: %.2fMB"
                                             .formatted(
                                                     logger.getCurrentQueuedBytes() / 1024.0 / 1024.0
                                             ));
                         }
 
                         consumer.accept(
-                                "[Raknetify] C: I: %s, O: %s"
+                                "[Raknetify2] C: I: %s, O: %s"
                                         .formatted(
                                                 logger.getMeasureTrafficInFormatted(),
                                                 logger.getMeasureTrafficOutFormatted()
                                         ));
 
                         consumer.accept(
-                                "[Raknetify] C: ERR: %.4f%%, %d tx, %d rx, BST: %d"
+                                "[Raknetify2] C: ERR: %.4f%%, %d tx, %d rx, BST: %d"
                                         .formatted(
                                                 logger.getMeasureErrorRate() * 100.0,
                                                 logger.getMeasureTX(), logger.getMeasureRX(),
@@ -84,7 +84,7 @@ public class DebugHudUtil {
                                         ));
                         if (serverSync != null && serverSync.isRemoteSupported()) {
                             consumer.accept(
-                                    "[Raknetify] S: ERR: %.4f%%, %d tx, %d rx, BST: %d"
+                                    "[Raknetify2] S: ERR: %.4f%%, %d tx, %d rx, BST: %d"
                                             .formatted(
                                                     serverSync.getErrorRate() * 100.0,
                                                     serverSync.getTX(), serverSync.getRX(),
@@ -93,7 +93,7 @@ public class DebugHudUtil {
                         }
                     } else {
                         consumer.accept(
-                                "[Raknetify] A: true, MTU: %d"
+                                "[Raknetify2] A: true, MTU: %d"
                                         .formatted(config.getMTU())
                         );
                     }
@@ -101,7 +101,7 @@ public class DebugHudUtil {
                     final MultiChannelingStreamingCompression compression = channel.pipeline().get(MultiChannelingStreamingCompression.class);
                     if (compression != null && compression.isActive()) {
                         consumer.accept(
-                                "[Raknetify] CRatio: I: %.2f%%, O: %.2f%%"
+                                "[Raknetify2] CRatio: I: %.2f%%, O: %.2f%%"
                                         .formatted(compression.getInCompressionRatio() * 100, compression.getOutCompressionRatio() * 100)
                         );
                     }
@@ -110,7 +110,7 @@ public class DebugHudUtil {
                 }
             }
         }
-        consumer.accept("[Raknetify] A: false");
+        consumer.accept("[Raknetify2] A: false");
     }
 
 }

@@ -36,7 +36,7 @@ final class DebugHudLines26_4 {
         try {
             // Cache the reflected API once because debug lines are emitted on every HUD update.
             Class<?> builderClass = Class.forName("net.minecraft.client.gui.components.debug.DebugGroup$Builder");
-            Object builder = builderClass.getMethod("titled", String.class).invoke(null, "Raknetify");
+            Object builder = builderClass.getMethod("titled", String.class).invoke(null, "Raknetify2");
             GROUP = builderClass.getMethod("build").invoke(builder);
             ADD_LINE = DebugScreenDisplayer.class.getMethod("addToGroup", GROUP.getClass(), String.class);
         } catch (ReflectiveOperationException exception) {
@@ -51,7 +51,7 @@ final class DebugHudLines26_4 {
         try {
             ADD_LINE.invoke(lines, GROUP, text);
         } catch (ReflectiveOperationException exception) {
-            throw new IllegalStateException("Cannot display Raknetify debug information", exception);
+            throw new IllegalStateException("Cannot display Raknetify2 debug information", exception);
         }
     }
 }

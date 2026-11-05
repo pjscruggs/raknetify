@@ -9,7 +9,7 @@ pluginManagement {
     }
 }
 
-rootProject.name = "raknetify"
+rootProject.name = "raknetify2"
 
 includeBuild('netty-raknet') {
     dependencySubstitution {

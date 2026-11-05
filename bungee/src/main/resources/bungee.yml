@@ -23,6 +23,7 @@
 #
 
 name: raknetify
+description: Raknetify2, an independently maintained fork of Raknetify.
 main: com.ishland.raknetify.bungee.RaknetifyBungeePlugin
 version: ${version}
 author: ishland

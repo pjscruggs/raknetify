@@ -25,11 +25,11 @@ fi
 
 for version in $vers
 do
-  rm -f mods/raknetify-*-all.jar
+  rm -f mods/raknetify-*-all.jar mods/raknetify2-*-all.jar
   if [[ "$version" == 26.* ]]; then
-    cp ../fabric-26/build/libs/raknetify-*-all.jar mods/ || exit 1
+    cp ../fabric-26/build/libs/raknetify2-*-all.jar mods/ || exit 1
   else
-    cp ../fabric/build/libs/raknetify-*-all.jar mods/ || exit 1
+    cp ../fabric/build/libs/raknetify2-*-all.jar mods/ || exit 1
   fi
 
   launcher="fabric-server-mc${version}-loader${loader_version}-installer${installer_version}.jar"

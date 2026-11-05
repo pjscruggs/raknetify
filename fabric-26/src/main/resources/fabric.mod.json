@@ -3,12 +3,14 @@
   "id": "raknetify",
   "version": "${version}",
 
-  "name": "Raknetify (Fabric)",
+  "name": "Raknetify2 (Fabric)",
   "description": "A Fabric mod that allows using RakNet as Minecraft networking backend. ",
   "authors": [
     "ishland"
   ],
   "contact": {
+    "sources": "https://github.com/pjscruggs/raknetify2",
+    "issues": "https://github.com/pjscruggs/raknetify2/issues"
   },
 
   "license": "MIT",
