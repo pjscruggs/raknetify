@@ -94,15 +94,7 @@ public class DebugUtil {
         }
 
         b.append('\n');
-        b.append("Pipeline: ").append('\n');
-        for (String name : channel.pipeline().names()) {
-            final ChannelHandler channelHandler = channel.pipeline().get(name);
-            if (channelHandler == null) {
-                b.append("\t").append(name).append(": \t").append("null").append('\n');
-            } else {
-                b.append("\t").append(name).append(": \t").append(channelHandler.toString()).append("(").append(channelHandler.getClass().getName()).append(")").append('\n');
-            }
-        }
+        appendPipeline(b, channel);
 
         if (channel.parent() != null) {
             b.append('\n');
@@ -113,6 +105,24 @@ public class DebugUtil {
 
 
         return b.toString();
+    }
+
+    /**
+     * Appends handler names and implementation types in the channel's current pipeline order.
+     *
+     * @param b diagnostic report being assembled
+     * @param channel channel whose handlers may be removed concurrently while the report is built
+     */
+    private static void appendPipeline(StringBuilder b, Channel channel) {
+        b.append("Pipeline: ").append('\n');
+        for (String name : channel.pipeline().names()) {
+            final ChannelHandler channelHandler = channel.pipeline().get(name);
+            if (channelHandler == null) {
+                b.append("\t").append(name).append(": \t").append("null").append('\n');
+            } else {
+                b.append("\t").append(name).append(": \t").append(channelHandler.toString()).append("(").append(channelHandler.getClass().getName()).append(")").append('\n');
+            }
+        }
     }
 
 }

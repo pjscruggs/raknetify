@@ -24,12 +24,9 @@
 
 package com.ishland.raknetify.fabric.common.client;
 
-import com.ishland.raknetify.common.connection.MetricsSynchronizationHandler;
-import com.ishland.raknetify.common.connection.MultiChannelingStreamingCompression;
-import com.ishland.raknetify.common.connection.SimpleMetricsLogger;
+import com.ishland.raknetify.common.util.DebugHudFormatter;
 import com.ishland.raknetify.fabric.mixin.access.IClientConnection;
 import io.netty.channel.Channel;
-import network.ycc.raknet.RakNet;
 
 import java.util.function.Consumer;
 import net.minecraft.client.Minecraft;
@@ -43,72 +40,7 @@ public class DebugHudUtil {
         if (networkHandler != null) {
             final Connection connection = networkHandler.getConnection();
             final Channel channel = ((IClientConnection) connection).getChannel();
-            if (channel != null) {
-                if (channel.config() instanceof RakNet.Config config) {
-                    if (config.getMetrics() instanceof SimpleMetricsLogger logger) {
-                        consumer.accept(
-                                "[Raknetify2] A: true, MTU: %d, RTT: %.2f/%.2fms"
-                                        .formatted(config.getMTU(),
-                                                logger.getMeasureRTTns() / 1_000_000.0,
-                                                logger.getMeasureRTTnsStdDev() / 1_000_000.0
-                                        ));
-                        final MetricsSynchronizationHandler serverSync = logger.getMetricsSynchronizationHandler();
-                        if (serverSync != null && serverSync.isRemoteSupported()) {
-                            consumer.accept(
-                                    "[Raknetify2] C: BUF: %.2fMB; S: BUF: %.2fMB"
-                                            .formatted(
-                                                    logger.getCurrentQueuedBytes() / 1024.0 / 1024.0,
-                                                    serverSync.getQueuedBytes() / 1024.0 / 1024.0
-                                            ));
-                        } else {
-                            consumer.accept(
-                                    "[Raknetify2] C: BUF: %.2fMB"
-                                            .formatted(
-                                                    logger.getCurrentQueuedBytes() / 1024.0 / 1024.0
-                                            ));
-                        }
-
-                        consumer.accept(
-                                "[Raknetify2] C: I: %s, O: %s"
-                                        .formatted(
-                                                logger.getMeasureTrafficInFormatted(),
-                                                logger.getMeasureTrafficOutFormatted()
-                                        ));
-
-                        consumer.accept(
-                                "[Raknetify2] C: ERR: %.4f%%, %d tx, %d rx, BST: %d"
-                                        .formatted(
-                                                logger.getMeasureErrorRate() * 100.0,
-                                                logger.getMeasureTX(), logger.getMeasureRX(),
-                                                logger.getMeasureBurstTokens() + config.getDefaultPendingFrameSets()
-                                        ));
-                        if (serverSync != null && serverSync.isRemoteSupported()) {
-                            consumer.accept(
-                                    "[Raknetify2] S: ERR: %.4f%%, %d tx, %d rx, BST: %d"
-                                            .formatted(
-                                                    serverSync.getErrorRate() * 100.0,
-                                                    serverSync.getTX(), serverSync.getRX(),
-                                                    serverSync.getBurst()
-                                            ));
-                        }
-                    } else {
-                        consumer.accept(
-                                "[Raknetify2] A: true, MTU: %d"
-                                        .formatted(config.getMTU())
-                        );
-                    }
-
-                    final MultiChannelingStreamingCompression compression = channel.pipeline().get(MultiChannelingStreamingCompression.class);
-                    if (compression != null && compression.isActive()) {
-                        consumer.accept(
-                                "[Raknetify2] CRatio: I: %.2f%%, O: %.2f%%"
-                                        .formatted(compression.getInCompressionRatio() * 100, compression.getOutCompressionRatio() * 100)
-                        );
-                    }
-
-                    return;
-                }
-            }
+            if (DebugHudFormatter.append(consumer, channel)) return;
         }
         consumer.accept("[Raknetify2] A: false");
     }
