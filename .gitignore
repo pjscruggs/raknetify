@@ -31,3 +31,7 @@ bin/
 # fabric
 
 run*/
+
+# Python build and verification helpers
+__pycache__/
+*.pyc

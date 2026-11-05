@@ -1,3 +1,4 @@
+/** Configures shared dependencies, publication settings, and verification for every mod and proxy module. */
 plugins {
 	id 'fabric-loom' version '1.17.21' apply false
 	id 'net.fabricmc.fabric-loom' version '1.17.21' apply false
@@ -14,11 +15,18 @@ ext.modrinthProjectId = providers.gradleProperty('modrinth_project_id')
 ext.curseforgeProjectId = providers.gradleProperty('curseforge_project_id')
 ext.supportedVersions = new groovy.json.JsonSlurper().parse(file('supported-versions.json'))
 
+tasks.register('qualityChecks') {
+	group = 'verification'
+	description = 'Check documentation and a cyclomatic complexity limit of ten across project sources.'
+	dependsOn gradle.includedBuild('quality').task(':check')
+}
+
 subprojects {
 	apply plugin: 'java'
 	apply plugin: 'java-library'
 	apply plugin: 'maven-publish'
 	apply plugin: 'dev.yumi.gradle.licenser'
+	tasks.named('check') { dependsOn rootProject.tasks.named('qualityChecks') }
 
 	java {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -86,6 +94,11 @@ afterEvaluate {
 	logger.lifecycle(com.ishland.buildscript.ParseGItHubActionChangelog.getChangelog())
 }
 
+/**
+ * Derives the development build number from the nearest Git tag and marks uncommitted changes.
+ *
+ * @return commit distance from the tag, followed by a dirty marker when needed
+ */
 String getVersionSuffix() {
     def stdout = providers.exec {
         commandLine 'git', 'describe', '--tags', '--dirty', '--broken'

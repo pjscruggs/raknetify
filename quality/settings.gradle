@@ -1,0 +1,2 @@
+/** Identifies the source checks independently of the Minecraft compilation projects. */
+rootProject.name = 'raknetify2-quality'

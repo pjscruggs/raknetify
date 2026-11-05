@@ -1,3 +1,4 @@
+/** Defines the mod modules and includes the transport dependency and source-quality build. */
 pluginManagement {
     repositories {
         maven {
@@ -10,6 +11,8 @@ pluginManagement {
 }
 
 rootProject.name = "raknetify2"
+
+includeBuild('quality')
 
 includeBuild('netty-raknet') {
     dependencySubstitution {

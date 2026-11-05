@@ -1,0 +1,79 @@
+/** Builds and runs the source-quality rules against all repository-owned source files. */
+plugins {
+    id 'java'
+    id 'groovy'
+    id 'checkstyle'
+    id 'codenarc'
+}
+
+repositories { mavenCentral() }
+
+dependencies {
+    implementation 'com.puppycrawl.tools:checkstyle:14.4.0'
+    implementation 'org.codenarc:CodeNarc:4.0.0'
+    implementation 'org.apache.groovy:groovy:5.0.3'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.3'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+/** Includes new source files during local development as well as files already committed. */
+def ownedSources = providers.exec {
+    workingDir projectDir.parentFile
+    commandLine 'git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z'
+}.standardOutput.asText.get().split('\u0000').findAll { !it.empty }
+        .collect { new File(projectDir.parentFile, it) }
+
+checkstyle {
+    toolVersion = '14.4.0'
+    configFile = file('checkstyle.xml')
+    ignoreFailures = false
+    maxWarnings = 0
+}
+
+codenarc {
+    toolVersion = '4.0.0'
+    configFile = file('codenarc.groovy')
+    ignoreFailures = false
+    maxPriority1Violations = 0
+    maxPriority2Violations = 0
+    maxPriority3Violations = 0
+}
+
+tasks.withType(Checkstyle).configureEach {
+    dependsOn 'classes'
+    checkstyleClasspath = configurations.checkstyle + sourceSets.main.output
+}
+
+tasks.withType(CodeNarc).configureEach {
+    dependsOn 'classes'
+    codenarcClasspath = configurations.codenarc + sourceSets.main.output
+}
+
+tasks.register('checkJava', Checkstyle) {
+    source files(ownedSources.findAll { it.name.endsWith('.java') })
+    classpath = files()
+    reports { xml.required = true; html.required = true }
+}
+
+tasks.register('checkGroovy', CodeNarc) {
+    source files(ownedSources.findAll { it.name.endsWith('.groovy') || it.name.endsWith('.gradle') })
+    reports { xml.required = true; html.required = true }
+}
+
+test { useJUnitPlatform() }
+
+/** Python command can be overridden when the interpreter has a platform-specific name. */
+def pythonCommand = providers.gradleProperty('qualityPython').getOrElse(
+        System.getProperty('os.name').toLowerCase().contains('windows') ? 'python' : 'python3')
+
+tasks.register('checkPython', Exec) {
+    workingDir projectDir.parentFile
+    commandLine pythonCommand, 'quality/check_python.py'
+}
+
+tasks.register('testPythonPolicy', Exec) {
+    workingDir projectDir.parentFile
+    commandLine pythonCommand, '-m', 'unittest', 'discover', '-s', 'quality', '-p', 'test_*.py'
+}
+
+tasks.named('check') { dependsOn 'checkJava', 'checkGroovy', 'checkPython', 'testPythonPolicy' }
