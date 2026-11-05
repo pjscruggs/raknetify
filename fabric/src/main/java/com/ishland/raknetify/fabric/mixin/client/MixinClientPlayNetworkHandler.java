@@ -38,9 +38,18 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+/**
+ * Starts the client's multichannel negotiation after Minecraft has processed the initial join packet.
+ */
 @Mixin(ClientPlayNetworkHandler.class)
 public class MixinClientPlayNetworkHandler {
 
+    /**
+     * Schedules the negotiation marker on the channel event loop once client join state is initialized.
+     *
+     * @param packet initial game-join packet, already processed by vanilla
+     * @param ci return injection callback, unused because negotiation follows vanilla processing
+     */
     @Inject(method = "onGameJoin", at = @At("RETURN"))
     private void postGameJoin(GameJoinS2CPacket packet, CallbackInfo ci) {
         final Channel channel = ((IClientConnection) MultiVersionUtil.ClientPlayNetworkHandler$connection.get((ClientPlayNetworkHandler) (Object) this)).getChannel();

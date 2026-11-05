@@ -45,17 +45,31 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.net.InetSocketAddress;
 
+/**
+ * Shows transport RTT in the server list and prevents TCP fallback probing for RakNet entries.
+ */
 @Mixin(targets = "net/minecraft/client/network/MultiplayerServerListPinger$1")
 public abstract class MixinMultiplayerServerListPinger1 implements ClientQueryPacketListener {
 
+    /**
+     * Status connection captured by vanilla's anonymous response listener.
+     */
     @Shadow
     @Final
     ClientConnection field_3774; // synthetic
 
+    /**
+     * Server-list record receiving the measured RakNet ping.
+     */
     @Shadow
     @Final
     ServerInfo field_3776; // synthetic
 
+    /**
+     * Publishes the RakNet RTT in milliseconds after a valid server-status response.
+     *
+     * @param ci return callback after vanilla processes the status response
+     */
     @Inject(method = "onResponse(Lnet/minecraft/network/packet/s2c/query/QueryResponseS2CPacket;)V", at = @At("RETURN"))
     private void setPingImmediately(CallbackInfo ci) {
         final Channel channel = ((IClientConnection) field_3774).getChannel();
@@ -64,6 +78,15 @@ public abstract class MixinMultiplayerServerListPinger1 implements ClientQueryPa
         }
     }
 
+    /**
+     * Suppresses legacy TCP status probing when the current status connection uses RakNet.
+     *
+     * @param instance vanilla server-list pinger that would issue the fallback request
+     * @param socketAddress resolved fallback target
+     * @param address parsed server address retained by vanilla
+     * @param serverInfo server-list record that would receive fallback status
+     * @return false for RakNet status connections, true to preserve TCP fallback
+     */
     @Dynamic
     @WrapWithCondition(method = {"method_10839(Lnet/minecraft/class_2561;)V", "onDisconnected"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/MultiplayerServerListPinger;method_3001(Ljava/net/InetSocketAddress;Lnet/minecraft/client/network/ServerAddress;Lnet/minecraft/client/network/ServerInfo;)V"), require = 0)
     private boolean noPingRaknet(MultiplayerServerListPinger instance, InetSocketAddress socketAddress, ServerAddress address, ServerInfo serverInfo) {
@@ -71,12 +94,30 @@ public abstract class MixinMultiplayerServerListPinger1 implements ClientQueryPa
         return !(channel.config() instanceof RakNet.Config);
     }
 
+    /**
+     * Suppresses legacy TCP status probing when the current status connection uses RakNet.
+     *
+     * @param instance vanilla server-list pinger that would issue the fallback request
+     * @param socketAddress resolved fallback target
+     * @param address parsed server address retained by vanilla
+     * @param serverInfo server-list record that would receive fallback status
+     * @param backend vanilla event-loop backend for the fallback connection
+     * @return false for RakNet status connections, true to preserve TCP fallback
+     */
     @WrapWithCondition(method = "onDisconnected", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/MultiplayerServerListPinger;ping(Ljava/net/InetSocketAddress;Lnet/minecraft/client/network/ServerAddress;Lnet/minecraft/client/network/ServerInfo;Lnet/minecraft/network/NetworkingBackend;)V"), require = 0)
     private boolean noPingRaknet(MultiplayerServerListPinger instance, InetSocketAddress socketAddress, ServerAddress address, ServerInfo serverInfo, NetworkingBackend backend) {
         final Channel channel = ((IClientConnection) field_3774).getChannel();
         return !(channel.config() instanceof RakNet.Config);
     }
 
+    /**
+     * Suppresses legacy TCP status probing when the current status connection uses RakNet.
+     *
+     * @param instance vanilla server-list pinger that would issue the fallback request
+     * @param address resolved fallback target in the oldest supported method signature
+     * @param info server-list record that would receive fallback status
+     * @return false for RakNet status connections, true to preserve TCP fallback
+     */
     @Dynamic
     @WrapWithCondition(method = "method_10839(Lnet/minecraft/class_2561;)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/MultiplayerServerListPinger;method_3001(Ljava/net/InetSocketAddress;Lnet/minecraft/client/network/ServerInfo;)V"), require = 0)
     private boolean noPingRaknet(MultiplayerServerListPinger instance, InetSocketAddress address, ServerInfo info) {

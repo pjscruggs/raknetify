@@ -33,10 +33,19 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+/**
+ * Registers transport diagnostics through the snapshot's registry bootstrap API.
+ */
 @Mixin(DebugScreenEntries.class)
 public class MixinDebugHudEntries26_4 {
 
     // Register through the snapshot's registry bootstrap instead of the removed static registration API.
+    /**
+     * Adds the Raknetify debug entry after vanilla populates the snapshot debug registry.
+     *
+     * @param registry debug-entry registry being bootstrapped
+     * @param ci return callback, unused because registration mutates the supplied registry
+     */
     @Inject(method = "bootstrap", at = @At("RETURN"))
     private static void registerDebugEntry(Registry<DebugScreenEntry> registry, CallbackInfoReturnable<Object> ci) {
         Registry.register(registry, DebugHudUtil1_21_9.ID, DebugHudUtil1_21_9.createEntry());

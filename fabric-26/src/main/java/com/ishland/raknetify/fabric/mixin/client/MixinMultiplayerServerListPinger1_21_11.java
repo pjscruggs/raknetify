@@ -38,9 +38,22 @@ import net.minecraft.network.Connection;
 import net.minecraft.server.network.EventLoopGroupHolder;
 import net.minecraft.util.debugchart.LocalSampleLogger;
 
+/**
+ * Selects RakNet for server-list probes using the connection-factory signature available in this version.
+ */
 @Mixin(ServerStatusPinger.class)
 public class MixinMultiplayerServerListPinger1_21_11 {
 
+    /**
+     * Chooses the server-list probe transport from the saved address prefix without changing normal TCP entries.
+     *
+     * @param address resolved remote server address
+     * @param backend vanilla event-loop backend passed to the factory
+     * @param packetSizeLog vanilla bandwidth logger argument, replaced with null for this status probe
+     * @param original intercepted vanilla connection factory
+     * @param entry saved server-list record retaining the user's transport prefix
+     * @return status connection using RakNet or ordinary TCP as requested
+     */
     @WrapOperation(method = "pingServer", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/Connection;connectToServer(Ljava/net/InetSocketAddress;Lnet/minecraft/server/network/EventLoopGroupHolder;Lnet/minecraft/util/debugchart/LocalSampleLogger;)Lnet/minecraft/network/Connection;"))
     private Connection redirectConnect(InetSocketAddress address, EventLoopGroupHolder backend, LocalSampleLogger packetSizeLog, Operation<Connection> original, ServerData entry) {
         final PrefixUtil.Info info = PrefixUtil.getInfo(entry.ip);

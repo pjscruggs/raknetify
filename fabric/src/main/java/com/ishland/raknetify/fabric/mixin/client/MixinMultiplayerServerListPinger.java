@@ -39,9 +39,19 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 
 import java.net.InetSocketAddress;
 
+/**
+ * Removes transport selection syntax before Minecraft resolves a server-list address.
+ */
 @Mixin(MultiplayerServerListPinger.class)
 public abstract class MixinMultiplayerServerListPinger {
 
+    /**
+     * Passes only the host-and-port portion of a prefixed address to vanilla's parser.
+     *
+     * @param address saved server address that may contain a RakNet prefix
+     * @param original intercepted vanilla address parser
+     * @return parsed address without transport selection syntax
+     */
     @Dynamic
     @WrapOperation(method = {"add", "method_3003"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ServerAddress;parse(Ljava/lang/String;)Lnet/minecraft/client/network/ServerAddress;"))
     private ServerAddress modifyRaknetAddress(String address, Operation<ServerAddress> original) {
@@ -49,6 +59,16 @@ public abstract class MixinMultiplayerServerListPinger {
         return original.call(info.stripped());
     }
 
+    /**
+     * Chooses the server-list probe transport from the saved address prefix without changing normal TCP entries.
+     *
+     * @param address resolved remote server address
+     * @param useEpoll vanilla preference for native Linux transport
+     * @param original intercepted vanilla connection factory
+     * @param entry saved server-list record retaining the user's transport prefix
+     * @param runnable vanilla status-completion callback, unused by transport selection
+     * @return status connection using RakNet or ordinary TCP as requested
+     */
     @Dynamic
     @WrapOperation(method = {"add", "method_3003"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/network/ClientConnection;method_10753(Ljava/net/InetSocketAddress;Z)Lnet/minecraft/network/ClientConnection;"), require = 0)
     private ClientConnection redirectConnect(InetSocketAddress address, boolean useEpoll, Operation<ClientConnection> original, ServerInfo entry, Runnable runnable) {

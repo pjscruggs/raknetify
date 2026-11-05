@@ -44,20 +44,37 @@ import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import net.minecraft.network.Connection;
 import net.minecraft.server.network.EventLoopGroupHolder;
 
+/**
+ * Carries a saved server's RakNet selection into the connection thread after stripping its hostname prefix.
+ */
 @Mixin(targets = "net/minecraft/client/gui/screens/ConnectScreen$1")
 public class MixinConnectionScreen1 extends Thread {
 
+    /**
+     * Address captured by the vanilla connection thread, replaced with its unprefixed equivalent.
+     */
     @Mutable
     @Shadow
     @Final
     ServerAddress val$hostAndPort;
 
+    /**
+     * Whether the original server address selected RakNet for this connection attempt.
+     */
     @Unique
     private boolean isRaknet = false;
 
+    /**
+     * Whether the original server address selected the opt-in larger MTU.
+     */
     @Unique
     private boolean raknetLargeMTU = false;
 
+    /**
+     * Captures transport flags and removes the prefix before the connection thread resolves the hostname.
+     *
+     * @param ci constructor-return callback after vanilla captures the target address
+     */
     @Inject(method = "<init>*", at = @At("RETURN"), remap = false)
     private void onInit(CallbackInfo ci) {
         final PrefixUtil.Info info = PrefixUtil.getInfo(this.val$hostAndPort.getHost());
@@ -68,6 +85,15 @@ public class MixinConnectionScreen1 extends Thread {
         }
     }
 
+    /**
+     * Selects the guarded RakNet factory only when this connection attempt requested UDP.
+     *
+     * @param address resolved remote Minecraft address
+     * @param backend vanilla event-loop backend selection
+     * @param connection existing Minecraft connection receiving the new channel
+     * @param original intercepted vanilla connection factory
+     * @return channel future for the selected transport
+     */
     @WrapOperation(method = "run()V", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/Connection;connect(Ljava/net/InetSocketAddress;Lnet/minecraft/server/network/EventLoopGroupHolder;Lnet/minecraft/network/Connection;)Lio/netty/channel/ChannelFuture;"), require = 0)
     private ChannelFuture connectRaknet(InetSocketAddress address, EventLoopGroupHolder backend, Connection connection, Operation<ChannelFuture> original) {
         return this.isRaknet ? RakNetClientConnectionUtil.connect(address, backend, this.raknetLargeMTU, original, connection) : original.call(address, backend, connection);

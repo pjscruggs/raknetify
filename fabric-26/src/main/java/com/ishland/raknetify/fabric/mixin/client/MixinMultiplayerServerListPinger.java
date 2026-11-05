@@ -34,9 +34,19 @@ import org.spongepowered.asm.mixin.injection.At;
 import net.minecraft.client.multiplayer.ServerStatusPinger;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
 
+/**
+ * Removes transport selection syntax before Minecraft resolves a server-list address.
+ */
 @Mixin(ServerStatusPinger.class)
 public abstract class MixinMultiplayerServerListPinger {
 
+    /**
+     * Passes only the host-and-port portion of a prefixed address to vanilla's parser.
+     *
+     * @param address saved server address that may contain a RakNet prefix
+     * @param original intercepted vanilla address parser
+     * @return parsed address without transport selection syntax
+     */
     @Dynamic
     @WrapOperation(method = "pingServer", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/resolver/ServerAddress;parseString(Ljava/lang/String;)Lnet/minecraft/client/multiplayer/resolver/ServerAddress;"))
     private ServerAddress modifyRaknetAddress(String address, Operation<ServerAddress> original) {

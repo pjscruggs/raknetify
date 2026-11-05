@@ -40,9 +40,23 @@ import org.spongepowered.asm.mixin.injection.At;
 
 import java.net.InetSocketAddress;
 
+/**
+ * Selects RakNet for server-list probes using the connection-factory signature available in this version.
+ */
 @Mixin(MultiplayerServerListPinger.class)
 public class MixinMultiplayerServerListPinger1_20_5 {
 
+    /**
+     * Chooses the server-list probe transport from the saved address prefix without changing normal TCP entries.
+     *
+     * @param address resolved remote server address
+     * @param useEpoll vanilla preference for native Linux transport
+     * @param log vanilla bandwidth logger argument, replaced with null for this status probe
+     * @param original intercepted vanilla connection factory
+     * @param entry saved server-list record retaining the user's transport prefix
+     * @param runnable vanilla status-completion callback, unused by transport selection
+     * @return status connection using RakNet or ordinary TCP as requested
+     */
     @Dynamic
     @WrapOperation(method = {"add", "method_3003"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/network/ClientConnection;method_10753(Ljava/net/InetSocketAddress;ZLnet/minecraft/util/profiler/MultiValueDebugSampleLogImpl;)Lnet/minecraft/network/ClientConnection;"))
     private ClientConnection redirectConnect(InetSocketAddress address, boolean useEpoll, MultiValueDebugSampleLogImpl log, Operation<ClientConnection> original, ServerInfo entry, Runnable runnable) {

@@ -34,9 +34,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.List;
 
+/**
+ * Appends RakNet diagnostics to the legacy debug HUD before configurable entries were introduced.
+ */
 @Mixin(DebugHud.class)
 public class MixinDebugHud1_21_8 {
 
+    /**
+     * Adds transport lines to the left-side text list returned by vanilla.
+     *
+     * @param cir return callback containing the mutable vanilla HUD line list
+     */
     @Dynamic
     @Inject(method = "method_1835", at = @At("RETURN"))
     private void getLeftText(CallbackInfoReturnable<List<String>> cir) {
