@@ -4,7 +4,9 @@ import java.nio.file.StandardCopyOption
 evaluationDependsOn(":")
 
 apply plugin: 'com.gradleup.shadow'
-apply plugin: 'com.modrinth.minotaur'
+if (rootProject.modrinthProjectId.isPresent()) {
+    apply plugin: 'com.modrinth.minotaur'
+}
 
 base {
     archivesName = project.archives_base_name + "-bungee"
@@ -70,11 +72,13 @@ tasks.withType(AbstractArchiveTask) {
     reproducibleFileOrder = true
 }
 
-modrinth {
-    versionNumber = project.version + "+bungeecord"
-    versionName = project.version + " devbuild for BungeeCord"
-    uploadFile = shadowJar
-    loaders = ["bungeecord", "waterfall"]
+plugins.withId('com.modrinth.minotaur') {
+    modrinth {
+        versionNumber = project.version + "+bungeecord"
+        versionName = project.version + " devbuild for BungeeCord"
+        uploadFile = shadowJar
+        loaders = ["bungeecord", "waterfall"]
+    }
 }
 
 task("prepareRunBungee", dependsOn: shadowJar) {

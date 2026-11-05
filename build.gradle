@@ -10,6 +10,8 @@ plugins {
 ext.remapJarTaskType = net.fabricmc.loom.task.RemapJarTask
 ext.curseforgeAlpha = io.github.themrmilchmann.gradle.publish.curseforge.ReleaseType.ALPHA
 ext.curseforgeMarkdown = io.github.themrmilchmann.gradle.publish.curseforge.ChangelogFormat.MARKDOWN
+ext.modrinthProjectId = providers.gradleProperty('modrinth_project_id')
+ext.curseforgeProjectId = providers.gradleProperty('curseforge_project_id')
 
 subprojects {
 	apply plugin: 'java'
@@ -63,7 +65,7 @@ subprojects {
 		if (it.plugins.hasPlugin("com.modrinth.minotaur")) {
 			modrinth {
 				token = System.getenv("MODRINTH_TOKEN") // This is the default. Remember to have the MODRINTH_TOKEN environment variable set or else this will fail, or set it to whatever you want - just make sure it stays private!
-				projectId = "raknetify" // This can be the project ID or the slug. Either will work!
+				projectId = rootProject.modrinthProjectId.get()
 //				versionNumber = project.version + "+" + project.minecraft_version // You don't need to set this manually. Will fail if Modrinth has this version already
 //				versionName = project.version + " devbuild for " + project.minecraft_version
 				versionType = "alpha" // This is the default -- can also be `beta` or `alpha`

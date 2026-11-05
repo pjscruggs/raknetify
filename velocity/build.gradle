@@ -5,7 +5,9 @@ import java.nio.file.StandardCopyOption
 evaluationDependsOn(":")
 
 apply plugin: 'com.gradleup.shadow'
-apply plugin: 'com.modrinth.minotaur'
+if (rootProject.modrinthProjectId.isPresent()) {
+    apply plugin: 'com.modrinth.minotaur'
+}
 
 afterEvaluate {
     license {
@@ -88,11 +90,13 @@ tasks.withType(AbstractArchiveTask) {
     reproducibleFileOrder = true
 }
 
-modrinth {
-    versionNumber = project.version + "+velocity"
-    versionName = project.version + " devbuild for Velocity"
-    uploadFile = shadowJar
-    loaders = ["velocity"]
+plugins.withId('com.modrinth.minotaur') {
+    modrinth {
+        versionNumber = project.version + "+velocity"
+        versionName = project.version + " devbuild for Velocity"
+        uploadFile = shadowJar
+        loaders = ["velocity"]
+    }
 }
 
 task("prepareRunVelocity", dependsOn: shadowJar) {
