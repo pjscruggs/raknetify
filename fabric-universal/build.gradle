@@ -2,6 +2,7 @@ import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import java.util.zip.ZipFile
 
+/** Packages compatible Fabric runtimes as Loader-selected dependencies and generates download metadata. */
 evaluationDependsOn(':fabric')
 evaluationDependsOn(':fabric-26')
 

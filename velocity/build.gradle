@@ -2,6 +2,7 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import java.nio.file.StandardCopyOption
 
+/** Builds the Velocity plugin with the shared transport and its required bundled dependencies. */
 evaluationDependsOn(":")
 
 apply plugin: 'com.gradleup.shadow'

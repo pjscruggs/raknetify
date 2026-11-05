@@ -1,3 +1,4 @@
+/** Builds platform-independent framing, compression, synchronization, and diagnostic code. */
 dependencies {
     api("com.github.RelativityMC.netty-raknet:netty-raknet-common") {
         transitive = false

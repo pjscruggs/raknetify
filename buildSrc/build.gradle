@@ -1,3 +1,4 @@
+/** Builds the changelog helper used by the root publication tasks. */
 plugins {
     id 'java'
 }

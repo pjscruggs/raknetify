@@ -8,8 +8,18 @@ import com.google.gson.JsonObject;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+/**
+ * Formats commit summaries from the GitHub push-event payload for development publication metadata.
+ */
 public class ParseGItHubActionChangelog {
 
+    /**
+     * Reads the event payload selected by GITHUB_EVENT_RAW_PATH and formats linked commit summaries.
+     * Missing event-path configuration produces a short fallback instead of reading an arbitrary file.
+     *
+     * @return Markdown changelog containing each commit subject and author, or the unconfigured fallback
+     * @throws Throwable if the configured payload cannot be read or does not match the expected push-event structure
+     */
     public static String getChangelog() throws Throwable {
         final String path = System.getenv("GITHUB_EVENT_RAW_PATH");
         if (path == null || path.isBlank()) return "No changelog was specified. ";

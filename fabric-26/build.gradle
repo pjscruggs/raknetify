@@ -1,3 +1,4 @@
+/** Builds the unobfuscated modern Fabric runtime embedded in the universal distribution. */
 apply plugin: 'net.fabricmc.fabric-loom'
 apply plugin: 'com.gradleup.shadow'
 

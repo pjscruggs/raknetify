@@ -1,6 +1,7 @@
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
+/** Builds the BungeeCord plugin with the shared transport and its required bundled dependencies. */
 evaluationDependsOn(":")
 
 apply plugin: 'com.gradleup.shadow'

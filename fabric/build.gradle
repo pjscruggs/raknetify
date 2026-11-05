@@ -1,3 +1,4 @@
+/** Builds and remaps the legacy Fabric runtime embedded in the universal distribution. */
 evaluationDependsOn(":")
 
 apply plugin: 'fabric-loom'
