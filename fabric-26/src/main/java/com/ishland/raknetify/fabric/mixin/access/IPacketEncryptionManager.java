@@ -32,12 +32,30 @@ import org.spongepowered.asm.mixin.gen.Invoker;
 import javax.crypto.ShortBufferException;
 import net.minecraft.network.CipherBase;
 
+/**
+ * Exposes Minecraft's cipher-buffer operations for encryption compatibility hooks.
+ */
 @Mixin(CipherBase.class)
 public interface IPacketEncryptionManager {
 
+    /**
+     * Invokes Minecraft's inbound cipher-buffer operation through Mixin.
+     *
+     * @param context handler context supplying buffer allocation
+     * @param buf encrypted input buffer consumed by the cipher operation
+     * @return newly allocated buffer containing decrypted bytes
+     * @throws ShortBufferException if the cipher output storage is too small
+     */
     @Invoker
     ByteBuf invokeDecipher(ChannelHandlerContext context, ByteBuf buf) throws ShortBufferException;
 
+    /**
+     * Invokes Minecraft's outbound cipher-buffer operation through Mixin.
+     *
+     * @param buf plaintext input buffer consumed by the cipher operation
+     * @param result destination receiving encrypted bytes
+     * @throws ShortBufferException if the cipher output storage is too small
+     */
     @Invoker
     void invokeEncipher(ByteBuf buf, ByteBuf result) throws ShortBufferException;
 

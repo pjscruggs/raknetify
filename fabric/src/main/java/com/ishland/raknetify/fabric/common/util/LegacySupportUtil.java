@@ -28,8 +28,18 @@ import com.ishland.raknetify.fabric.mixin.RaknetifyFabricMixinPlugin;
 import net.minecraft.entity.Entity;
 import net.minecraft.world.World;
 
+/**
+ * Bridges legacy Minecraft methods whose signatures are absent from the current compile target.
+ */
 public class LegacySupportUtil {
 
+    /**
+     * Obtains an entity's world through the accessor available in the running Minecraft version.
+     *
+     * @param entity entity whose containing world is needed
+     * @return world currently containing the entity
+     * @throws RuntimeException if the legacy world accessor cannot be invoked
+     */
     public static World getEntityWorld(Entity entity) {
         if (RaknetifyFabricMixinPlugin.AFTER_1_21_8) {
             return entity.getEntityWorld();

@@ -36,15 +36,42 @@ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * Selects Mixin hooks whose target APIs exist in the running Minecraft version.
+ */
 public class RaknetifyFabricMixinPlugin implements IMixinConfigPlugin {
 
+    /**
+     * Whether Minecraft is newer than 1.20.1, selecting common packet listeners and the revised player-join callback.
+     */
     public static final boolean AFTER_1_20_1;
+    /**
+     * Whether Minecraft is newer than 1.20.2, selecting post-1.20.2 compatibility paths.
+     */
     public static final boolean AFTER_1_20_2;
+    /**
+     * Whether Minecraft is newer than 1.20.4, selecting codec-based packet registration and the revised server-list pinger.
+     */
     public static final boolean AFTER_1_20_4;
+    /**
+     * Whether Minecraft is newer than 1.20.5, selecting later codec-transition hooks.
+     */
     public static final boolean AFTER_1_20_5;
+    /**
+     * Whether Minecraft is newer than 1.21.4, selecting context-aware protocol factory bindings.
+     */
     public static final boolean AFTER_1_21_4;
+    /**
+     * Whether Minecraft is newer than 1.21.5, selecting hunger-state copying without the older NBT serialization methods.
+     */
     public static final boolean AFTER_1_21_5;
+    /**
+     * Whether Minecraft is newer than 1.21.8, selecting the configurable debug HUD and newer entity world accessor.
+     */
     public static final boolean AFTER_1_21_8;
+    /**
+     * Whether Minecraft is newer than 1.21.10, selecting the event-loop backend argument used by connection factories.
+     */
     public static final boolean AFTER_1_21_10;
 
     static {
@@ -63,17 +90,34 @@ public class RaknetifyFabricMixinPlugin implements IMixinConfigPlugin {
     }
 
 
+    /**
+     * Initializes MixinExtras and relaxes the transport's packet-loss disconnect threshold.
+     *
+     * @param mixinPackage configured mixin package, unused because initialization is shared
+     */
     @Override
     public void onLoad(String mixinPackage) {
         System.setProperty("raknetserver.maxPacketLoss", String.valueOf(Integer.MAX_VALUE));
         MixinExtrasBootstrap.init();
     }
 
+    /**
+     * Uses the reference mapper declared in the Mixin configuration without overriding it.
+     *
+     * @return null to retain the configured reference mapper
+     */
     @Override
     public String getRefMapperConfig() {
         return null;
     }
 
+    /**
+     * Checks runtime API boundaries before Mixin resolves version-specific target classes.
+     *
+     * @param targetClassName target binary name, unused because selection is keyed by mixin name
+     * @param mixinClassName fully qualified candidate mixin class
+     * @return whether the candidate hook is supported by this runtime
+     */
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
         if (mixinClassName.startsWith("com.ishland.raknetify.fabric.mixin.client.")) {
@@ -116,21 +160,48 @@ public class RaknetifyFabricMixinPlugin implements IMixinConfigPlugin {
         return true;
     }
 
+    /**
+     * Leaves this configuration's targets and other configurations' targets unchanged.
+     *
+     * @param myTargets targets selected by this configuration
+     * @param otherTargets targets selected by other loaded configurations
+     */
     @Override
     public void acceptTargets(Set<String> myTargets, Set<String> otherTargets) {
 
     }
 
+    /**
+     * Uses the mixins listed in the configuration without adding dynamic entries.
+     *
+     * @return null because no additional mixin class names are supplied
+     */
     @Override
     public List<String> getMixins() {
         return null;
     }
 
+    /**
+     * Leaves target bytecode unchanged before Mixin applies the declared injections.
+     *
+     * @param targetClassName target binary name
+     * @param targetClass target bytecode about to be transformed
+     * @param mixinClassName mixin selected for application
+     * @param mixinInfo metadata describing the selected mixin
+     */
     @Override
     public void preApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
 
     }
 
+    /**
+     * Leaves the transformed target unchanged after Mixin applies the declared injections.
+     *
+     * @param targetClassName target binary name
+     * @param targetClass bytecode after the selected mixin was applied
+     * @param mixinClassName mixin that has just been applied
+     * @param mixinInfo metadata describing the applied mixin
+     */
     @Override
     public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
 

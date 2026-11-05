@@ -48,30 +48,101 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.function.Function;
 
+/**
+ * Resolves legacy Minecraft members once through mappings and structural lookup.
+ * Optional handles are null when their API is absent. Callers must select the appropriate
+ * version path before invoking a version-specific handle.
+ */
 public class MultiVersionUtil {
 
+    /**
+     * Stable mapping namespace used to locate obfuscated legacy Minecraft members.
+     */
     private static final String INTERMEDIARY = "intermediary";
+    /**
+     * Intermediary name of the server play listener used for legacy field lookup.
+     */
     private static final String CLASSNAME_ServerPlayNetworkHandler = "net.minecraft.class_3244";
+    /**
+     * Intermediary name of the protocol wrapper introduced around the legacy packet handler.
+     */
     private static final String CLASSNAME_NetworkStatePacketHandler = "net.minecraft.class_2539$class_8698";
+    /**
+     * Intermediary name of the legacy handler containing class-to-packet-ID mappings.
+     */
     private static final String CLASSNAME_NetworkState$InternalPacketHandler = "net.minecraft.class_2539$class_4532";
+    /**
+     * Intermediary name of the protocol factory whose older bind method lacks context.
+     */
     private static final String CLASSNAME_NetworkState$Factory = "net.minecraft.class_9127$class_9128";
+    /**
+     * Intermediary name of the context-aware serverbound protocol factory.
+     */
     private static final String CLASSNAME_ContextAwareNetworkStateFactory = "net.minecraft.class_10947";
+    /**
+     * Intermediary name of the holder for clientbound and serverbound play factories.
+     */
     private static final String CLASSNAME_PlayStateFactories = "net.minecraft.class_9095";
+    /**
+     * Intermediary name used to resolve legacy hunger-state serialization methods.
+     */
     private static final String CLASSNAME_HungerManager = "net.minecraft.class_1702";
+    /**
+     * Intermediary name used to resolve the older entity world accessor.
+     */
     private static final String CLASSNAME_Entity = "net.minecraft.class_1297";
 
+    /**
+     * Required connection field located structurally in the server play listener hierarchy.
+     */
     public static final VarHandle ServerPlayNetworkHandler$connection;
+    /**
+     * Client play listener connection field, or null on a dedicated server.
+     */
     public static final VarHandle ClientPlayNetworkHandler$connection;
+    /**
+     * Optional vanilla encrypted-state flag, absent on versions that no longer expose that field.
+     */
     private static final VarHandle ClientConnection$encrypted;
+    /**
+     * Legacy player ping field used before latency moved to the common packet listener.
+     */
     public static final VarHandle ServerPlayerEntity$pingMillis1_20_1;
+    /**
+     * Optional protocol-wrapper class used by the legacy backing-handler layout.
+     */
     public static final Class<?> clazzNetworkStatePacketHandler;
+    /**
+     * Optional wrapper field leading to the underlying class-to-ID packet handler.
+     */
     public static final VarHandle NetworkStatePacketHandler$backingHandler1_20_2;
+    /**
+     * Optional older protocol factory bind method used when inspecting registration order.
+     */
     public static final MethodHandle NetworkState$Factory$bind1_20_5;
+    /**
+     * Optional runtime holder of the static play protocol factories.
+     */
     public static final Class<?> clazzPlayStateFactories;
+    /**
+     * Optional static serverbound play factory used by the older codec-registration API.
+     */
     public static final VarHandle PlayStateFactories$C2S1_20_5;
+    /**
+     * Optional static clientbound play factory used by the older codec-registration API.
+     */
     public static final VarHandle PlayStateFactories$S2C1_20_5;
+    /**
+     * Optional legacy hunger-state serializer used when constructing the client hunger replacement.
+     */
     public static final MethodHandle HungerManager$writeNbt1_21_5;
+    /**
+     * Optional legacy hunger-state reader used to initialize the client hunger replacement.
+     */
     public static final MethodHandle HungerManager$readNbt1_21_5;
+    /**
+     * Optional older entity world getter used before the compile target's accessor became available.
+     */
     public static final MethodHandle Entity$getEntity1_21_8;
 
     static {
@@ -307,6 +378,15 @@ public class MultiVersionUtil {
         }
     }
 
+    /**
+     * Searches a class hierarchy for fields of an exact type, optionally excluding Mixin-added fields.
+     * Superclass fields appear first so ambiguity can be detected before choosing a connection field.
+     *
+     * @param clazz class whose declared fields and superclass chain are inspected
+     * @param fieldType exact field type to match
+     * @param includeMixinMerged whether fields marked as merged by Mixin are eligible
+     * @return all matching fields without changing their accessibility
+     */
     private static List<Field> tryLocateFields(Class<?> clazz, Class<?> fieldType, boolean includeMixinMerged) {
         final ImmutableList.Builder<Field> builder = ImmutableList.builder();
         final Class<?> superclass = clazz.getSuperclass();
@@ -330,15 +410,30 @@ public class MultiVersionUtil {
         return builder.build();
     }
 
+    /**
+     * Forces compatibility-member resolution before normal Minecraft initialization proceeds.
+     */
     public static void init() {
     }
 
+    /**
+     * Updates vanilla's encrypted-state flag on versions where that flag still exists.
+     *
+     * @param connection Minecraft connection whose displayed encryption state is being updated
+     * @param encrypted whether frame encryption has been enabled
+     */
     public static void setEncrypted(ClientConnection connection, boolean encrypted) {
         if (ClientConnection$encrypted != null) {
             ClientConnection$encrypted.set(connection, encrypted);
         }
     }
 
+    /**
+     * Attempts to load an optional runtime class by its already-resolved binary name.
+     *
+     * @param name fully qualified runtime class name
+     * @return loaded class, or null when the class is absent
+     */
     public static Class<?> tryLocateClass(String name) {
         try {
             return Class.forName(name);
@@ -347,6 +442,15 @@ public class MultiVersionUtil {
         }
     }
 
+    /**
+     * Treats specified lookup failures as an absent optional API while propagating other failures.
+     *
+     * @param <T> lookup result type
+     * @param supplier lookup operation that may throw reflection or linkage failures
+     * @param catchExceptions exception types that mean the optional member is unavailable
+     * @return lookup result, or null when an allowed absence exception occurs
+     * @throws RuntimeException if the lookup fails with an unlisted exception type
+     */
     private static <T> T getOrNull(SupplierThrowable<T> supplier, Class<? extends Throwable>... catchExceptions) {
         try {
             return supplier.get();
@@ -361,7 +465,18 @@ public class MultiVersionUtil {
         }
     }
 
+    /**
+     * Represents a compatibility lookup that can expose checked reflection failures.
+     *
+     * @param <T> result supplied by the lookup
+     */
     private interface SupplierThrowable<T> {
+        /**
+         * Runs the compatibility lookup without narrowing its possible failure types.
+         *
+         * @return located class, field, method, or other lookup result
+         * @throws Throwable if the lookup cannot complete
+         */
         T get() throws Throwable;
     }
 

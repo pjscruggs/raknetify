@@ -30,9 +30,20 @@ import net.minecraft.util.Identifier;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Invoker;
 
+/**
+ * Exposes the debug HUD registry's private registration method on versions that provide it.
+ */
 @Mixin(DebugHudEntries.class)
 public interface IDebugHudEntries {
 
+    /**
+     * Registers a named HUD entry through the invoker body supplied by Mixin.
+     *
+     * @param id identifier under which the transport diagnostics are registered
+     * @param entry renderer and visibility policy for the debug entry
+     * @return identifier returned by the Minecraft registry
+     * @throws AbstractMethodError if called before Mixin replaces this stub
+     */
     @Invoker
     static Identifier invokeRegister(Identifier id, DebugHudEntry entry) {
         throw new AbstractMethodError();

@@ -28,9 +28,17 @@ import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
+/**
+ * Exposes the logical-side flag used to install client-only hunger behavior.
+ */
 @Mixin(Level.class)
 public interface IWorld {
 
+    /**
+     * Reads whether this world belongs to a logical client.
+     *
+     * @return true for a client world and false for a server world
+     */
     @Accessor("isClientSide")
     boolean raknetify$isClient();
 

@@ -29,9 +29,17 @@ import net.minecraft.network.ClientConnection;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
+/**
+ * Exposes the Minecraft connection's Netty channel to transport setup and diagnostics.
+ */
 @Mixin(ClientConnection.class)
 public interface IClientConnection {
 
+    /**
+     * Reads the underlying application channel without changing connection state.
+     *
+     * @return Minecraft's Netty channel, possibly null before connection initialization
+     */
     @Accessor
     Channel getChannel();
 

@@ -31,9 +31,21 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 import java.util.List;
 import net.minecraft.network.codec.IdDispatchCodec;
 
+/**
+ * Exposes codec entries in wire-ID order for reproducible proxy mapping generation.
+ *
+ * @param <B> buffer type accepted by the packet codecs
+ * @param <V> packet value decoded or encoded by the dispatcher
+ * @param <T> packet-type key used to select a codec
+ */
 @Mixin(IdDispatchCodec.class)
 public interface IPacketCodecDispatcher<B extends ByteBuf, V, T> {
 
+    /**
+     * Reads the ordered registration list whose indices are Minecraft packet IDs.
+     *
+     * @return live codec entries in wire-ID order, inspected without encoding or decoding
+     */
     @Accessor
     List<IdDispatchCodec.Entry<B, V, T>> getById();
 

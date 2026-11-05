@@ -29,6 +29,9 @@ import net.minecraft.network.ClientConnection;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
+/**
+ * Retains the client play-listener accessor mixin target while connection lookup uses runtime field discovery.
+ */
 @Mixin(ClientPlayNetworkHandler.class)
 public interface IClientPlayNetworkHandler {
 

@@ -33,10 +33,18 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 
 import java.util.Map;
 
+/**
+ * Exposes legacy protocol handlers before Minecraft moved registration into packet codecs.
+ */
 @Pseudo
 @Mixin(targets = "net/minecraft/class_2539")
 public interface INetworkState1_20_4 {
 
+    /**
+     * Reads the legacy play-state handlers for both traffic directions.
+     *
+     * @return direction-to-handler map used to discover packet IDs
+     */
     @Dynamic
     @Accessor(value = "field_20595", remap = false)
     Map<NetworkSide, ?> getPacketHandlers();
