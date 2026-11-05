@@ -44,13 +44,28 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+/**
+ * Uses RakNet transport liveness and RTT instead of Minecraft keepalive timing.
+ */
 @Mixin(ServerCommonNetworkHandler.class)
 public abstract class MixinServerCommonNetworkHandler implements ServerCommonPacketListener {
 
+    /**
+     * Vanilla player connection inspected for RakNet transport configuration.
+     */
     @Shadow @Final protected ClientConnection connection;
 
+    /**
+     * Vanilla player latency field, updated from transport nanoseconds converted to milliseconds.
+     */
     @Shadow private int latency;
 
+    /**
+     * Keeps vanilla's keepalive interval from expiring on connections already monitored by RakNet.
+     *
+     * @param original vanilla timestamp of the last keepalive check
+     * @return current monotonic time for RakNet, or the original timestamp for TCP
+     */
     @ModifyExpressionValue(method = "baseTick", at = @At(value = "FIELD", target = "Lnet/minecraft/server/network/ServerCommonNetworkHandler;lastKeepAliveTime:J", opcode = Opcodes.GETFIELD))
     private long disableKeepAlive(long original) {
         if (!(((IClientConnection) this.connection).getChannel().config() instanceof RakNet.Config)) {
@@ -59,16 +74,35 @@ public abstract class MixinServerCommonNetworkHandler implements ServerCommonPac
         return Util.getMeasuringTimeMs();
     }
 
+    /**
+     * Leaves connection timeout decisions to RakNet instead of vanilla keepalive replies.
+     *
+     * @param instance vanilla listener about to disconnect the player
+     * @param reason vanilla keepalive disconnect reason
+     * @return false for RakNet to suppress this disconnect, true for ordinary TCP behavior
+     */
     @WrapWithCondition(method = "onKeepAlive", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/network/ServerCommonNetworkHandler;disconnect(Lnet/minecraft/text/Text;)V"))
     private boolean stopTimeoutPlayersOnKeepAlive(ServerCommonNetworkHandler instance, Text reason) {
         return !(((IClientConnection) MultiVersionUtil.ServerPlayNetworkHandler$connection.get((ServerCommonNetworkHandler) (Object) this)).getChannel().config() instanceof RakNet.Config);
     }
 
+    /**
+     * Prevents vanilla keepalive timing from overwriting transport-derived ping.
+     *
+     * @param instance vanilla object whose latency field would be updated
+     * @param value latency measured from the vanilla keepalive exchange
+     * @return false for RakNet, true when vanilla should store the TCP measurement
+     */
     @WrapWithCondition(method = "onKeepAlive", at = @At(value = "FIELD", target = "Lnet/minecraft/server/network/ServerCommonNetworkHandler;latency:I", opcode = Opcodes.PUTFIELD))
     private boolean redirectPingStoring(ServerCommonNetworkHandler instance, int value) {
         return !(((IClientConnection) MultiVersionUtil.ServerPlayNetworkHandler$connection.get((ServerCommonNetworkHandler) (Object) this)).getChannel().config() instanceof RakNet.Config);
     }
 
+    /**
+     * Publishes RakNet RTT plus its standard deviation as the player latency in milliseconds.
+     *
+     * @param ci tick injection callback, left uncancelled so other vanilla maintenance continues
+     */
     @Inject(method = "baseTick", at = @At("HEAD"))
     private void onTick(CallbackInfo ci) {
         final Channel channel = ((IClientConnection) MultiVersionUtil.ServerPlayNetworkHandler$connection.get((ServerCommonNetworkHandler) (Object) this)).getChannel();

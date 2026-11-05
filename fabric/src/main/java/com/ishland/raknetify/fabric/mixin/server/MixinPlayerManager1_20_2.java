@@ -39,9 +39,20 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Surrogate;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+/**
+ * Records RakNet logins and starts multichannel delivery after the modern player-join sequence.
+ */
 @Mixin(PlayerManager.class)
 public class MixinPlayerManager1_20_2 {
 
+    /**
+     * Logs the negotiated RakNet MTU when a player enters the server. TCP joins are left unchanged.
+     *
+     * @param connection player's initialized Minecraft connection
+     * @param player server player entering the world
+     * @param clientData joined-client metadata, unused by the transport log
+     * @param ci injection callback, left uncancelled so vanilla join processing is unchanged
+     */
     @Inject(method = "onPlayerConnect", at = @At("HEAD"))
     private void onJoin(ClientConnection connection, ServerPlayerEntity player, ConnectedClientData clientData, CallbackInfo ci) {
         if (((IClientConnection) connection).getChannel().config() instanceof RakNet.Config config) {
@@ -49,6 +60,14 @@ public class MixinPlayerManager1_20_2 {
         }
     }
 
+    /**
+     * Requests multichannel negotiation after vanilla finishes sending the player's initial join state.
+     *
+     * @param connection player's initialized Minecraft connection
+     * @param player server player entering the world
+     * @param clientData joined-client metadata, unused by channel negotiation
+     * @param ci injection callback, left uncancelled so vanilla join processing is unchanged
+     */
     @Inject(method = "onPlayerConnect", at = @At("RETURN"))
     private void postJoin(ClientConnection connection, ServerPlayerEntity player, ConnectedClientData clientData, CallbackInfo ci) {
         final Channel channel = ((IClientConnection) connection).getChannel();

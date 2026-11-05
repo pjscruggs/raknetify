@@ -38,9 +38,20 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Surrogate;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+/**
+ * Handles both legacy player-join signatures when logging and starting RakNet multichannel delivery.
+ */
 @Mixin(PlayerManager.class)
 public class MixinPlayerManager1_20_1 {
 
+    /**
+     * Logs the negotiated RakNet MTU when a player enters the server. TCP joins are left unchanged.
+     *
+     * @param connection player's initialized Minecraft connection
+     * @param player server player entering the world
+     * @param latency legacy join latency argument, unused by the transport log
+     * @param ci injection callback, left uncancelled so vanilla join processing is unchanged
+     */
     @Dynamic
     @Inject(method = {"onPlayerConnect", "method_12975"}, at = @At("HEAD"), require = 0)
     private void onJoin(ClientConnection connection, ServerPlayerEntity player, int latency, CallbackInfo ci) {
@@ -49,6 +60,14 @@ public class MixinPlayerManager1_20_1 {
         }
     }
 
+    /**
+     * Logs the negotiated RakNet MTU when a player enters the server. TCP joins are left unchanged.
+     * This surrogate serves Minecraft versions without the explicit latency argument.
+     *
+     * @param connection player's initialized Minecraft connection
+     * @param player server player entering the world
+     * @param ci injection callback, left uncancelled so vanilla join processing is unchanged
+     */
     @Surrogate
     private void onJoin(ClientConnection connection, ServerPlayerEntity player, CallbackInfo ci) {
         if (((IClientConnection) connection).getChannel().config() instanceof RakNet.Config config) {
@@ -56,6 +75,14 @@ public class MixinPlayerManager1_20_1 {
         }
     }
 
+    /**
+     * Requests multichannel negotiation after vanilla finishes sending the player's initial join state.
+     *
+     * @param connection player's initialized Minecraft connection
+     * @param player server player entering the world
+     * @param latency legacy join latency argument, unused by channel negotiation
+     * @param ci injection callback, left uncancelled so vanilla join processing is unchanged
+     */
     @Dynamic
     @Inject(method = {"onPlayerConnect", "method_12975"}, at = @At("RETURN"), require = 0)
     private void postJoin(ClientConnection connection, ServerPlayerEntity player, int latency, CallbackInfo ci) {
@@ -68,6 +95,14 @@ public class MixinPlayerManager1_20_1 {
         channel.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL);
     }
 
+    /**
+     * Requests multichannel negotiation after vanilla finishes sending the player's initial join state.
+     * This surrogate serves Minecraft versions without the explicit latency argument.
+     *
+     * @param connection player's initialized Minecraft connection
+     * @param player server player entering the world
+     * @param ci injection callback, left uncancelled so vanilla join processing is unchanged
+     */
     @Surrogate
     private void postJoin(ClientConnection connection, ServerPlayerEntity player, CallbackInfo ci) {
         final Channel channel = ((IClientConnection) connection).getChannel();

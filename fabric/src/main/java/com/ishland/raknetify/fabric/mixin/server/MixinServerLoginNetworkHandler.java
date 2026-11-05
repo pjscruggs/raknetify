@@ -40,13 +40,28 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.lang.reflect.Method;
 
+/**
+ * Suppresses redundant vanilla packet compression during vanilla login when streaming compression is active.
+ */
 @Mixin(value = ServerLoginNetworkHandler.class, priority = 900)
 public class MixinServerLoginNetworkHandler {
 
+    /**
+     * Login connection whose pipeline advertises whether streaming compression was negotiated.
+     */
     @Shadow @Final public ClientConnection connection;
 
+    /**
+     * Vanilla server reference retained by the login listener.
+     */
     @Shadow @Final private MinecraftServer server;
 
+    /**
+     * Substitutes the disabled vanilla threshold only after RakNet streaming compression is active.
+     *
+     * @param server Minecraft server supplying the normal compression threshold
+     * @return -1 to disable vanilla compression, otherwise the configured server threshold
+     */
     @Dynamic
     @Redirect(method = {"method_14384()V", "tickVerify"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/server/MinecraftServer;getNetworkCompressionThreshold()I"), require = 1)
     private int stopCompressionIfStreamingCompressionExists(MinecraftServer server) {

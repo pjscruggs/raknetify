@@ -64,28 +64,63 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.function.Consumer;
 
+/**
+ * Creates UDP companions to vanilla server listeners using a guarded recursive bootstrap call.
+ * Wildcard listeners expand to local interface addresses and follow subsequent address changes.
+ */
 @Mixin(ServerNetworkIo.class)
 public abstract class MixinServerNetworkIo {
 
+    /**
+     * Optional UDP-only listener port read from raknetify.fabric.portOverride, with invalid values ignored.
+     */
     @Unique
     private static final int raknetify$portOverride = Integer.getInteger("raknetify.fabric.portOverride", -1);
 
+    /**
+     * Vanilla server supplying native-transport preference and interface-change scheduling.
+     */
     @Shadow
     @Final
     private MinecraftServer server;
 
+    /**
+     * Invokes vanilla listener creation, with transport selection controlled by the thread-local bootstrap flag.
+     *
+     * @param address local interface address, or null for a wildcard listener
+     * @param port local port to bind
+     * @throws IOException if the listener cannot be created
+     */
     @Shadow
     public abstract void bind(@Nullable InetAddress address, int port) throws IOException;
 
+    /**
+     * Vanilla listener lifecycle flag checked before reacting to an interface change.
+     */
     @Shadow
     public volatile boolean active;
 
+    /**
+     * Vanilla list of bound channels, synchronized while removing listeners for a departed address.
+     */
     @Shadow
     @Final
     private List<ChannelFuture> channels;
+    /**
+     * Per-server interface-change callback, created once for wildcard binding.
+     */
     @Unique
     private Consumer<NetworkInterfaceListener.InterfaceAddressChangeEvent> raknetify$eventListener = null;
 
+    /**
+     * Creates the requested UDP endpoints before the original TCP bind continues.
+     * The thread-local guard makes recursive calls select RakNet without creating another companion listener.
+     *
+     * @param address requested local address, or null to enumerate every interface
+     * @param port vanilla Minecraft port, used unless a valid UDP override is configured
+     * @param ci injection callback, left uncancelled so the original TCP bind continues
+     * @throws IOException if interface enumeration or an explicit-address UDP bind fails
+     */
     @Inject(method = "bind", at = @At("HEAD"))
     private void bindUdp(InetAddress address, int port, CallbackInfo ci) throws IOException {
         if (!ThreadLocalUtil.isInitializingRaknet()) {
@@ -170,6 +205,14 @@ public abstract class MixinServerNetworkIo {
         }
     }
 
+    /**
+     * Selects shared RakNet transport event loops during a guarded UDP bind.
+     *
+     * @param instance vanilla server bootstrap being configured
+     * @param group original vanilla event-loop group
+     * @param original intercepted bootstrap group call
+     * @return bootstrap configured for RakNet NIO or epoll, or the original TCP group
+     */
     @WrapOperation(method = "bind", at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/ServerBootstrap;group(Lio/netty/channel/EventLoopGroup;)Lio/netty/bootstrap/ServerBootstrap;", remap = false))
     private ServerBootstrap redirectGroup(ServerBootstrap instance, EventLoopGroup group, Operation<ServerBootstrap> original) {
         final boolean useEpoll = Epoll.isAvailable() && this.server.isUsingNativeTransport();
@@ -178,6 +221,14 @@ public abstract class MixinServerNetworkIo {
                 : original.call(instance, group);
     }
 
+    /**
+     * Substitutes a RakNet server channel with its own application loop during a guarded UDP bind.
+     *
+     * @param instance vanilla server bootstrap being configured
+     * @param aClass original TCP server socket class
+     * @param original intercepted bootstrap channel-class call
+     * @return bootstrap using the UDP-backed RakNet factory or the original TCP channel class
+     */
     @WrapOperation(method = "bind", at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/ServerBootstrap;channel(Ljava/lang/Class;)Lio/netty/bootstrap/AbstractBootstrap;", remap = false))
     private AbstractBootstrap<ServerBootstrap, ServerChannel> redirectChannel(ServerBootstrap instance, Class<? extends ServerSocketChannel> aClass, Operation<AbstractBootstrap<ServerBootstrap, ServerChannel>> original) {
         final boolean useEpoll = Epoll.isAvailable() && this.server.isUsingNativeTransport();

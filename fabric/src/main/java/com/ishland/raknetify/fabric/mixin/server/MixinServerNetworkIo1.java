@@ -32,14 +32,29 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+/**
+ * Wraps vanilla server channel initialization with RakNet transport setup and codec adaptation.
+ */
 @Mixin(targets = "net/minecraft/server/ServerNetworkIo$1")
 public abstract class MixinServerNetworkIo1 extends ChannelInitializer<Channel> {
 
+    /**
+     * Installs transport handlers before vanilla constructs the Minecraft packet pipeline.
+     *
+     * @param channel newly accepted or connecting application channel
+     * @param ci injection callback, left uncancelled so vanilla initialization proceeds
+     */
     @Inject(method = "initChannel(Lio/netty/channel/Channel;)V", at = @At("HEAD"))
     private void onChannelInit(Channel channel, CallbackInfo ci) {
         RakNetFabricConnectionUtil.initChannel(channel);
     }
 
+    /**
+     * Adapts the completed vanilla pipeline for the server side of a RakNet connection.
+     *
+     * @param channel initialized Minecraft application channel
+     * @param ci return injection callback, unused because setup runs after vanilla completes
+     */
     @Inject(method = "initChannel(Lio/netty/channel/Channel;)V", at = @At("RETURN"))
     private void postChannelInit(Channel channel, CallbackInfo ci) {
         RakNetFabricConnectionUtil.postInitChannel(channel, false);
