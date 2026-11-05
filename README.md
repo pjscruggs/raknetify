@@ -1,29 +1,33 @@
-# Raknetify
-A Fabric mod / Velocity plugin / BungeeCord plugin that uses RakNet to improve multiplayer experience significantly
-under unreliable and rate-limited connections.
+# Raknetify2
 
-# Features
-- Higher reliability and lower latency under unreliable and rate-limited client connections.
-- Uses RakNet's multiple channels with priorities to achieve higher responsiveness. 
-- Supports ViaVersion client-side and ViaVersion server-side.
+<img src="icon.png" alt="Raknetify2" width="256">
 
-# How to use it?
+Raknetify2 is a Minecraft networking mod that uses RakNet over UDP to help keep multiplayer interactions responsive during packet loss and large world transfers.
 
-## Prerequisites
-- Raknetify is designed to work on Minecraft 1.17.1+
-  Note: On proxies such as Velocity and BungeeCord, **unsupported client version** will cause
-  multi-channelling failing to initialize, causing **reduced responsiveness**.  
-- You need to have a UDP port opened at the same port number of your normal server port. 
+## How it works
 
-## Installation and usage
-- Download the latest release from 
-  [GitHub](https://github.com/RelativityMC/raknetify/releases) 
-  [Modrinth (Fabric)](https://modrinth.com/mod/raknetify/versions) 
-  [CurseForge (Fabric)](https://www.curseforge.com/minecraft/mc-mods/raknetify/files)
-  [SpigotMC (BungeeCord)](https://www.spigotmc.org/resources/raknetify-bungeecord.102509/)
-  or development builds from [CodeMC](https://ci.codemc.io/job/RelativityMC/job/raknetify/)
-- Install the mod on both client and server. (Installation on backend servers are not needed if using on proxies) 
-- Prefix your server address with `raknet;` (or `raknetl;` to use high mtu) and save or connect directly. 
-  (e.g. `raknet;example.com`)
-- Enjoy!
+Minecraft normally uses TCP, which delivers data in one ordered stream. A missing piece can delay everything behind it. Raknetify2 separates traffic into ordering channels, so a delay in one channel need not hold up unrelated traffic in another.
 
+Raknetify2 changes the network transport, not Minecraft's game protocol. Connecting different Minecraft versions still requires a compatible protocol translation setup.
+
+## Downloads
+
+Development builds are available from [GitHub Actions](https://github.com/pjscruggs/raknetify2/actions/workflows/build.yml). Open a successful run for `main` and download its `Artifacts` archive. A GitHub account is required to download these builds.
+
+Use the Fabric JAR for clients and Fabric servers, or the matching plugin for Velocity or BungeeCord. The included `compatibility.json` lists supported Minecraft versions and runtime requirements for the Fabric mod.
+
+## Direct server setup
+
+1. Install the Fabric JAR in the `mods` folder on both the client and server.
+2. Allow UDP traffic on the server's Minecraft port, using the same port number as TCP. Configure both the firewall and port forwarding when applicable.
+3. Connect using an address such as `raknet;example.com` or `raknet;example.com:25565`.
+
+Install Raknetify2 in place of Raknetify. Do not install both. Normal server addresses continue to use TCP.
+
+## Proxy setup
+
+Install the matching plugin on Velocity or BungeeCord and the Fabric mod on each connecting client. Allow UDP on the proxy's listening port. Clients use the `raknet;` prefix with the proxy address. Backend servers do not need Raknetify2 for this setup.
+
+## License and credits
+
+Raknetify2 is an independently maintained fork of [Raknetify](https://github.com/RelativityMC/raknetify), originally developed by ishland. It retains Raknetify's MIT license and original copyright notices. The networking implementation builds on ishland's Raknetify and [netty-raknet](https://github.com/RelativityMC/netty-raknet).
