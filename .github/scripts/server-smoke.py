@@ -221,7 +221,7 @@ def check_server(folder, version, native, java, probe_dir, polymer=False):
         check_connected_udp(port, version, java, probe_dir)
         if polymer:
             check_polymer_http(port)
-        java_path = Path(shutil.which(java) or java)
+        java_path = Path(shutil.which(java) or java).resolve()
         jcmd = java_path.with_name('jcmd.exe' if os.name == 'nt' else 'jcmd')
         dump = subprocess.check_output([str(jcmd), str(process.pid), 'Thread.print'], text=True)
         (folder / ('native-threads.log' if native else 'nio-threads.log')).write_text(dump)
