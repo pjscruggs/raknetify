@@ -35,6 +35,11 @@ import network.ycc.raknet.packet.FramedPacket;
 
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Exchanges diagnostic snapshots with the peer over unreliable RakNet frames.
+ * Snapshots carry the sender's timestamp so reordered older reports do not replace newer data.
+ * These values describe the remote endpoint and do not control local transport behavior.
+ */
 public class MetricsSynchronizationHandler extends ChannelDuplexHandler {
 
     // Packet format:
@@ -46,22 +51,45 @@ public class MetricsSynchronizationHandler extends ChannelDuplexHandler {
     // int: tx
     // int: rx
 
+    /**
+     * Wire-layout version accepted by this metrics exchange implementation.
+     */
     private static final byte VERSION = 0x00;
 
+    /**
+     * Periodic event-loop task publishing a local snapshot every 200 milliseconds.
+     */
     private ScheduledFuture<?> future;
+    /**
+     * Installed pipeline context used by the scheduled sender.
+     */
     private ChannelHandlerContext ctx;
 
+    /**
+     * Retains the context and schedules peer-statistics updates on its event loop.
+     *
+     * @param ctx installed handler context for allocation, scheduling, and writes
+     */
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) {
         this.ctx = ctx;
         this.future = ctx.channel().eventLoop().scheduleAtFixedRate(this::sendSyncPacket, 200, 200, TimeUnit.MILLISECONDS);
     }
 
+    /**
+     * Stops periodic metric publication when the handler leaves the pipeline.
+     *
+     * @param ctx removed context, unused because the scheduled task is already retained
+     */
     @Override
     public void handlerRemoved(ChannelHandlerContext ctx) {
         if (future != null) future.cancel(false);
     }
 
+    /**
+     * Sends the latest local queue, burst, retransmission, and packet-rate measurements.
+     * The temporary payload is released after an unreliable frame takes ownership of its data.
+     */
     private void sendSyncPacket() {
         if (this.ctx.channel().config() instanceof RakNet.Config config && config.getMetrics() instanceof SimpleMetricsLogger logger){
             ByteBuf buffer = null;
@@ -83,14 +111,43 @@ public class MetricsSynchronizationHandler extends ChannelDuplexHandler {
         }
     }
 
+    /**
+     * Whether a snapshot with the supported wire-layout version has ever been received.
+     */
     private boolean isRemoteSupported = false;
+    /**
+     * Sender wall-clock timestamp, in milliseconds, of the newest accepted snapshot.
+     */
     private long lastRecv = 0L;
+    /**
+     * Last reported number of bytes queued at the remote endpoint.
+     */
     private int queuedBytes;
+    /**
+     * Peer's last reported pending-frame-set capacity, including its baseline allowance.
+     */
     private int burst;
+    /**
+     * Peer's rolling retransmitted-byte fraction relative to its total inbound and outbound bytes.
+     */
     private double errorRate;
+    /**
+     * Peer's last reported outgoing packet rate, in packets per second.
+     */
     private int tx;
+    /**
+     * Peer's last reported incoming packet rate, in packets per second.
+     */
     private int rx;
 
+    /**
+     * Consumes supported metric frames and rejects stale snapshots without forwarding them.
+     * Every consumed frame and its payload view are released even when parsing fails.
+     *
+     * @param ctx inbound context receiving messages unrelated to metrics
+     * @param msg incoming metric frame or other pipeline message
+     * @throws Exception if superclass processing of an unrelated message fails
+     */
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         if (msg instanceof FrameData frameData && frameData.getDataSize() > 0 && frameData.getPacketId() == Constants.RAKNET_METRICS_SYNC_PACKET_ID) {
@@ -120,26 +177,56 @@ public class MetricsSynchronizationHandler extends ChannelDuplexHandler {
         super.channelRead(ctx, msg);
     }
 
+    /**
+     * Reports whether remote metric values have been initialized by a compatible snapshot.
+     *
+     * @return true after at least one supported snapshot has been accepted
+     */
     public boolean isRemoteSupported() {
         return this.isRemoteSupported;
     }
 
+    /**
+     * Reports the peer's most recently advertised queue size.
+     *
+     * @return remote queued bytes, or zero before the first snapshot
+     */
     public int getQueuedBytes() {
         return queuedBytes;
     }
 
+    /**
+     * Reports the peer's most recently advertised send capacity.
+     *
+     * @return remote burst tokens plus its baseline pending-frame-set allowance
+     */
     public int getBurst() {
         return burst;
     }
 
+    /**
+     * Reports the peer's rolling retransmission measurement.
+     *
+     * @return retransmitted-byte fraction, not a percentage or a measured packet-loss probability
+     */
     public double getErrorRate() {
         return errorRate;
     }
 
+    /**
+     * Reports traffic sent by the peer, which is inbound from this endpoint's perspective.
+     *
+     * @return remote outgoing packets per second
+     */
     public int getTX() {
         return tx;
     }
 
+    /**
+     * Reports traffic received by the peer, which is outbound from this endpoint's perspective.
+     *
+     * @return remote incoming packets per second
+     */
     public int getRX() {
         return rx;
     }

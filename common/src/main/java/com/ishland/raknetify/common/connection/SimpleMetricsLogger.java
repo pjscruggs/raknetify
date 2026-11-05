@@ -29,108 +29,239 @@ import network.ycc.raknet.RakNet;
 import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
 
 /**
- * This implementation is only designed to be modified single-threaded
+ * Collects transport counters and publishes sampled rates for diagnostics.
+ * Mutations must come from one transport thread. Volatile fields allow other threads
+ * to read recent values but do not make the counter increments atomic.
  */
 @SuppressWarnings("NonAtomicOperationOnVolatileField")
 public class SimpleMetricsLogger implements RakNet.MetricsLogger {
 
     // ========== Loggers ==========
 
+    /**
+     * Received RakNet packet count, accumulated by the connection's single transport writer.
+     */
     private volatile long packetsIn = 0L;
+    /**
+     * Received RakNet frame count, accumulated by the connection's single transport writer.
+     */
     private volatile long framesIn = 0L;
+    /**
+     * Transport-reported frame error count, accumulated by the connection's single transport writer.
+     */
     private volatile long framesError = 0L;
+    /**
+     * Received transport byte count, accumulated by the connection's single transport writer.
+     */
     private volatile long bytesIn = 0L;
+    /**
+     * Sent RakNet packet count, accumulated by the connection's single transport writer.
+     */
     private volatile long packetsOut = 0L;
+    /**
+     * Sent RakNet frame count, accumulated by the connection's single transport writer.
+     */
     private volatile long framesOut = 0L;
+    /**
+     * Sent transport byte count, accumulated by the connection's single transport writer.
+     */
     private volatile long bytesOut = 0L;
+    /**
+     * Retransmitted transport byte count, accumulated by the connection's single transport writer.
+     */
     private volatile long bytesRecalled = 0L;
+    /**
+     * Acknowledged transport byte count, accumulated by the connection's single transport writer.
+     */
     private volatile long bytesACKd = 0L;
+    /**
+     * Negatively acknowledged transport byte count, accumulated by the connection's single transport writer.
+     */
     private volatile long bytesNACKd = 0L;
+    /**
+     * Sent acknowledgement count, accumulated by the connection's single transport writer.
+     */
     private volatile long acksSent = 0L;
+    /**
+     * Sent negative-acknowledgement count, accumulated by the connection's single transport writer.
+     */
     private volatile long nacksSent = 0L;
 
+    /**
+     * Latest transport round-trip-time estimate, in nanoseconds.
+     */
     private volatile long measureRTTns = 0L;
+    /**
+     * Latest standard deviation of the transport RTT estimate, in nanoseconds.
+     */
     private volatile long measureRTTnsStdDev = 0L;
+    /**
+     * Latest additional burst allowance above the configured baseline pending-frame-set count.
+     */
     private volatile long measureBurstTokens = 0L;
+    /**
+     * Latest transport queue size in bytes, published for diagnostic readers.
+     */
     private volatile int currentQueuedBytes = 0;
 
+    /**
+     * Accumulates the received raknet packet count reported by the transport.
+     *
+     * @param delta additional count reported by this transport callback
+     */
     @Override
     public void packetsIn(int delta) {
         packetsIn += delta;
     }
 
+    /**
+     * Accumulates the received raknet frame count reported by the transport.
+     *
+     * @param delta additional count reported by this transport callback
+     */
     @Override
     public void framesIn(int delta) {
         framesIn += delta;
     }
 
+    /**
+     * Accumulates the transport-reported frame error count reported by the transport.
+     *
+     * @param delta additional count reported by this transport callback
+     */
     @Override
     public void frameError(int delta) {
         framesError += delta;
     }
 
+    /**
+     * Accumulates the received transport byte count reported by the transport.
+     *
+     * @param delta additional count reported by this transport callback
+     */
     @Override
     public void bytesIn(int delta) {
         bytesIn += delta;
     }
 
+    /**
+     * Accumulates the sent raknet packet count reported by the transport.
+     *
+     * @param delta additional count reported by this transport callback
+     */
     @Override
     public void packetsOut(int delta) {
         packetsOut += delta;
     }
 
+    /**
+     * Accumulates the sent raknet frame count reported by the transport.
+     *
+     * @param delta additional count reported by this transport callback
+     */
     @Override
     public void framesOut(int delta) {
         framesOut += delta;
     }
 
+    /**
+     * Accumulates the sent transport byte count reported by the transport.
+     * Also refreshes derived rates when the sampling interval has elapsed.
+     *
+     * @param delta additional count reported by this transport callback
+     */
     @Override
     public void bytesOut(int delta) {
         bytesOut += delta;
         tick();
     }
 
+    /**
+     * Accumulates the retransmitted transport byte count reported by the transport.
+     *
+     * @param delta additional count reported by this transport callback
+     */
     @Override
     public void bytesRecalled(int delta) {
         bytesRecalled += delta;
     }
 
+    /**
+     * Accumulates the acknowledged transport byte count reported by the transport.
+     *
+     * @param delta additional count reported by this transport callback
+     */
     @Override
     public void bytesACKd(int delta) {
         bytesACKd += delta;
     }
 
+    /**
+     * Accumulates the negatively acknowledged transport byte count reported by the transport.
+     *
+     * @param delta additional count reported by this transport callback
+     */
     @Override
     public void bytesNACKd(int delta) {
         bytesNACKd += delta;
     }
 
+    /**
+     * Accumulates the sent acknowledgement count reported by the transport.
+     *
+     * @param delta additional count reported by this transport callback
+     */
     @Override
     public void acksSent(int delta) {
         acksSent += delta;
     }
 
+    /**
+     * Accumulates the sent negative-acknowledgement count reported by the transport.
+     *
+     * @param delta additional count reported by this transport callback
+     */
     @Override
     public void nacksSent(int delta) {
         nacksSent += delta;
     }
 
+    /**
+     * Publishes the transport's latest round-trip-time estimate.
+     *
+     * @param n estimated round-trip time in nanoseconds
+     */
     @Override
     public void measureRTTns(long n) {
         measureRTTns = n;
     }
 
+    /**
+     * Publishes RTT variation and refreshes derived rates when sampling is due.
+     *
+     * @param n standard deviation of the RTT estimate in nanoseconds
+     */
     @Override
     public void measureRTTnsStdDev(long n) {
         measureRTTnsStdDev = n;
         tick();
     }
 
+    /**
+     * Publishes the transport's additional send allowance above its baseline.
+     *
+     * @param n current burst-token count
+     */
     @Override
     public void measureBurstTokens(int n) {
         measureBurstTokens = n;
     }
 
+    /**
+     * Publishes the current transport queue size without accumulating it.
+     *
+     * @param bytes bytes currently waiting in the transport queue
+     */
     @Override
     public void currentQueuedBytes(int bytes) {
         currentQueuedBytes = bytes;
@@ -138,8 +269,14 @@ public class SimpleMetricsLogger implements RakNet.MetricsLogger {
 
     // ========== Calculations ==========
 
+    /**
+     * Wall-clock time of the last derived-rate update, in milliseconds.
+     */
     private long lastMeasureMillis = System.currentTimeMillis();
 
+    /**
+     * Updates derived measurements at most about once per second from transport callbacks.
+     */
     private synchronized void tick() {
         final long measureMillis = System.currentTimeMillis();
         final long deltaTime = measureMillis - lastMeasureMillis;
@@ -150,11 +287,26 @@ public class SimpleMetricsLogger implements RakNet.MetricsLogger {
         tickRXTX(deltaTime);
     }
 
+    /**
+     * Rolling sixteen-sample window of retransmitted bytes divided by total traffic bytes.
+     */
     private final DescriptiveStatistics errorStats = new DescriptiveStatistics(16);
+    /**
+     * Combined inbound and outbound byte total at the previous retransmission sample.
+     */
     private long lastBytesTotal = 0L;
+    /**
+     * Retransmitted-byte total at the previous retransmission sample.
+     */
     private long lastBytesRecalled = 0L;
+    /**
+     * Published rolling retransmitted-byte fraction, not a direct packet-loss measurement.
+     */
     private volatile double measureErrorRate = 0.0D;
 
+    /**
+     * Updates the retransmitted-byte fraction only for intervals containing traffic.
+     */
     private void tickErrorRate() {
         final long bytesTotal = this.bytesIn + this.bytesOut;
         final long bytesRecalled = this.bytesRecalled;
@@ -171,19 +323,61 @@ public class SimpleMetricsLogger implements RakNet.MetricsLogger {
         this.lastBytesRecalled = bytesRecalled;
     }
 
+    /**
+     * Rolling eight-sample window of incoming packet rates in packets per second.
+     */
     private final DescriptiveStatistics rxStats = new DescriptiveStatistics(8);
+    /**
+     * Rolling eight-sample window of outgoing packet rates in packets per second.
+     */
     private final DescriptiveStatistics txStats = new DescriptiveStatistics(8);
+    /**
+     * Incoming packet total at the previous rate sample.
+     */
     private long lastPacketsIn = 0L;
+    /**
+     * Outgoing packet total at the previous rate sample.
+     */
     private long lastPacketsOut = 0L;
+    /**
+     * Incoming byte total at the previous rate sample.
+     */
     private long lastBytesIn = 0L;
+    /**
+     * Outgoing byte total at the previous rate sample.
+     */
     private long lastBytesOut = 0L;
+    /**
+     * Published rolling mean incoming packet rate, truncated to whole packets per second.
+     */
     private volatile int measureRX = 0;
+    /**
+     * Published rolling mean outgoing packet rate, truncated to whole packets per second.
+     */
     private volatile int measureTX = 0;
+    /**
+     * Published incoming byte rate for the latest sampling interval, in bytes per second.
+     */
     private volatile long measureBytesInRate = 0;
+    /**
+     * Published outgoing byte rate for the latest sampling interval, in bytes per second.
+     */
     private volatile long measureBytesOutRate = 0;
+    /**
+     * Incoming byte rate formatted with binary units and a per-second suffix.
+     */
     private volatile String measureTrafficInFormatted = "...";
+    /**
+     * Outgoing byte rate formatted with binary units and a per-second suffix.
+     */
     private volatile String measureTrafficOutFormatted = "...";
 
+    /**
+     * Converts counter deltas into packet and byte rates using the actual elapsed interval.
+     * Packet rates use rolling means. Byte rates and their display strings describe the latest interval.
+     *
+     * @param deltaTime elapsed sampling time in milliseconds
+     */
     private void tickRXTX(long deltaTime) {
 
         final long packetsIn = this.packetsIn;
@@ -213,62 +407,135 @@ public class SimpleMetricsLogger implements RakNet.MetricsLogger {
 
     // ========== Getters ==========
 
+    /**
+     * Reports the transport round-trip-time estimate.
+     *
+     * @return latest RTT in nanoseconds
+     */
     public long getMeasureRTTns() {
         return measureRTTns;
     }
 
+    /**
+     * Reports variation in the transport round-trip-time estimate.
+     *
+     * @return latest RTT standard deviation in nanoseconds
+     */
     public long getMeasureRTTnsStdDev() {
         return measureRTTnsStdDev;
     }
 
+    /**
+     * Reports the rolling retransmission fraction.
+     *
+     * @return retransmitted bytes divided by combined incoming and outgoing bytes
+     */
     public double getMeasureErrorRate() {
         return measureErrorRate;
     }
 
+    /**
+     * Reports the rolling incoming packet rate.
+     *
+     * @return incoming packets per second, truncated to an integer
+     */
     public int getMeasureRX() {
         return measureRX;
     }
 
+    /**
+     * Reports the rolling outgoing packet rate.
+     *
+     * @return outgoing packets per second, truncated to an integer
+     */
     public int getMeasureTX() {
         return measureTX;
     }
 
+    /**
+     * Reports the transport queue occupancy.
+     *
+     * @return most recently reported queued bytes
+     */
     public int getCurrentQueuedBytes() {
         return currentQueuedBytes;
     }
 
+    /**
+     * Reports the transport burst allowance.
+     *
+     * @return additional pending-frame-set tokens above the configured baseline
+     */
     public long getMeasureBurstTokens() {
         return measureBurstTokens;
     }
 
+    /**
+     * Reports the latest incoming byte rate.
+     *
+     * @return incoming bytes per second over the latest sampling interval
+     */
     public long getMeasureBytesInRate() {
         return measureBytesInRate;
     }
 
+    /**
+     * Reports the latest outgoing byte rate.
+     *
+     * @return outgoing bytes per second over the latest sampling interval
+     */
     public long getMeasureBytesOutRate() {
         return measureBytesOutRate;
     }
 
+    /**
+     * Reports the incoming transfer rate for display.
+     *
+     * @return binary-unit rate with a per-second suffix, or an ellipsis before sampling
+     */
     public String getMeasureTrafficInFormatted() {
         return measureTrafficInFormatted;
     }
 
+    /**
+     * Reports the outgoing transfer rate for display.
+     *
+     * @return binary-unit rate with a per-second suffix, or an ellipsis before sampling
+     */
     public String getMeasureTrafficOutFormatted() {
         return measureTrafficOutFormatted;
     }
 
+    /**
+     * Reports the lifetime received traffic total.
+     *
+     * @return cumulative incoming transport bytes
+     */
     public long getBytesIn() {
         return bytesIn;
     }
 
     // ========== Misc ==========
 
+    /**
+     * Peer-statistics handler paired with this local logger, or null before pipeline initialization.
+     */
     private MetricsSynchronizationHandler metricsSynchronizationHandler;
 
+    /**
+     * Finds the peer-statistics source associated with this connection.
+     *
+     * @return paired synchronization handler, or null if one has not been installed
+     */
     public MetricsSynchronizationHandler getMetricsSynchronizationHandler() {
         return this.metricsSynchronizationHandler;
     }
 
+    /**
+     * Associates the local logger with the handler that receives peer statistics.
+     *
+     * @param metricsSynchronizationHandler installed peer-statistics handler, or null to clear the association
+     */
     public void setMetricsSynchronizationHandler(MetricsSynchronizationHandler metricsSynchronizationHandler) {
         this.metricsSynchronizationHandler = metricsSynchronizationHandler;
     }
