@@ -54,16 +54,43 @@ import java.lang.reflect.Field;
 import java.security.GeneralSecurityException;
 import java.util.logging.Level;
 
+/**
+ * Adapts BungeeCord login and play transitions to frame-based encryption, compression, and ordering.
+ */
 public class RakNetBungeeClientChannelEventListener extends ChannelDuplexHandler {
 
+    /**
+     * Pipeline name for the client-facing proxy lifecycle handler.
+     */
     public static final String NAME = "raknetify-bungee-event-listener";
 
+    /**
+     * Captured login secret awaiting installation of frame encryption on the next outgoing write.
+     */
     private SecretKey encryptionKey = null;
+    /**
+     * Whether a swallowed compression packet requires BungeeCord's threshold to be reset on the next write.
+     */
     private boolean needResetCompression = false;
 
+    /**
+     * Protocol phase supplied by setProtocol, currently retained without affecting packet handling.
+     */
     private Protocol protocol = null;
+    /**
+     * Protocol number supplied by setProtocol, currently retained without affecting packet handling.
+     */
     private int protocolVersion = -1;
 
+    /**
+     * Reconciles proxy codec state, suppresses redundant vanilla compression, and handles phase boundaries.
+     * World and configuration transitions synchronize ordering. The command tree starts multichannel delivery.
+     *
+     * @param ctx client-facing outbound context
+     * @param msg decoded Minecraft packet sent by the proxy
+     * @param promise completion notification, completed locally for a suppressed compression packet
+     * @throws Exception if proxy state access, encryption setup, or outbound forwarding fails
+     */
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
         if (this.needResetCompression) {
@@ -120,6 +147,14 @@ public class RakNetBungeeClientChannelEventListener extends ChannelDuplexHandler
         return msg instanceof Respawn || msg instanceof Login || msg instanceof StartConfiguration || msg instanceof FinishConfiguration;
     }
 
+    /**
+     * Captures the client's encryption response before normal proxy login handling consumes it.
+     * Failures are logged while the original packet continues to BungeeCord's authentication handler.
+     *
+     * @param ctx client-facing inbound context
+     * @param msg wrapped Minecraft packet or unrelated pipeline message
+     * @throws Exception if superclass inbound forwarding fails
+     */
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         if (msg instanceof PacketWrapper wrapper) {
@@ -134,17 +169,38 @@ public class RakNetBungeeClientChannelEventListener extends ChannelDuplexHandler
         super.channelRead(ctx, msg);
     }
 
+    /**
+     * Decrypts only the shared-secret field using the proxy's RSA key.
+     * BungeeCord remains responsible for validating the login response and authentication.
+     *
+     * @param resp client encryption response containing the RSA-encrypted shared secret
+     * @return AES session key used for RakNet frame encryption
+     * @throws GeneralSecurityException if RSA initialization or secret decryption fails
+     */
     private static SecretKey getSecretUnchecked(EncryptionResponse resp) throws GeneralSecurityException {
         Cipher cipher = Cipher.getInstance("RSA");
         cipher.init(Cipher.DECRYPT_MODE, EncryptionUtil.keys.getPrivate());
         return new SecretKeySpec(cipher.doFinal(resp.getSharedSecret()), "AES");
     }
 
+    /**
+     * Records protocol context supplied by an integration without changing the installed routing table.
+     *
+     * @param protocol current BungeeCord protocol phase
+     * @param protocolVersion negotiated Minecraft protocol number
+     */
     public void setProtocol(Protocol protocol, int protocolVersion) {
         this.protocol = protocol;
         this.protocolVersion = protocolVersion;
     }
 
+    /**
+     * Propagates a pipeline exception and prints its stack trace for connection diagnostics.
+     *
+     * @param ctx context reporting the failure
+     * @param cause original pipeline failure
+     * @throws Exception if superclass exception forwarding fails
+     */
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
         super.exceptionCaught(ctx, cause);

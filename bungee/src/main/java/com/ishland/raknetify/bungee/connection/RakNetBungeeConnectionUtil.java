@@ -50,10 +50,22 @@ import java.lang.reflect.Field;
 
 import static com.ishland.raknetify.common.util.ReflectionUtil.accessible;
 
+/**
+ * Installs Bungee connection hooks around the shared RakNet transport pipeline.
+ */
 public class RakNetBungeeConnectionUtil {
 
+    /**
+     * Reflective access to the player's BungeeCord channel wrapper.
+     */
     private static final Field USER_CONNECTION_CH;
+    /**
+     * Reflective access to the backend server's BungeeCord channel wrapper.
+     */
     private static final Field SERVER_CONNECTION_CH;
+    /**
+     * Reflective access to the negotiated protocol number used by the packet encoder.
+     */
     private static final Field ENCODER_PROTOCOL_VERSION;
 
     static {
@@ -66,9 +78,17 @@ public class RakNetBungeeConnectionUtil {
         }
     }
 
+    /**
+     * Prevents construction of the proxy connection-initialization utility.
+     */
     private RakNetBungeeConnectionUtil() {
     }
 
+    /**
+     * Installs shared transport handlers and Minecraft framing before the proxy initializes its pipeline.
+     *
+     * @param channel accepted application channel, left unchanged when it is not a RakNet channel
+     */
     public static void initChannel(Channel channel) {
         if (channel.config() instanceof RakNet.Config) {
             RakNetConnectionUtil.initChannel(channel);
@@ -77,6 +97,13 @@ public class RakNetBungeeConnectionUtil {
         }
     }
 
+    /**
+     * Replaces TCP framing and timeout behavior after proxy initialization and attaches login hooks.
+     * The HAProxy stream decoder is removed when present because this channel carries RakNet frames.
+     *
+     * @param channel initialized client connection, left unchanged for TCP
+     * @param isClientSide reserved direction flag, currently unused by this server-side integration
+     */
     public static void postInitChannel(Channel channel, boolean isClientSide) {
         if (channel.config() instanceof RakNet.Config) {
             channel.pipeline().replace(PipelineUtils.TIMEOUT_HANDLER, PipelineUtils.TIMEOUT_HANDLER, new ChannelDuplexHandler()); // no-op
@@ -93,6 +120,13 @@ public class RakNetBungeeConnectionUtil {
         }
     }
 
+    /**
+     * Selects the client's protocol routing table and installs transport-derived ping updates.
+     * Unknown protocol numbers retain the default routing behavior and produce a warning.
+     *
+     * @param evt proxy login event supplying the connected player
+     * @throws RuntimeException if proxy connection state or protocol registry internals cannot be accessed
+     */
     public static void onPlayerLogin(PostLoginEvent evt) {
         try {
             final UserConnection player = (UserConnection) evt.getPlayer();
@@ -135,6 +169,12 @@ public class RakNetBungeeConnectionUtil {
         }
     }
 
+    /**
+     * Resets pending client traffic before BungeeCord emits backend-switch state and attaches backend hooks.
+     *
+     * @param evt completed backend connection event for the player
+     * @throws RuntimeException if proxy connection state or protocol registry internals cannot be accessed
+     */
     public static void handleServerSwitch(ServerConnectedEvent evt) {
         try {
             final UserConnection player = (UserConnection) evt.getPlayer();

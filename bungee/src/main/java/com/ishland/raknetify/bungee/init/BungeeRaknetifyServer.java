@@ -68,13 +68,29 @@ import java.util.stream.Stream;
 
 import static com.ishland.raknetify.common.util.ReflectionUtil.accessible;
 
+/**
+ * Creates companion UDP listeners from BungeeCord's existing TCP listener configuration.
+ * Wildcard binds expand to individual interface addresses and follow later address changes.
+ */
 public class BungeeRaknetifyServer {
 
+    /**
+     * Optional UDP-only port from the raknetify.bungee.portOverride property, with invalid values ignored.
+     */
     private static final int portOverride = Integer.getInteger("raknetify.bungee.portOverride", -1);
 
+    /**
+     * Accessible ChannelInitializer hook used to reuse the proxy's normal child pipeline.
+     */
     private static final Method INIT_CHANNEL;
+    /**
+     * Reflective access to the proxy's live listener set for lifecycle interception.
+     */
     private static final Field BUNGEE_LISTENERS_FIELD;
 
+    /**
+     * Netty acceptor implementation that retains the child initializer and listener attributes.
+     */
     private static final Class<?> ACCEPTOR_CLASS;
 
     static {
@@ -87,15 +103,39 @@ public class BungeeRaknetifyServer {
         }
     }
 
+    /**
+     * Wildcard TCP listeners mapped by identity to their per-interface UDP bind futures.
+     */
     private static final Reference2ReferenceOpenHashMap<Channel, ReferenceOpenHashSet<ChannelFuture>> channels = new Reference2ReferenceOpenHashMap<>();
+    /**
+     * UDP bind futures created for listeners with an explicit local address.
+     */
     private static final ReferenceOpenHashSet<ChannelFuture> nonWildcardChannels = new ReferenceOpenHashSet<>();
 
+    /**
+     * Whether plugin listener creation and interface-change handling are enabled.
+     */
     private static volatile boolean active = false;
+    /**
+     * Activation generation used to reject callbacks captured by an earlier plugin activation.
+     */
     private static volatile int activeIndex = 0;
+    /**
+     * Whether the proxy listener set has already been wrapped with lifecycle hooks.
+     */
     private static boolean injected = false;
 
+    /**
+     * Current interface-change callback, replaced on each activation.
+     */
     private static volatile Consumer<NetworkInterfaceListener.InterfaceAddressChangeEvent> listener = null;
 
+    /**
+     * Wraps the proxy listener set once and attaches UDP endpoints to existing listeners.
+     * Collects initial binding failures before reporting them, then arranges interface-change callbacks.
+     *
+     * @throws RuntimeException if listener inspection or initial UDP setup fails
+     */
     public static void inject() {
         if (active) return;
         try {
@@ -138,6 +178,15 @@ public class BungeeRaknetifyServer {
         }
     }
 
+    /**
+     * Finds a Minecraft listener's child pipeline and binds matching UDP endpoints.
+     * Query sockets, Geyser listeners, and incomplete acceptor metadata are excluded.
+     *
+     * @param instance running BungeeCord proxy
+     * @param listener existing proxy listener to inspect
+     * @param throwErrors whether binding failures should escape instead of only being logged
+     * @throws RuntimeException if setup fails while throwErrors is true
+     */
     public static void injectChannel(BungeeCord instance, Channel listener, boolean throwErrors) {
         try {
             if (!isListenerCandidate(listener)) return;
@@ -293,6 +342,18 @@ public class BungeeRaknetifyServer {
         }
     }
 
+    /**
+     * Binds one UDP endpoint using the proxy's transport and child initializer.
+     * Existing per-interface endpoints are reused by skipping duplicate addresses.
+     *
+     * @param instance running proxy supplying event loops
+     * @param listener TCP listener that owns the new UDP endpoint
+     * @param initializer original proxy child initializer reused for accepted connections
+     * @param info proxy listener attributes and configured address
+     * @param address interface address for wildcard expansion, or null for an explicit bind
+     * @throws NoSuchFieldException if the proxy exposes neither supported event-loop field layout
+     * @throws IllegalAccessException if the proxy event-loop fields cannot be read
+     */
     private static void startServer(BungeeCord instance, Channel listener, ChannelInitializer<Channel> initializer, ListenerInfo info, InetAddress address) throws NoSuchFieldException, IllegalAccessException {
         if (address != null) {
             final ReferenceOpenHashSet<ChannelFuture> futures = channels.get(listener);
@@ -317,6 +378,12 @@ public class BungeeRaknetifyServer {
                 .option(ChannelOption.SO_REUSEADDR, true)
                 .childAttr(PipelineUtils.LISTENER, info)
                 .childHandler(new ChannelInitializer<>() {
+                    /**
+                     * Wraps the normal BungeeCord child initialization with RakNet transport setup and codec replacement.
+                     *
+                     * @param channel accepted RakNet application channel
+                     * @throws Exception if invoking the proxy's initializer fails
+                     */
                     @Override
                     protected void initChannel(Channel channel) throws Exception {
                         RakNetBungeeConnectionUtil.initChannel(channel);
@@ -337,6 +404,9 @@ public class BungeeRaknetifyServer {
         RaknetifyBungeePlugin.LOGGER.info("Raknetify server started on %s".formatted(future.channel().localAddress()));
     }
 
+    /**
+     * Closes all tracked UDP endpoints and clears their ownership tables while the plugin is active.
+     */
     public static void stopAll() {
         if (!active) return;
         for (ChannelFuture future : Stream.concat(channels.values().stream().flatMap(Collection::stream), nonWildcardChannels.stream()).toList()) {
@@ -352,12 +422,23 @@ public class BungeeRaknetifyServer {
         nonWildcardChannels.clear();
     }
 
+    /**
+     * Closes active UDP endpoints and prevents subsequent listener creation.
+     */
     public static void disable() {
         if (!active) return;
         stopAll();
         active = false;
     }
 
+    /**
+     * Finds the acceptor event loops across BungeeCord's shared and Waterfall's split layouts.
+     *
+     * @param instance running proxy supplying event loops
+     * @return proxy-owned acceptor event-loop group
+     * @throws NoSuchFieldException if neither supported field layout exists
+     * @throws IllegalAccessException if the selected event-loop field cannot be read
+     */
     private static EventLoopGroup getBossEventLoopGroup(BungeeCord instance) throws NoSuchFieldException, IllegalAccessException {
         try {
             return (EventLoopGroup) accessible(BungeeCord.class.getDeclaredField("eventLoops")).get(instance);
@@ -367,6 +448,14 @@ public class BungeeRaknetifyServer {
         }
     }
 
+    /**
+     * Finds the connection event loops across BungeeCord's shared and Waterfall's split layouts.
+     *
+     * @param instance running proxy supplying event loops
+     * @return proxy-owned connection event-loop group
+     * @throws NoSuchFieldException if neither supported field layout exists
+     * @throws IllegalAccessException if the selected event-loop field cannot be read
+     */
     private static EventLoopGroup getWorkerEventLoopGroup(BungeeCord instance) throws NoSuchFieldException, IllegalAccessException {
         try {
             return (EventLoopGroup) accessible(BungeeCord.class.getDeclaredField("eventLoops")).get(instance);

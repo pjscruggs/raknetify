@@ -42,17 +42,40 @@ import network.ycc.raknet.RakNet;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Answers backend keepalives using the RakNet client's measured RTT instead of relaying them to the client.
+ */
 public class RakNetBungeeServerChannelEventListener extends ChannelDuplexHandler {
 
+    /**
+     * Pipeline name for the backend-facing keepalive and connection diagnostic handler.
+     */
     public static final String NAME = "raknetify-bungee-downstream-event-listener";
 
+    /**
+     * RakNet client connection whose transport RTT determines backend keepalive reply timing.
+     */
     private final Channel clientChannel;
 
+    /**
+     * Associates a backend pipeline with the RakNet client it serves.
+     *
+     * @param clientChannel client-facing channel required to have a RakNet configuration
+     */
     public RakNetBungeeServerChannelEventListener(Channel clientChannel) {
         Preconditions.checkArgument(clientChannel.config() instanceof RakNet.Config);
         this.clientChannel = clientChannel;
     }
 
+    /**
+     * Resynchronizes client ordering on respawn and answers backend keepalives locally.
+     * Replies are delayed by the client RTT minus four milliseconds, bounded below by zero,
+     * to account for scheduling overhead without involving Minecraft's client keepalive path.
+     *
+     * @param ctx backend-facing context used to schedule and send the reply
+     * @param msg decoded backend packet wrapper
+     * @throws Exception if superclass forwarding fails
+     */
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         if (msg instanceof PacketWrapper wrapper) {
@@ -71,6 +94,13 @@ public class RakNetBungeeServerChannelEventListener extends ChannelDuplexHandler
         super.channelRead(ctx, msg);
     }
 
+    /**
+     * Propagates the failure and prints the backend pipeline layout alongside its stack trace.
+     *
+     * @param ctx backend context reporting the exception
+     * @param cause original connection failure
+     * @throws Exception if superclass exception forwarding fails
+     */
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
         super.exceptionCaught(ctx, cause);

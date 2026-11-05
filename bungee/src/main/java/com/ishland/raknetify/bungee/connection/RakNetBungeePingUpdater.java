@@ -36,18 +36,40 @@ import network.ycc.raknet.packet.Ping;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Publishes RakNet RTT plus its standard deviation as the proxy-visible player ping.
+ */
 public class RakNetBungeePingUpdater extends ChannelDuplexHandler {
 
+    /**
+     * Pipeline name for the transport-based player ping updater.
+     */
     public static final String NAME = "raknetify-bungee-ping-updater";
 
+    /**
+     * Player whose proxy-visible ping follows this connection's transport measurements.
+     */
     private final UserConnection player;
 
+    /**
+     * Once-per-second event-loop task, or null before installation and after removal.
+     */
     ScheduledFuture<?> updateTask = null;
 
+    /**
+     * Associates transport ping samples with an authenticated proxy player.
+     *
+     * @param player player record whose ping is updated while this handler is installed
+     */
     public RakNetBungeePingUpdater(UserConnection player) {
         this.player = Objects.requireNonNull(player);
     }
 
+    /**
+     * Schedules millisecond ping updates using RakNet RTT and its standard deviation.
+     *
+     * @param ctx installed context whose channel supplies transport measurements and scheduling
+     */
     public void handlerAdded(ChannelHandlerContext ctx) {
         if (ctx.channel().config() instanceof RakNet.Config config) {
             updateTask = ctx.channel().eventLoop().scheduleAtFixedRate(
@@ -57,6 +79,11 @@ public class RakNetBungeePingUpdater extends ChannelDuplexHandler {
         }
     }
 
+    /**
+     * Cancels further ping updates when the player's handler is removed.
+     *
+     * @param ctx removed handler context, unused because the task is already retained
+     */
     public void handlerRemoved(ChannelHandlerContext ctx) {
         if (updateTask != null) {
             updateTask.cancel(false);

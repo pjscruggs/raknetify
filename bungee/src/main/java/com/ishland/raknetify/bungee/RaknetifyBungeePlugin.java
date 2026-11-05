@@ -35,11 +35,23 @@ import net.md_5.bungee.event.EventHandler;
 
 import java.util.logging.Logger;
 
+/**
+ * Connects the BungeeCord plugin lifecycle to UDP listeners and player connection hooks.
+ */
 public class RaknetifyBungeePlugin extends Plugin implements Listener {
 
+    /**
+     * Proxy-provided plugin logger initialized during enable.
+     */
     public static Logger LOGGER;
+    /**
+     * Enabled plugin instance used to own scheduled tasks and event registrations.
+     */
     public static RaknetifyBungeePlugin INSTANCE;
 
+    /**
+     * Loads routing tables, attaches companion UDP listeners, and registers player lifecycle hooks.
+     */
     @Override
     public void onEnable() {
         super.onEnable();
@@ -54,6 +66,9 @@ public class RaknetifyBungeePlugin extends Plugin implements Listener {
         this.getProxy().getPluginManager().registerListener(this, this);
     }
 
+    /**
+     * Closes the plugin's UDP listeners when BungeeCord disables the plugin.
+     */
     @Override
     public void onDisable() {
         super.onDisable();
@@ -61,11 +76,21 @@ public class RaknetifyBungeePlugin extends Plugin implements Listener {
         BungeeRaknetifyServer.disable();
     }
 
+    /**
+     * Installs protocol routing and transport-based ping updates for a newly authenticated player.
+     *
+     * @param evt completed proxy login event
+     */
     @EventHandler
     public void onPostLogin(PostLoginEvent evt) {
         RakNetBungeeConnectionUtil.onPlayerLogin(evt);
     }
 
+    /**
+     * Resynchronizes a RakNet client and attaches hooks to its newly connected backend.
+     *
+     * @param evt event identifying the player and new backend connection
+     */
     @EventHandler
     public void handleServerSwitch(ServerConnectedEvent evt) {
         RakNetBungeeConnectionUtil.handleServerSwitch(evt);
