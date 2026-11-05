@@ -68,8 +68,8 @@ def check_udp(port):
         assert 128 <= struct.unpack('>H', reply[26:28])[0] <= 1200
 
 
-def start_server(folder, log, events):
-    process = subprocess.Popen(['java', '-Xms256M', '-Xmx1G', '-jar', 'fabric-server-launch.jar', 'nogui'],
+def start_server(folder, log, events, java):
+    process = subprocess.Popen([java, '-Xms256M', '-Xmx1G', '-jar', 'fabric-server-launch.jar', 'nogui'],
                                cwd=folder, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace')
 
@@ -85,7 +85,7 @@ def start_server(folder, log, events):
     return process, reader
 
 
-def check_server(folder, version, native):
+def check_server(folder, version, native, java):
     port = 25871
     (folder / 'eula.txt').write_text('eula=true\n')
     (folder / 'server.properties').write_text(
@@ -95,7 +95,7 @@ def check_server(folder, version, native):
         'use-native-transport=' + str(native).lower() + '\nlevel-name=world-' + str(native).lower() + '\n')
     log = folder / ('native.log' if native else 'nio.log')
     events = queue.Queue()
-    process, reader = start_server(folder, log, events)
+    process, reader = start_server(folder, log, events, java)
     try:
         deadline = time.monotonic() + 180
         while time.monotonic() < deadline:
@@ -117,7 +117,7 @@ def check_server(folder, version, native):
                     raise
                 time.sleep(0.5)
         check_udp(port)
-        dump = subprocess.check_output(['jcmd', str(process.pid), 'Thread.print'], text=True)
+        dump = subprocess.check_output([str(Path(java).with_name('jcmd')), str(process.pid), 'Thread.print'], text=True)
         (folder / ('native-threads.log' if native else 'nio-threads.log')).write_text(dump)
         transport = 'Epoll' if native and sys.platform.startswith('linux') else 'NIO'
         assert 'Netty Server ' + transport + ' Raknetify' in dump, transport
@@ -147,6 +147,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--jar', type=Path, required=True)
     parser.add_argument('--work-dir', type=Path, required=True)
+    parser.add_argument('--java-17', default='java')
+    parser.add_argument('--java-21', default='java')
     supported = json.loads((Path(__file__).resolve().parents[2] / 'supported-versions.json').read_text())
     parser.add_argument('--versions', nargs='+', default=['1.18.2', '1.21.1'] + supported['modern']['gameVersions'])
     args = parser.parse_args()
@@ -159,8 +161,9 @@ def main():
             url = f'https://meta.fabricmc.net/v2/versions/loader/{version}/0.20.1/1.1.1/server/jar'
             with urllib.request.urlopen(url, timeout=60) as response:
                 launcher.write_bytes(response.read())
-        check_server(folder, version, True)
-        check_server(folder, version, False)
+        java = args.java_17 if version == '1.18.2' else args.java_21 if version == '1.21.1' else 'java'
+        check_server(folder, version, True, java)
+        check_server(folder, version, False, java)
 
 
 if __name__ == '__main__':
