@@ -30,8 +30,17 @@ import io.netty.buffer.ByteBuf;
 import java.text.CharacterIterator;
 import java.text.StringCharacterIterator;
 
+/**
+ * Provides binary-unit formatting and the limited Minecraft wire decoding needed by packet classifiers.
+ */
 public class MathUtil {
 
+    /**
+     * Formats a signed byte count using binary units from bytes through exbibytes.
+     *
+     * @param bytes byte count or byte rate to display
+     * @return signed value with a binary unit, using two decimal places above the byte range
+     */
     public static String humanReadableByteCountBin(long bytes) {
         long absB = bytes == Long.MIN_VALUE ? Long.MAX_VALUE : Math.abs(bytes);
         if (absB < 1024) {
@@ -47,6 +56,13 @@ public class MathUtil {
         return String.format("%.2f %ciB", value / 1024.0, ci.current());
     }
 
+    /**
+     * Consumes a Minecraft VarInt from the current reader index.
+     *
+     * @param buf buffer containing up to five bytes of VarInt data
+     * @return decoded 32-bit value
+     * @throws RuntimeException if the encoded value continues beyond five bytes
+     */
     public static int readVarInt(ByteBuf buf) {
         // TODO [VanillaCopy]
         int i = 0;
@@ -64,10 +80,24 @@ public class MathUtil {
         return i;
     }
 
+    /**
+     * Consumes a length-prefixed UTF-8 Minecraft string with the default character limit.
+     *
+     * @param buf buffer positioned at the string's VarInt byte length
+     * @return decoded string, limited to Short.MAX_VALUE UTF-16 code units
+     */
     public static String readString(ByteBuf buf) {
         return readString(buf, Short.MAX_VALUE);
     }
 
+    /**
+     * Consumes a VarInt byte length and UTF-8 string while enforcing encoded and decoded limits.
+     *
+     * @param buf buffer positioned at the string's VarInt byte length
+     * @param maxLen maximum decoded length in UTF-16 code units
+     * @return decoded string after advancing past its encoded bytes
+     * @throws IllegalArgumentException if the byte length exceeds three times the limit or the decoded string exceeds it
+     */
     public static String readString(ByteBuf buf, int maxLen) {
         // Copied from BungeeCord
         int len = readVarInt(buf);

@@ -28,10 +28,23 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import network.ycc.raknet.frame.FrameData;
 
+/**
+ * Releases transport frames left unconsumed after decoding so they cannot reach Minecraft handlers.
+ */
 public class FrameDataBlocker extends ChannelInboundHandlerAdapter {
 
+    /**
+     * Enables diagnostics for unconsumed frames through the raknetify.printBlockedFrames property.
+     */
     private static final boolean printBlockedFrames = Boolean.getBoolean("raknetify.printBlockedFrames");
 
+    /**
+     * Drops and releases remaining RakNet frames while forwarding decoded Minecraft messages.
+     *
+     * @param ctx inbound context receiving messages that are no longer transport frames
+     * @param msg decoded payload or unrecognized transport frame
+     * @throws Exception reserved by the Netty callback contract
+     */
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         if (msg instanceof FrameData data) {

@@ -41,17 +41,38 @@ import java.util.concurrent.TimeUnit;
 
 import static com.ishland.raknetify.common.util.ReflectionUtil.accessible;
 
+/**
+ * Installs common transport tuning, metrics, synchronization, and framing support on RakNet connections.
+ */
 public class RakNetConnectionUtil {
 
+    /**
+     * IPv4 type-of-service flag requesting low delay when honored by the network.
+     */
     public static final int IP_TOS_LOWDELAY = 0b00010000;
+    /**
+     * IPv4 type-of-service flag requesting throughput when honored by the network.
+     */
     public static final int IP_TOS_THROUGHPUT = 0b00001000;
+    /**
+     * IPv4 type-of-service flag requesting reliability when honored by the network.
+     */
     public static final int IP_TOS_RELIABILITY = 0b00000100;
 
+    /**
+     * Default socket traffic-class request combining low-delay and throughput flags.
+     */
     public static final int DEFAULT_IP_TOS = IP_TOS_LOWDELAY | IP_TOS_THROUGHPUT;
 
+    /**
+     * Prevents construction of the shared channel-initialization utility.
+     */
     private RakNetConnectionUtil() {
     }
 
+    /**
+     * Send priority: unreliable before reliable, unordered before ordered, then channel and order index.
+     */
     private static final Comparator<Frame> cmp =
             Comparator
                     .comparingInt((Frame frame) -> frame.getReliability().isReliable ? 1 : 0) // unreliable then reliable
@@ -59,6 +80,12 @@ public class RakNetConnectionUtil {
                     .thenComparingInt(Frame::getOrderChannel) // lower channel first
                     .thenComparingInt(Frame::getOrderIndex); // lower index first
 
+    /**
+     * Applies queue and retry limits and installs the common application-side transport handlers.
+     * TCP channels are left unchanged. Platform integrations install their Minecraft codec separately.
+     *
+     * @param channel newly created application channel to configure
+     */
     public static void initChannel(Channel channel) {
         if (channel.config() instanceof RakNet.Config config) {
             config.setMaxQueuedBytes(Constants.MAX_QUEUED_SIZE);
@@ -80,6 +107,11 @@ public class RakNetConnectionUtil {
         }
     }
 
+    /**
+     * Finds the underlying transport channel and installs handlers before cross-thread delivery.
+     *
+     * @param appChannel application-facing channel or a transport channel without a threaded wrapper
+     */
     private static void initRaknetChannel(Channel appChannel) {
         final Channel channel;
         final String threadedReadHandlerName;
@@ -94,6 +126,11 @@ public class RakNetConnectionUtil {
             threadedReadHandlerName = null;
         }
         channel.pipeline().addLast(new ChannelInitializer<>() {
+            /**
+             * Installs connection-local metrics, ordering synchronization, and the transport read timeout.
+             *
+             * @param ch transport channel whose event loop owns the new handlers
+             */
             @Override
             protected void initChannel(Channel ch) {
                 final RakNet.Config config = (RakNet.Config) ch.config();
@@ -127,6 +164,12 @@ public class RakNetConnectionUtil {
 //        }
 //    }
 
+    /**
+     * Replaces the transport send queue with the shared channel-priority comparator.
+     * Existing frames are retained. Reflection failures are logged without aborting channel initialization.
+     *
+     * @param channel transport channel containing the reliability handler
+     */
     @SuppressWarnings("unchecked")
     private static void reInitChannelForOrdering(Channel channel) {
         if (channel.config() instanceof RakNet.Config config) {

@@ -27,13 +27,28 @@ package com.ishland.raknetify.common.util;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
+/**
+ * Marks reflected transport and platform members accessible while preserving their concrete reflection type.
+ */
 public class ReflectionUtil {
 
+    /**
+     * Enables direct field access for compatibility code and returns the same field.
+     *
+     * @param field reflected field whose access checks should be disabled
+     * @return the supplied field with access checks disabled
+     */
     public static Field accessible(Field field) {
         field.setAccessible(true);
         return field;
     }
 
+    /**
+     * Enables reflective invocation for compatibility code and returns the same method.
+     *
+     * @param method reflected method whose access checks should be disabled
+     * @return the supplied method with access checks disabled
+     */
     public static Method accessible(Method method) {
         method.setAccessible(true);
         return method;

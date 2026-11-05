@@ -31,8 +31,17 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
 import network.ycc.raknet.RakNet;
 
+/**
+ * Builds connection diagnostics that include transport metrics and complete Netty handler ordering.
+ */
 public class DebugUtil {
 
+    /**
+     * Describes the channel, its optional RakNet metrics, and each parent channel recursively.
+     *
+     * @param channel connection or transport channel to inspect
+     * @return multiline diagnostic report suitable for logs or a debug command
+     */
     public static String printChannelDetails(Channel channel) {
         final StringBuilder b = new StringBuilder();
         b.append("Channel details for ").append(channel.toString()).append(' ').append('(').append(channel.getClass().getName()).append(')').append('\n');

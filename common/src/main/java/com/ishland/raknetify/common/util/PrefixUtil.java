@@ -26,8 +26,17 @@ package com.ishland.raknetify.common.util;
 
 import com.ishland.raknetify.common.Constants;
 
+/**
+ * Separates a user-selected RakNet transport prefix from the address sent to normal host resolution.
+ */
 public class PrefixUtil {
 
+    /**
+     * Recognizes a normal or large-MTU RakNet prefix at the beginning of a server address.
+     *
+     * @param address user-entered server address before DNS or server-list processing
+     * @return transport selection and the address with any recognized prefix removed
+     */
     public static Info getInfo(String address) {
         if (address.startsWith(Constants.RAKNET_PREFIX)) {
             return new Info(true, address.substring(Constants.RAKNET_PREFIX.length()), false);
@@ -38,6 +47,13 @@ public class PrefixUtil {
         }
     }
 
+    /**
+     * Carries transport selection alongside the address used for ordinary resolution.
+     *
+     * @param useRakNet whether the original address explicitly selected RakNet
+     * @param stripped address after removing a recognized transport prefix
+     * @param largeMTU whether the large-MTU prefix was selected
+     */
     public record Info(boolean useRakNet, String stripped, boolean largeMTU) {
     }
 

@@ -36,13 +36,33 @@ import javax.crypto.spec.IvParameterSpec;
 import java.security.GeneralSecurityException;
 import java.util.Objects;
 
+/**
+ * Encrypts or decrypts individual RakNet frame payloads while preserving routing metadata.
+ * Each direction may be enabled independently during login. Nonframe messages and disabled
+ * directions pass through without transformation.
+ */
 public class MultiChannellingEncryption extends ChannelDuplexHandler {
 
+    /**
+     * Pipeline name used to install frame encryption after Minecraft negotiates its session key.
+     */
     public static final String NAME = "raknetify-multichannel-encryption";
 
+    /**
+     * Inbound payload transformer, or null while decryption is not enabled.
+     */
     private final PacketEncryptionManager decryption;
+    /**
+     * Outbound payload transformer, or null while encryption is not enabled.
+     */
     private final PacketEncryptionManager encryption;
 
+    /**
+     * Creates matching AES/CFB8 payload transformers from Minecraft's shared session key.
+     *
+     * @param key negotiated session key also used as the initial cipher IV
+     * @throws GeneralSecurityException if the cipher is unavailable or rejects the key
+     */
     public MultiChannellingEncryption(SecretKey key) throws GeneralSecurityException {
         Cipher decryption = Cipher.getInstance("AES/CFB8/NoPadding");
         decryption.init(Cipher.DECRYPT_MODE, key, new IvParameterSpec(key.getEncoded()));
@@ -52,25 +72,58 @@ public class MultiChannellingEncryption extends ChannelDuplexHandler {
         this.encryption = new PacketEncryptionManager(encryption);
     }
 
+    /**
+     * Wraps separately initialized ciphers for both directions of the connection.
+     *
+     * @param decryption initialized inbound cipher owned by this handler
+     * @param encryption initialized outbound cipher owned by this handler
+     */
     public MultiChannellingEncryption(Cipher decryption, Cipher encryption) {
         this.decryption = new PacketEncryptionManager(Objects.requireNonNull(decryption));
         this.encryption = new PacketEncryptionManager(Objects.requireNonNull(encryption));
     }
 
     // A null manager passes that direction through while the handshake enables the other direction independently.
+    /**
+     * Creates a handler whose disabled direction passes frames through unchanged.
+     *
+     * @param decryption inbound transformer, or null to leave incoming frames unchanged
+     * @param encryption outbound transformer, or null to leave outgoing frames unchanged
+     */
     private MultiChannellingEncryption(PacketEncryptionManager decryption, PacketEncryptionManager encryption) {
         this.decryption = decryption;
         this.encryption = encryption;
     }
 
+    /**
+     * Enables decryption only, leaving outgoing frames unchanged during handshake transitions.
+     *
+     * @param cipher initialized inbound cipher owned by the new handler
+     * @return handler that transforms incoming frame payloads only
+     */
     public static MultiChannellingEncryption inbound(Cipher cipher) {
         return new MultiChannellingEncryption(new PacketEncryptionManager(Objects.requireNonNull(cipher)), null);
     }
 
+    /**
+     * Enables encryption only, leaving incoming frames unchanged during handshake transitions.
+     *
+     * @param cipher initialized outbound cipher owned by the new handler
+     * @return handler that transforms outgoing frame payloads only
+     */
     public static MultiChannellingEncryption outbound(Cipher cipher) {
         return new MultiChannellingEncryption(null, new PacketEncryptionManager(Objects.requireNonNull(cipher)));
     }
 
+    /**
+     * Encrypts an outgoing frame payload and transfers its routing policy and promise to the replacement.
+     * The input frame and temporary buffers are released on success and failure.
+     *
+     * @param ctx outbound context allocating and forwarding the replacement frame
+     * @param msg outgoing frame or unrelated pipeline message
+     * @param promise completion notification for the outgoing write
+     * @throws Exception if encryption or superclass forwarding fails
+     */
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
         if (encryption != null && msg instanceof FrameData data) {
@@ -98,6 +151,14 @@ public class MultiChannellingEncryption extends ChannelDuplexHandler {
         super.write(ctx, msg, promise);
     }
 
+    /**
+     * Decrypts an incoming frame payload without changing its identifier, channel, or reliability.
+     * The input frame and temporary buffers are released on success and failure.
+     *
+     * @param ctx inbound context receiving the decrypted replacement
+     * @param msg incoming frame or unrelated pipeline message
+     * @throws Exception if decryption or superclass forwarding fails
+     */
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         if (decryption != null && msg instanceof FrameData data) {

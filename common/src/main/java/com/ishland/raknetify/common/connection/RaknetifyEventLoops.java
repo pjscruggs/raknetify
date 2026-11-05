@@ -33,8 +33,14 @@ import io.netty.util.concurrent.FastThreadLocalThread;
 
 import java.util.function.Supplier;
 
+/**
+ * Provides lazily created shared daemon event loops, separating client and server transport work.
+ */
 public class RaknetifyEventLoops {
 
+    /**
+     * Memoized Java NIO event loops for server UDP sockets.
+     */
     public static final Supplier<NioEventLoopGroup> NIO_EVENT_LOOP_GROUP =
             Suppliers.memoize(() -> new NioEventLoopGroup(
                             0,
@@ -46,6 +52,9 @@ public class RaknetifyEventLoops {
                     )
             );
 
+    /**
+     * Memoized Java NIO event loops for client UDP sockets.
+     */
     public static final Supplier<NioEventLoopGroup> NIO_CLIENT_EVENT_LOOP_GROUP =
             Suppliers.memoize(() -> new NioEventLoopGroup(
                             0,
@@ -57,6 +66,9 @@ public class RaknetifyEventLoops {
                     )
             );
 
+    /**
+     * Memoized Linux epoll event loops for server UDP sockets, requested only when epoll is available.
+     */
     public static final Supplier<EpollEventLoopGroup> EPOLL_EVENT_LOOP_GROUP =
             Suppliers.memoize(() -> new EpollEventLoopGroup(
                             0,
@@ -68,6 +80,9 @@ public class RaknetifyEventLoops {
                     )
             );
 
+    /**
+     * Memoized Linux epoll event loops for client UDP sockets, requested only when epoll is available.
+     */
     public static final Supplier<EpollEventLoopGroup> EPOLL_CLIENT_EVENT_LOOP_GROUP =
             Suppliers.memoize(() -> new EpollEventLoopGroup(
                             0,
@@ -79,6 +94,9 @@ public class RaknetifyEventLoops {
                     )
             );
 
+    /**
+     * Memoized server application event loops separating packet processing from UDP I/O.
+     */
     public static final Supplier<DefaultEventLoopGroup> DEFAULT_EVENT_LOOP_GROUP =
             Suppliers.memoize(() -> new DefaultEventLoopGroup(
                             0,
@@ -90,6 +108,9 @@ public class RaknetifyEventLoops {
                     )
             );
 
+    /**
+     * Memoized client application event loops separating packet processing from UDP I/O.
+     */
     public static final Supplier<DefaultEventLoopGroup> DEFAULT_CLIENT_EVENT_LOOP_GROUP =
             Suppliers.memoize(() -> new DefaultEventLoopGroup(
                             0,

@@ -24,26 +24,60 @@
 
 package com.ishland.raknetify.common.util;
 
+/**
+ * Carries transport selection through synchronous platform connection and bootstrap hooks.
+ * Callers must restore flags after initialization so later connections on the same thread
+ * do not inherit a previous connection's transport choice.
+ */
 public class ThreadLocalUtil {
 
+    /**
+     * Prevents construction of the thread-local bootstrap-state utility.
+     */
     private ThreadLocalUtil() {
     }
 
+    /**
+     * Whether the current thread is constructing a RakNet connection rather than a TCP connection.
+     */
     private static final ThreadLocal<Boolean> initializingRaknet = ThreadLocal.withInitial(() -> false);
+    /**
+     * Whether the current bootstrap selected the opt-in large MTU.
+     */
     private static final ThreadLocal<Boolean> initializingRaknetLargeMTU = ThreadLocal.withInitial(() -> false);
 
+    /**
+     * Sets the transport choice observed by nested bootstrap hooks on this thread.
+     *
+     * @param value true while initializing a RakNet connection, false when restoring normal behavior
+     */
     public static void setInitializingRaknet(boolean value) {
         initializingRaknet.set(value);
     }
 
+    /**
+     * Sets the MTU choice observed by nested bootstrap hooks on this thread.
+     *
+     * @param value true while initializing a large-MTU connection, false when restoring the default
+     */
     public static void setInitializingRaknetLargeMTU(boolean value) {
         initializingRaknetLargeMTU.set(value);
     }
 
+    /**
+     * Reads this thread's transport selection for the current bootstrap.
+     *
+     * @return true when nested connection hooks should create RakNet channels
+     */
     public static boolean isInitializingRaknet() {
         return initializingRaknet.get();
     }
 
+    /**
+     * Reads this thread's MTU selection for the current bootstrap.
+     *
+     * @return true when the large-MTU transport prefix was selected
+     */
     public static boolean isInitializingRaknetLargeMTU() {
         return initializingRaknetLargeMTU.get();
     }

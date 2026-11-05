@@ -33,8 +33,14 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 
+/**
+ * Stores packet-ID routing tables by Minecraft protocol number for proxy-side classification.
+ */
 public class ProtocolMultiChannelMappings {
 
+    /**
+     * Bundled routing tables loaded once from raknetify-channel-mappings.json, or empty after an I/O failure.
+     */
     public static final ProtocolMultiChannelMappings INSTANCE;
 
     static {
@@ -56,13 +62,28 @@ public class ProtocolMultiChannelMappings {
         }
     }
 
+    /**
+     * Forces class initialization and loading of the bundled routing tables before connections arrive.
+     */
     public static void init() {
     }
 
+    /**
+     * Minecraft protocol numbers mapped to separate clientbound and serverbound routing tables.
+     */
     public Int2ObjectArrayMap<VersionMapping> mappings = new Int2ObjectArrayMap<>();
 
+    /**
+     * Packet-ID routing tables for both directions of one Minecraft protocol version.
+     */
     public static class VersionMapping {
+        /**
+         * Server-to-client packet IDs mapped to ordering channels or special delivery policies.
+         */
         public Int2IntArrayMap s2c = new Int2IntArrayMap();
+        /**
+         * Client-to-server packet IDs mapped to ordering channels or special delivery policies.
+         */
         public Int2IntArrayMap c2s = new Int2IntArrayMap();
     }
 

@@ -33,8 +33,14 @@ import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import java.util.Objects;
 import java.util.function.IntPredicate;
 
+/**
+ * Routes known mod payload identifiers onto the same ordering channels as their related vanilla traffic.
+ */
 public class CustomPayloadChannel {
 
+    /**
+     * Custom payload identifiers mapped to ordering channels, with zero deferring to ordinary routing.
+     */
     public static final Object2IntOpenHashMap<String> identifier2channel;
 
     static {
@@ -46,14 +52,32 @@ public class CustomPayloadChannel {
         identifier2channel.put("porting_lib:extra_entity_spawn_data", 2); // https://github.com/Fabricators-of-Create/Porting-Lib/commit/4b0cd845731f89eafd9fb39e13e1a7d87f5e14a4
     }
 
+    /**
+     * Recognizes a protocol's custom-payload packets before looking up their namespaced identifiers.
+     */
     public static class OverrideHandler implements RakNetSimpleMultiChannelCodec.OverrideHandler {
 
+        /**
+         * Protocol-specific predicate identifying custom-payload packet IDs.
+         */
         private final IntPredicate isCustomPayload;
 
+        /**
+         * Creates a classifier for the custom-payload IDs used by one protocol direction.
+         *
+         * @param isCustomPayload predicate recognizing custom-payload packet IDs
+         */
         public OverrideHandler(IntPredicate isCustomPayload) {
             this.isCustomPayload = Objects.requireNonNull(isCustomPayload);
         }
 
+        /**
+         * Inspects modern identifier-prefixed custom payloads without consuming the original buffer.
+         *
+         * @param origBuf Minecraft payload beginning with its packet ID
+         * @param suppressWarning unused because unrecognized identifiers silently defer to other classifiers
+         * @return configured ordering channel, or zero for unrelated or unregistered payloads
+         */
         @Override
         public int getChannelOverride(ByteBuf origBuf, boolean suppressWarning) {
             ByteBuf buf = origBuf.slice();

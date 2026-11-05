@@ -28,10 +28,24 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 
+/**
+ * Ensures inbound payloads expose a native memory address for downstream native codecs.
+ */
 public class ByteBufCopyDecoder extends ChannelInboundHandlerAdapter {
 
+    /**
+     * Pipeline name used when installing the native-buffer compatibility handler.
+     */
     public static final String NAME = "raknetify-byte-buf-copy-decoder";
 
+    /**
+     * Copies buffers without a native address into direct memory and releases the original.
+     * Buffers already exposing an address and nonbuffer messages pass through unchanged.
+     *
+     * @param ctx inbound context whose allocator supplies the replacement buffer
+     * @param msg payload buffer or unrelated pipeline message
+     * @throws Exception if superclass forwarding fails
+     */
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         if (msg instanceof ByteBuf buf && !buf.hasMemoryAddress()) {

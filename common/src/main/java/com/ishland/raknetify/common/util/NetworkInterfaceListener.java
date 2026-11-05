@@ -38,8 +38,16 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
+/**
+ * Polls local interface addresses so wildcard UDP listeners can follow network changes.
+ * Callbacks run on a shared polling thread. Consumers must dispatch channel mutations to
+ * the appropriate event loop or platform scheduler.
+ */
 public class NetworkInterfaceListener {
 
+    /**
+     * Single daemon polling thread with slightly reduced priority.
+     */
     private static final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(
             r -> {
                 final Thread thread = new Thread(r, "Raknetify IFListener");
@@ -59,12 +67,25 @@ public class NetworkInterfaceListener {
         }, 0, 10, TimeUnit.SECONDS);
     }
 
+    /**
+     * Forces initialization of the shared ten-second interface polling task.
+     */
     public static void init() {
     }
 
+    /**
+     * Addresses seen on active interfaces at the last poll, owned by the polling thread.
+     */
     private static final ObjectOpenHashSet<InetAddress> knownAddresses = new ObjectOpenHashSet<>();
+    /**
+     * Identity-based synchronized callback set, allowing platform-specific listener removal.
+     */
     private static final ReferenceSet<Consumer<InterfaceAddressChangeEvent>> listeners = ReferenceSets.synchronize(new ReferenceOpenHashSet<>());
 
+    /**
+     * Compares active interface addresses with the previous snapshot and publishes additions and removals.
+     * Enumeration or callback failures are logged so the scheduled task can run again.
+     */
     private static void pollChanges() {
         try {
             final List<NetworkInterface> networkInterfaces = NetworkInterface.networkInterfaces().toList();
@@ -92,14 +113,30 @@ public class NetworkInterfaceListener {
         }
     }
 
+    /**
+     * Registers a callback for subsequent address changes without replaying the current snapshot.
+     *
+     * @param consumer callback invoked on the shared interface polling thread
+     */
     public static void addListener(Consumer<InterfaceAddressChangeEvent> consumer) {
         listeners.add(consumer);
     }
 
+    /**
+     * Unregisters the exact callback instance previously supplied to addListener.
+     *
+     * @param consumer callback identity to remove
+     */
     public static void removeListener(Consumer<InterfaceAddressChangeEvent> consumer) {
         listeners.remove(consumer);
     }
 
+    /**
+     * Describes an address entering or leaving the set of active local interfaces.
+     *
+     * @param added true for an address addition, false for a removal
+     * @param address local IPv4 or IPv6 address affected by the change
+     */
     public record InterfaceAddressChangeEvent(boolean added, InetAddress address) {
     }
 
