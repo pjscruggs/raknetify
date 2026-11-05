@@ -35,13 +35,28 @@ import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
 
+/**
+ * Defines packet delivery groups whose ordering dependencies stay within each RakNet channel.
+ */
 public class RakNetMultiChannel {
 
+    /**
+     * Prevents construction of the static packet-class routing table.
+     */
     private RakNetMultiChannel() {
     }
 
+    /**
+     * Bundled name aliases used when the runtime mapping resolver cannot translate an intermediary packet name.
+     */
     private static final Properties packetNames = loadPacketNames();
 
+    /**
+     * Loads optional packet-name aliases for runtimes without a matching intermediary mapping.
+     *
+     * @return loaded aliases, or an empty set when the resource is absent
+     * @throws IllegalStateException if the alias resource exists but cannot be read
+     */
     private static Properties loadPacketNames() {
         final Properties names = new Properties();
         try (InputStream input = RakNetMultiChannel.class.getResourceAsStream("/raknetify-packet-names.properties")) {
@@ -52,6 +67,13 @@ public class RakNetMultiChannel {
         return names;
     }
 
+    /**
+     * Resolves intermediary packet names and optional aliases against the running Minecraft version.
+     * Absent classes are skipped because this table spans versions that add and remove packet types.
+     *
+     * @param classNames intermediary class names using slash or dot separators
+     * @return mutable set of classes present in the running version
+     */
     private static Set<Class<?>> createClassSet(String[] classNames) {
         final MappingResolver mappingResolver = FabricLoader.getInstance().getMappingResolver();
         final boolean isIntermediaryNamespace = mappingResolver.getCurrentRuntimeNamespace().equals("intermediary");
@@ -74,6 +96,9 @@ public class RakNetMultiChannel {
         return classHashSet; // no read-only wrapper for performance
     }
 
+    /**
+     * Packets delivered reliably without an ordering-channel dependency, including keepalives and independent metadata.
+     */
     private static final Set<Class<?>> unordered = createClassSet(new String[]{
             "net/minecraft/class_2670", // KeepAliveS2C
             "net/minecraft/class_2827", // KeepAliveC2S
@@ -96,6 +121,9 @@ public class RakNetMultiChannel {
             "net/minecraft/class_9815", // ServerLinksS2CPacket
     });
 
+    /**
+     * Protocol-control packets kept on the default ordered channel during configuration transitions.
+     */
     private static final Set<Class<?>> channel0 = createClassSet(new String[]{
             "net/minecraft/class_8588", // EnterReconfigurationS2CPacket
             "net/minecraft/class_8591", // AcknowledgeReconfigurationC2SPacket
@@ -104,6 +132,9 @@ public class RakNetMultiChannel {
     });
 
     // Primarily used for interactions independent to world
+    /**
+     * Mostly world-independent interaction and UI traffic that survives world synchronization.
+     */
     private static final Set<Class<?>> channel1 = createClassSet(new String[]{
             "net/minecraft/class_1_71", // LowDiskSpaceWarningS2CPacket
             "net/minecraft/class_1_130", // SetGameRuleC2SPacket
@@ -199,6 +230,9 @@ public class RakNetMultiChannel {
     });
 
     // Entities related stuff
+    /**
+     * Entity lifecycle, movement, combat, and related player interactions that share an ordering dependency.
+     */
     private static final Set<Class<?>> channel2 = createClassSet(new String[]{
             "net/minecraft/class_1_126", // AttackC2SPacket
             "net/minecraft/class_1_1438", // HandSwingC2SPacket
@@ -271,6 +305,9 @@ public class RakNetMultiChannel {
     });
 
     // Primarily used for interactions dependent to world
+    /**
+     * World-dependent interactions such as containers, inventories, teleports, and custom payloads.
+     */
     private static final Set<Class<?>> channel3 = createClassSet(new String[]{
             "net/minecraft/class_1_133", // SpectateEntityC2SPacket
             "net/minecraft/class_2884", // SpectatorTeleportC2S
@@ -342,6 +379,9 @@ public class RakNetMultiChannel {
     });
 
     // Primarily for packets not very critical to interactions
+    /**
+     * Map, sound, particle, and other visual traffic separated from latency-sensitive interactions.
+     */
     private static final Set<Class<?>> channel4 = createClassSet(new String[]{
             "net/minecraft/class_1_1290", // PostEffectsS2CPacket
             "net/minecraft/class_2683", // MapUpdateS2C
@@ -355,6 +395,9 @@ public class RakNetMultiChannel {
     });
 
     // Used for worlds
+    /**
+     * Chunk, block, lighting, and related world-stream traffic that can queue behind large transfers.
+     */
     private static final Set<Class<?>> channel7 = createClassSet(new String[]{
             "net/minecraft/class_1_1680", // AddTransientBlockS2CPacket
             "net/minecraft/class_5194", // JigsawGeneratingC2S
@@ -389,14 +432,23 @@ public class RakNetMultiChannel {
 
     });
 
+    /**
+     * Packet classes permitted to use unreliable delivery, currently empty.
+     */
     private static final Set<Class<?>> unreliable = createClassSet(new String[]{
     });
 
+    /**
+     * Bundle delimiters discarded because RakNet routing does not preserve vanilla packet bundles.
+     */
     private static final Set<Class<?>> theVoid = createClassSet(new String[]{
             "net/minecraft/class_8037", // BundleDelimiterPacket
             "net/minecraft/class_9093", // BundleDelimiterS2CPacket
     });
 
+    /**
+     * Resolved packet-class policies, using Integer.MAX_VALUE to identify unregistered classes.
+     */
     private static final Object2IntOpenHashMap<Class<?>> classToChannelIdOverride = new Object2IntOpenHashMap<>();
 
     static {
@@ -428,8 +480,19 @@ public class RakNetMultiChannel {
 //        currentPacketClass.set(null);
 //    }
 
+    /**
+     * Unknown packet classes already reported, shared safely across connection threads.
+     */
     private static final Set<Class<?>> foundUnknownClasses = Sets.newConcurrentHashSet();
 
+    /**
+     * Looks up a packet class and falls back to the world channel for unknown types.
+     * Missing captures use the default channel. Unknown-class diagnostics are emitted at most once per class.
+     *
+     * @param clazz captured packet implementation class, or null when capture was unavailable
+     * @param suppressWarning whether unknown packet classes should be handled without a diagnostic
+     * @return channel index, -1 for reliable unordered, -2 for unreliable, or Integer.MIN_VALUE to discard
+     */
     public static int getPacketChannelOverride(Class<?> clazz, boolean suppressWarning) {
         if (clazz == null) {
             System.err.println("Raknetify: Warning: Tried to send packet without setting packet class");
@@ -449,6 +512,9 @@ public class RakNetMultiChannel {
         return channelOverride;
     }
 
+    /**
+     * Forces packet-class resolution and routing-table initialization before connections begin.
+     */
     public static void init() {
     }
 

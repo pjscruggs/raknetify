@@ -26,8 +26,17 @@ package com.ishland.raknetify.fabric.common.connection;
 
 import net.minecraft.network.UnconfiguredPipelineHandler;
 
+/**
+ * Preserves packet-capture placement when Minecraft reconfigures its inbound or outbound codecs.
+ */
 public class RakNetNetworkTransitionUtil {
 
+    /**
+     * Wraps recognized configuration tasks to restore capture placement after the original task runs.
+     *
+     * @param msg outgoing pipeline task or unrelated message
+     * @return wrapped configuration task, or the unchanged message when no wrapper is needed
+     */
     static Object handleTransition(Object msg) {
         if (msg instanceof UnconfiguredPipelineHandler.InboundConfigurationTask transitioner) {
             return (UnconfiguredPipelineHandler.InboundConfigurationTask) context -> {

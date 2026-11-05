@@ -31,11 +31,26 @@ import java.net.InetSocketAddress;
 import net.minecraft.network.Connection;
 import net.minecraft.server.network.EventLoopGroupHolder;
 
+/**
+ * Scopes RakNet bootstrap flags around the version-specific Minecraft connection factory.
+ */
 public class RakNetClientConnectionUtil {
 
+    /**
+     * Prevents construction of the client connection-factory adapter.
+     */
     private RakNetClientConnectionUtil() {
     }
 
+    /**
+     * Enables RakNet bootstrap selection for the wrapped connection call and clears both flags afterward.
+     *
+     * @param address resolved remote server address
+     * @param backend vanilla event-loop backend selection passed through to the original factory
+     * @param largeMTU whether the server address requested the larger RakNet MTU
+     * @param original intercepted Minecraft factory operation
+     * @return Minecraft connection produced by the original factory
+     */
     public static Connection connect(InetSocketAddress address, EventLoopGroupHolder backend, boolean largeMTU, Operation<Connection> original) {
         try {
             ThreadLocalUtil.setInitializingRaknet(true);
@@ -47,6 +62,16 @@ public class RakNetClientConnectionUtil {
         }
     }
 
+    /**
+     * Enables RakNet bootstrap selection for the wrapped connection call and clears both flags afterward.
+     *
+     * @param address resolved remote server address
+     * @param backend vanilla event-loop backend selection passed through to the original factory
+     * @param largeMTU whether the server address requested the larger RakNet MTU
+     * @param original intercepted Minecraft factory operation
+     * @param connection existing Minecraft connection to bind to the new channel
+     * @return channel future produced by the original factory
+     */
     public static ChannelFuture connect(InetSocketAddress address, EventLoopGroupHolder backend, boolean largeMTU, Operation<ChannelFuture> original, Connection connection) {
         try {
             ThreadLocalUtil.setInitializingRaknet(true);

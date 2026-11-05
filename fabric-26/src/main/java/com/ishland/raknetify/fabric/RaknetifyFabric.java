@@ -78,15 +78,31 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+/**
+ * Initializes Fabric transport support and optionally generates proxy packet-ID routing tables.
+ */
 public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
 
+    /**
+     * Whether startup should merge this protocol's generated routes into channelMappings.json.
+     */
     private static final boolean SAVE_CHANNEL_MAPPINGS = Boolean.getBoolean("raknetify.saveChannelMappings");
+    /**
+     * Whether mapping-generation startup should exit immediately after saving its output.
+     */
     private static final boolean EXIT_AFTER_SAVE_CHANNEL_MAPPINGS = Boolean.getBoolean("raknetify.saveChannelMappings.exit");
 
+    /**
+     * Leaves prelaunch unchanged because transport setup waits for Minecraft initialization.
+     */
     @Override
     public void onPreLaunch() {
     }
 
+    /**
+     * Initializes routing, client diagnostics, and the configured Netty leak-detection level.
+     * Development launches also audit mixin targets before normal connection setup.
+     */
     @Override
     public void onInitialize() {
 
@@ -110,6 +126,11 @@ public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
         ResourceLeakDetector.setLevel(level);
     }
 
+    /**
+     * Inspects registered play packet IDs and maps them to class-based channel policies.
+     * Codec bindings exist only to inspect registration order and must never encode or decode
+     * with their intentionally absent registry context.
+     */
     private static void handleMappings() {
         RakNetMultiChannel.init();
         NetworkInterfaceListener.init();
@@ -264,6 +285,11 @@ public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
         }
     }
 
+    /**
+     * Forces outstanding mixin targets to load so injection failures surface during validation.
+     *
+     * @throws RuntimeException if mixin internals cannot be inspected or a target cannot be loaded
+     */
     private static void auditMixins() {
         Logger auditLogger = LoggerFactory.getLogger("Raknetify Mixin Audit");
         try {

@@ -34,11 +34,26 @@ import io.netty.channel.ChannelPromise;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
 
+/**
+ * Carries the outgoing packet's Java class through synchronous encoding into the frame classifier.
+ * Each connection uses its own instance. The temporary capture is cleared when the write returns.
+ */
 @ChannelHandler.Sharable
 public class MultiChannellingPacketCapture extends ChannelOutboundHandlerAdapter {
 
+    /**
+     * Class of the packet currently traversing the encoder, or null outside a captured write.
+     */
     private Class<?> packetClass = null;
 
+    /**
+     * Exposes the decoded packet class while downstream encoding runs and clears it in a finally block.
+     *
+     * @param ctx outbound context positioned before packet encoding in write order
+     * @param msg decoded Minecraft packet being serialized
+     * @param promise completion notification forwarded with the original packet
+     * @throws Exception reserved by the Netty write callback contract
+     */
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
         this.packetClass = msg.getClass();
@@ -49,24 +64,54 @@ public class MultiChannellingPacketCapture extends ChannelOutboundHandlerAdapter
         }
     }
 
+    /**
+     * Reads the packet class currently available to encoding-time classifiers.
+     *
+     * @return active packet class, or null outside a captured write
+     */
     public Class<?> getPacketClass() {
         return this.packetClass;
     }
 
+    /**
+     * Sets the capture explicitly for integration code that controls the encoding boundary.
+     *
+     * @param packetClass current decoded packet class, or null to clear the capture
+     */
     public void setPacketClass(Class<?> packetClass) {
         this.packetClass = packetClass;
     }
 
+    /**
+     * Creates a classifier that applies the vanilla class-to-channel table to this capture.
+     *
+     * @return classifier tied to this capture instance's current packet class
+     */
     public RakNetSimpleMultiChannelCodec.OverrideHandler getCaptureBasedHandler() {
         return new CaptureBasedHandler();
     }
 
+    /**
+     * Creates an identifier-aware classifier that activates only for captured custom-payload packets.
+     *
+     * @return custom-payload classifier tied to this capture instance
+     */
     public RakNetSimpleMultiChannelCodec.OverrideHandler getCustomPayloadHandler() {
         return new CustomPayloadChannel.OverrideHandler(value -> packetClass == ClientboundCustomPayloadPacket.class || packetClass == ServerboundCustomPayloadPacket.class);
     }
 
+    /**
+     * Reads the enclosing capture instead of decoding a protocol-dependent packet ID.
+     */
     private class CaptureBasedHandler implements RakNetSimpleMultiChannelCodec.OverrideHandler {
 
+        /**
+         * Classifies the captured packet while leaving the encoded payload untouched.
+         *
+         * @param buf encoded Minecraft payload, unused because the packet class is already known
+         * @param suppressWarning whether unknown classes should avoid a diagnostic
+         * @return ordering channel or special delivery policy from the vanilla class table
+         */
         @Override
         public int getChannelOverride(ByteBuf buf, boolean suppressWarning) {
             return RakNetMultiChannel.getPacketChannelOverride(packetClass, suppressWarning);

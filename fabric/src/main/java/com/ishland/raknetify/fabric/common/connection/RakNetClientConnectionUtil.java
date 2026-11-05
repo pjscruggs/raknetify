@@ -31,11 +31,27 @@ import net.minecraft.network.ClientConnection;
 
 import java.net.InetSocketAddress;
 
+/**
+ * Scopes RakNet bootstrap flags around the version-specific Minecraft connection factory.
+ */
 public class RakNetClientConnectionUtil {
 
+    /**
+     * Prevents construction of the client connection-factory adapter.
+     */
     private RakNetClientConnectionUtil() {
     }
 
+    /**
+     * Enables RakNet bootstrap selection for the wrapped connection call and clears both flags afterward.
+     *
+     * @param address resolved remote server address
+     * @param useEpoll vanilla preference for the native Linux transport
+     * @param largeMTU whether the server address requested the larger RakNet MTU
+     * @param original intercepted Minecraft factory operation
+     * @param hasPerformanceLog whether this version's factory accepts the additional performance-log argument
+     * @return Minecraft connection produced by the original factory
+     */
     public static ClientConnection connect(InetSocketAddress address, boolean useEpoll, boolean largeMTU, Operation<ClientConnection> original, boolean hasPerformanceLog) {
         System.out.println("aaa");
         try {
@@ -52,6 +68,15 @@ public class RakNetClientConnectionUtil {
         }
     }
 
+    /**
+     * Enables RakNet bootstrap selection for the wrapped connection call and clears both flags afterward.
+     *
+     * @param address resolved remote server address
+     * @param backend vanilla event-loop backend selection passed through to the original factory
+     * @param largeMTU whether the server address requested the larger RakNet MTU
+     * @param original intercepted Minecraft factory operation
+     * @return Minecraft connection produced by the original factory
+     */
     public static ClientConnection connect(InetSocketAddress address, Object backend, boolean largeMTU, Operation<ClientConnection> original) {
         System.out.println("aaa");
         try {
@@ -64,6 +89,16 @@ public class RakNetClientConnectionUtil {
         }
     }
 
+    /**
+     * Enables RakNet bootstrap selection for the wrapped connection call and clears both flags afterward.
+     *
+     * @param address resolved remote server address
+     * @param useEpoll vanilla preference for the native Linux transport
+     * @param largeMTU whether the server address requested the larger RakNet MTU
+     * @param original intercepted Minecraft factory operation
+     * @param connection existing Minecraft connection to bind to the new channel
+     * @return channel future produced by the original factory
+     */
     public static ChannelFuture connect(InetSocketAddress address, boolean useEpoll, boolean largeMTU, Operation<ChannelFuture> original, ClientConnection connection) {
         System.out.println("aaaa");
         try {
@@ -76,6 +111,16 @@ public class RakNetClientConnectionUtil {
         }
     }
 
+    /**
+     * Enables RakNet bootstrap selection for the wrapped connection call and clears both flags afterward.
+     *
+     * @param address resolved remote server address
+     * @param backend vanilla event-loop backend selection passed through to the original factory
+     * @param largeMTU whether the server address requested the larger RakNet MTU
+     * @param original intercepted Minecraft factory operation
+     * @param connection existing Minecraft connection to bind to the new channel
+     * @return channel future produced by the original factory
+     */
     public static ChannelFuture connect(InetSocketAddress address, Object backend, boolean largeMTU, Operation<ChannelFuture> original, ClientConnection connection) {
         System.out.println("aaaa");
         try {

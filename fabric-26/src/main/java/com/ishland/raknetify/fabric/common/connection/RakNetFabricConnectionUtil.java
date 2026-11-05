@@ -43,13 +43,27 @@ import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import network.ycc.raknet.RakNet;
 
+/**
+ * Adapts Minecraft's channel pipeline to RakNet framing and class-based packet routing.
+ */
 public class RakNetFabricConnectionUtil {
 
+    /**
+     * Pipeline name used to reposition the packet-class capture whenever Minecraft replaces its encoder.
+     */
     public static final String NAME_RAKNETIFY_MULTI_CHANNEL_PACKET_CATURE = "raknetify-multi-channel-packet-cature";
 
+    /**
+     * Prevents construction of the Fabric channel-initialization utility.
+     */
     private RakNetFabricConnectionUtil() {
     }
 
+    /**
+     * Installs the shared RakNet transport handlers and Minecraft frame codec before vanilla initialization.
+     *
+     * @param channel newly created application channel, left unchanged for non-RakNet transports
+     */
     public static void initChannel(Channel channel) {
         if (channel.config() instanceof RakNet.Config) {
             RakNetConnectionUtil.initChannel(channel);
@@ -57,6 +71,13 @@ public class RakNetFabricConnectionUtil {
         }
     }
 
+    /**
+     * Replaces stream framing, installs packet classifiers, and attaches protocol-transition hooks.
+     * Optional ViaFabric handlers are initialized before codec replacements.
+     *
+     * @param channel initialized Minecraft application channel
+     * @param isClientSide whether this endpoint is a Minecraft client rather than a server
+     */
     public static void postInitChannel(Channel channel, boolean isClientSide) {
         if (channel.config() instanceof RakNet.Config) {
             ViaFabricCompatInjector.inject(channel, isClientSide);
@@ -74,6 +95,12 @@ public class RakNetFabricConnectionUtil {
         }
     }
 
+    /**
+     * Moves class capture next to the current encoder so each write is classified before serialization.
+     * A configuration-phase pipeline without an encoder is left alone until its transition completes.
+     *
+     * @param pipeline Minecraft pipeline whose encoder may have just been replaced
+     */
     static void onPipelineReorder(ChannelPipeline pipeline) {
         if (pipeline.get("encoder") == null) {
 //            System.out.println("Reordering failed: no encoder");
@@ -86,6 +113,13 @@ public class RakNetFabricConnectionUtil {
         }
     }
 
+    /**
+     * Selects a UDP channel implementation matching Minecraft's chosen TCP transport backend.
+     *
+     * @param clazz NIO, epoll, or kqueue socket-channel implementation selected by Minecraft
+     * @return new, unregistered datagram channel using the corresponding backend
+     * @throws UnsupportedOperationException if the socket implementation has no supported UDP counterpart
+     */
     public static DatagramChannel fromSocketChannel(Class<? extends SocketChannel> clazz) {
         if (clazz == NioSocketChannel.class) {
             return new NioDatagramChannel();

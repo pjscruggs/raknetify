@@ -30,8 +30,20 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import net.minecraft.network.protocol.login.ClientboundLoginCompressionPacket;
 
+/**
+ * Lets vanilla finish its compression transition without waiting for RakNet write acknowledgement.
+ */
 public class RakNetCompressionCompatibilityHandler extends ChannelDuplexHandler {
 
+    /**
+     * Completes the compression-setup promise immediately, forwards the packet, then removes this helper.
+     * Other writes retain their original promise and ordinary pipeline behavior.
+     *
+     * @param ctx outbound Minecraft context
+     * @param msg compression-setup packet or unrelated outgoing message
+     * @param promise local completion notification used by vanilla's pipeline transition
+     * @throws Exception if superclass forwarding of an unrelated message fails
+     */
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
         // The snapshot renamed this packet, so evaluate the old class reference only on earlier versions.

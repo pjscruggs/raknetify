@@ -37,10 +37,19 @@ import net.minecraft.network.packet.s2c.play.EnterReconfigurationS2CPacket;
 import net.minecraft.network.packet.s2c.play.GameJoinS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerRespawnS2CPacket;
 
+/**
+ * Coordinates RakNet ordering with Minecraft world changes, command availability, and codec transitions.
+ */
 public class RakNetFabricChannelEventListener extends ChannelDuplexHandler {
 
+    /**
+     * Pipeline name for the Minecraft packet and protocol-transition observer.
+     */
     public static final String NAME = "raknetify-fabric-event-listener";
 
+    /**
+     * Whether the running legacy Minecraft version contains the reconfiguration packet classes.
+     */
     private static final boolean isReconfigurationSupported;
 
     static {
@@ -54,6 +63,15 @@ public class RakNetFabricChannelEventListener extends ChannelDuplexHandler {
         isReconfigurationSupported = isReconfigurationSupported0;
     }
 
+    /**
+     * Sends ordering-reset markers at world or configuration boundaries and starts multichannel delivery at commands.
+     * Codec-transition tasks are wrapped so packet capture remains adjacent to the replacement encoder.
+     *
+     * @param ctx outbound Minecraft context
+     * @param msg decoded packet or codec-configuration task
+     * @param promise completion notification forwarded with the packet or wrapped task
+     * @throws Exception if superclass outbound forwarding fails
+     */
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
         if (msg instanceof PlayerRespawnS2CPacket || msg instanceof GameJoinS2CPacket) {
