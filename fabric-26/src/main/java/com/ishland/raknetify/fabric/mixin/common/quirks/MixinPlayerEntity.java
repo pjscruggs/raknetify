@@ -37,15 +37,32 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+/**
+ * Installs hunger handling that ignores client prediction while preserving server-controlled player state.
+ */
 @Mixin(Player.class)
 public abstract class MixinPlayerEntity extends LivingEntity {
 
+    /**
+     * Vanilla hunger state replaced only for players in a logical client world.
+     */
     @Shadow protected FoodData foodData;
 
+    /**
+     * Supplies the superclass constructor shape required by the player mixin.
+     *
+     * @param entityType living-entity type passed through to the vanilla superclass
+     * @param world world containing the entity
+     */
     protected MixinPlayerEntity(EntityType<? extends LivingEntity> entityType, Level world) {
         super(entityType, world);
     }
 
+    /**
+     * Copies existing hunger state into the client-only replacement after player construction.
+     *
+     * @param ci constructor-return callback, unused after vanilla state initialization
+     */
     @Inject(method = "<init>", at = @At("RETURN"), remap = false)
     private void replaceHungerManager(CallbackInfo ci) {
         if (((IWorld) this.level()).raknetify$isClient()) {

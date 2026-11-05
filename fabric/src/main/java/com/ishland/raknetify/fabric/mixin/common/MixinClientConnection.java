@@ -47,22 +47,53 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import java.net.SocketAddress;
 import java.nio.channels.ClosedChannelException;
 
+/**
+ * Avoids blocking disconnect waits and adds transport-aware connection diagnostics.
+ */
 @Mixin(ClientConnection.class)
 public abstract class MixinClientConnection {
 
+    /**
+     * Vanilla application channel whose state is combined with the local closing flag.
+     */
     @Shadow
     private Channel channel;
 
+    /**
+     * Exposes vanilla's remote-address accessor on the mixed-in connection.
+     *
+     * @return remote socket address retained by Minecraft
+     */
     @Shadow public abstract SocketAddress getAddress();
 
+    /**
+     * Remote socket address used to identify protocol errors in concise diagnostics.
+     */
     @Shadow private SocketAddress address;
 
+    /**
+     * Exposes the packet direction received by this Minecraft endpoint.
+     *
+     * @return receiving network direction configured for the connection
+     */
     @Shadow public abstract NetworkSide getSide();
 
+    /**
+     * Current Minecraft protocol listener, read as a snapshot when reporting failures.
+     */
     @Shadow private volatile @Nullable PacketListener packetListener;
+    /**
+     * Whether disconnect has begun even if the asynchronous Netty close has not completed.
+     */
     @Unique
     private volatile boolean isClosing = false;
 
+    /**
+     * Marks the connection as closing and lets Netty finish asynchronously instead of blocking the caller.
+     *
+     * @param instance close future that vanilla would otherwise wait on
+     * @return the unchanged close future without waiting
+     */
     @Redirect(method = {"disconnect(Lnet/minecraft/text/Text;)V", "disconnect(Lnet/minecraft/network/DisconnectionInfo;)V"}, at = @At(value = "INVOKE", target = "Lio/netty/channel/ChannelFuture;awaitUninterruptibly()Lio/netty/channel/ChannelFuture;", remap = false), require = 1)
     private ChannelFuture noDisconnectWait(ChannelFuture instance) {
         isClosing = true;
@@ -74,6 +105,12 @@ public abstract class MixinClientConnection {
         return instance;
     }
 
+    /**
+     * Treats a closing connection as unavailable before its asynchronous channel close completes.
+     *
+     * @param instance intercepted channel receiver, unused because this connection owns the authoritative channel
+     * @return true only when the owned channel exists, is open, and has not begun closing
+     */
     @Redirect(method = "*", at = @At(value = "INVOKE", target = "Lio/netty/channel/Channel;isOpen()Z", remap = false))
     private boolean redirectIsOpen(Channel instance) {
         return this.channel != null && (this.channel.isOpen() && !this.isClosing);
@@ -91,6 +128,14 @@ public abstract class MixinClientConnection {
 //        }
 //    }
 
+    /**
+     * Adds detailed transport diagnostics in debug mode and concise phase-aware errors otherwise.
+     * Expected closed-channel errors are ignored by this diagnostic hook. Vanilla error handling still runs.
+     *
+     * @param context handler context supplied by Netty, unused because connection fields identify the channel
+     * @param ex original connection failure
+     * @param ci injection callback, left uncancelled for vanilla exception handling
+     */
     @Inject(method = "exceptionCaught", at = @At("HEAD"))
     private void onExceptionCaught(ChannelHandlerContext context, Throwable ex, CallbackInfo ci) {
         if (ex instanceof ClosedChannelException) return;

@@ -37,15 +37,32 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+/**
+ * Feeds RakNet byte counters into Minecraft's bandwidth debug sampler.
+ */
 @Mixin(Connection.class)
 public class MixinClientConnection1_20_2 {
 
+    /**
+     * Vanilla application channel whose transport metrics supply received-byte totals.
+     */
     @Shadow private Channel channel;
+    /**
+     * Optional vanilla bandwidth sampler, absent when debug sampling is disabled.
+     */
     @Shadow private @Nullable BandwidthDebugMonitor bandwidthDebugMonitor;
 
+    /**
+     * Received transport-byte total at the previous sample, used to submit only the new bytes.
+     */
     @Unique
     private long raknetify$lastBytesIn = 0L;
 
+    /**
+     * Adds the latest RakNet received-byte delta immediately before vanilla advances its sampler.
+     *
+     * @param ci injection callback, left uncancelled so vanilla records the sample normally
+     */
     @Inject(method = "tick", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/BandwidthDebugMonitor;tick()V"))
     private void onPacketLoggerPush(CallbackInfo ci) {
         BandwidthDebugMonitor logger = this.bandwidthDebugMonitor;

@@ -32,9 +32,19 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import org.spongepowered.asm.mixin.Mixin;
 
+/**
+ * Preserves transport prefixes through Minecraft address parsing without passing them to host parsing.
+ */
 @Mixin(ServerAddress.class)
 public class MixinServerAddress {
 
+    /**
+     * Parses the unprefixed address, then restores transport selection on its normalized hostname.
+     *
+     * @param address user-supplied server address, possibly beginning with a RakNet prefix
+     * @param original vanilla address parser
+     * @return parsed address retaining the selected RakNet prefix, or the ordinary TCP address
+     */
     @WrapMethod(method = "parseString")
     private static ServerAddress wrapParsing(String address, Operation<ServerAddress> original) {
         PrefixUtil.Info info = PrefixUtil.getInfo(address);

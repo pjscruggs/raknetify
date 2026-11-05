@@ -54,9 +54,22 @@ import org.spongepowered.asm.mixin.injection.At;
 
 import java.net.InetSocketAddress;
 
+/**
+ * Substitutes a threaded RakNet channel during Minecraft bootstrap when transport flags request UDP.
+ */
 @Mixin(ClientConnection.class)
 public class MixinCCConnect {
 
+    /**
+     * Separates RakNet application work from the vanilla transport event loops while retaining the latter for UDP I/O.
+     *
+     * @param instance client bootstrap being configured
+     * @param eventLoopGroup vanilla transport event loops to retain for the parent UDP channel
+     * @param original original bootstrap group call
+     * @param address remote address captured from the connection call, unused by group selection
+     * @param raknetify$eventLoop shared local carrying the original transport group to channel creation
+     * @return bootstrap configured with application loops for RakNet or the original group for TCP
+     */
     @Dynamic("method_10753, method_52271 for compat")
     @WrapOperation(method = {"connect(Ljava/net/InetSocketAddress;Lnet/minecraft/network/NetworkingBackend;Lnet/minecraft/network/ClientConnection;)Lio/netty/channel/ChannelFuture;", "method_52271(Ljava/net/InetSocketAddress;ZLnet/minecraft/network/ClientConnection;)Lio/netty/channel/ChannelFuture;", "method_10753(Ljava/net/InetSocketAddress;Z)Lnet/minecraft/network/ClientConnection;", "method_10753"}, at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/Bootstrap;group(Lio/netty/channel/EventLoopGroup;)Lio/netty/bootstrap/AbstractBootstrap;", remap = false), require = 1)
     private static AbstractBootstrap<Bootstrap, Channel> redirectGroup(Bootstrap instance, EventLoopGroup eventLoopGroup, Operation<AbstractBootstrap<Bootstrap, Channel>> original, InetSocketAddress address, @Share("raknetify$eventLoop") LocalRef<EventLoopGroup> raknetify$eventLoop) {
@@ -66,6 +79,17 @@ public class MixinCCConnect {
                 : original.call(instance, eventLoopGroup);
     }
 
+    /**
+     * Creates a RakNet channel with a UDP backend matching vanilla's chosen socket implementation.
+     * The selected MTU controls receive allocation and transport negotiation. TCP bootstrap remains unchanged.
+     *
+     * @param instance client bootstrap being configured
+     * @param aClass vanilla socket class used to choose the corresponding UDP backend
+     * @param original original bootstrap channel-class call
+     * @param address remote address captured from the connection call, unused by channel selection
+     * @param raknetify$eventLoop shared local containing the retained vanilla transport event loops
+     * @return bootstrap using the RakNet factory or the original TCP channel class
+     */
     @Dynamic("method_10753, method_52271 for compat")
     @WrapOperation(method = {"connect(Ljava/net/InetSocketAddress;Lnet/minecraft/network/NetworkingBackend;Lnet/minecraft/network/ClientConnection;)Lio/netty/channel/ChannelFuture;", "method_52271(Ljava/net/InetSocketAddress;ZLnet/minecraft/network/ClientConnection;)Lio/netty/channel/ChannelFuture;", "method_10753(Ljava/net/InetSocketAddress;Z)Lnet/minecraft/network/ClientConnection;", "method_10753"}, at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/Bootstrap;channel(Ljava/lang/Class;)Lio/netty/bootstrap/AbstractBootstrap;", remap = false), require = 1)
     private static AbstractBootstrap<Bootstrap, Channel> redirectChannel(Bootstrap instance, Class<? extends SocketChannel> aClass, Operation<AbstractBootstrap<Bootstrap, Channel>> original, InetSocketAddress address, @Share("raknetify$eventLoop") LocalRef<EventLoopGroup> raknetify$eventLoop) {
