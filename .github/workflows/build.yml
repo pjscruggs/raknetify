@@ -14,7 +14,6 @@ jobs:
         java: [
           25,    # Required by Minecraft 26.x
         ]
-        # and run on both Linux and Windows
         os: [ubuntu-24.04]
     runs-on: ${{ matrix.os }}
     steps:
@@ -50,13 +49,15 @@ jobs:
         with:
           name: Linux-server-smoke-logs
           path: ${{ runner.temp }}/raknetify-smoke/**/*.log
+      - name: prepare downloads
+        run: |
+          mkdir -p "$RUNNER_TEMP/raknetify-downloads"
+          cp fabric-universal/build/libs/*.jar "$RUNNER_TEMP/raknetify-downloads/"
+          cp fabric-universal/build/generated/metadata/compatibility.json "$RUNNER_TEMP/raknetify-downloads/"
+          cp velocity/build/libs/*-all.jar bungee/build/libs/*-all.jar "$RUNNER_TEMP/raknetify-downloads/"
       - name: capture build artifacts
         if: ${{ runner.os == 'Linux' && matrix.java == '25' }} # Only upload artifacts built from latest java on one OS
         uses: actions/upload-artifact@v4
         with:
           name: Artifacts
-          path: |
-            fabric-universal/build/libs/*.jar
-            fabric-universal/build/generated/metadata/compatibility.json
-            velocity/build/libs/*-all.jar
-            bungee/build/libs/*-all.jar
+          path: ${{ runner.temp }}/raknetify-downloads/*
