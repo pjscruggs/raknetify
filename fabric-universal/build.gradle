@@ -1,0 +1,120 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import java.util.zip.ZipFile
+
+evaluationDependsOn(':fabric')
+evaluationDependsOn(':fabric-26')
+
+if (rootProject.modrinthProjectId.isPresent()) {
+    apply plugin: 'com.modrinth.minotaur'
+}
+if (rootProject.curseforgeProjectId.isPresent()) {
+    apply plugin: 'io.github.themrmilchmann.curseforge-publish'
+}
+
+base {
+    archivesName = project.archives_base_name + '-fabric'
+}
+group = project.maven_group + '.fabric'
+
+def runtimes = [
+        legacy: project(':fabric').tasks.named('remapShadowJar'),
+        modern: project(':fabric-26').tasks.named('shadowJar')
+]
+def generated = layout.buildDirectory.dir('generated/metadata')
+
+def metadata = tasks.register('generateMetadata') {
+    dependsOn runtimes.values()
+    inputs.files(runtimes.values().collect { it.flatMap { task -> task.archiveFile } })
+    inputs.file(rootProject.file('supported-versions.json'))
+    inputs.property('version', project.version)
+    outputs.dir(generated)
+
+    doLast {
+        def variants = runtimes.collect { name, task ->
+            def jar = task.get().archiveFile.get().asFile
+            new ZipFile(jar).withCloseable { zip ->
+                def mod = zip.getInputStream(zip.getEntry('fabric.mod.json')).withCloseable { input ->
+                    new JsonSlurper().parse(input)
+                }
+                [name: name, file: "META-INF/jars/${name}.jar", version: mod.version, depends: mod.depends]
+            }
+        }
+        def dependencies = ['minecraft', 'java', 'fabricloader'].collectEntries { key ->
+            [(key): variants.collectMany { variant ->
+                def value = variant.depends[key]
+                value instanceof List ? value : [value]
+            }.unique()]
+        }
+        // The required nested dependency makes Loader select one compatible runtime instead of skipping both.
+        dependencies.raknetify_runtime = variants.collect { it.version }
+        def mod = [
+                schemaVersion: 1, id: 'raknetify', version: project.version.toString(),
+                name: 'Raknetify2', description: 'RakNet networking for Minecraft clients and servers.',
+                authors: ['ishland'], contributors: ['pjscruggs'], license: 'MIT', environment: '*',
+                icon: 'icon.png',
+                contact: [sources: 'https://github.com/pjscruggs/raknetify2',
+                          issues: 'https://github.com/pjscruggs/raknetify2/issues'],
+                jars: variants.collect { [file: it.file] }, depends: dependencies
+        ]
+        def compatibility = [version: project.version.toString(),
+                             gameVersions: rootProject.supportedVersions.values().collectMany { it.gameVersions }.unique(),
+                             runtimes: variants]
+        def directory = generated.get().asFile
+        directory.mkdirs()
+        new File(directory, 'fabric.mod.json').text = JsonOutput.prettyPrint(JsonOutput.toJson(mod)) + '\n'
+        new File(directory, 'compatibility.json').text = JsonOutput.prettyPrint(JsonOutput.toJson(compatibility)) + '\n'
+    }
+}
+
+jar {
+    dependsOn metadata
+    from(generated)
+    from(rootProject.file('icon.png'))
+    from(rootProject.file('LICENSE'))
+    runtimes.each { name, task ->
+        from(task.flatMap { it.archiveFile }) {
+            into 'META-INF/jars'
+            rename { name + '.jar' }
+        }
+    }
+}
+
+plugins.withId('com.modrinth.minotaur') {
+    modrinth {
+        versionNumber = project.version
+        versionName = 'Raknetify2 ' + project.version
+        uploadFile = jar
+        loaders = ['fabric']
+    }
+}
+
+plugins.withId('io.github.themrmilchmann.curseforge-publish') {
+    curseforge {
+        apiToken = System.getenv('CURSEFORGE_TOKEN')
+        publications {
+            register('main') {
+                projectId = rootProject.curseforgeProjectId.get()
+                rootProject.supportedVersions.values().collectMany { it.gameVersions }.unique()
+                        .findAll { !it.contains('-') }.each { version ->
+                    gameVersion('minecraft-' + version.split('\\.').take(2).join('-'), version.replace('.', '-'))
+                }
+                gameVersion('java', 'java-17')
+                gameVersion('java', 'java-21')
+                gameVersion('java', 'java-25')
+                gameVersion('modloader', 'fabric')
+                gameVersion('environment', 'server')
+                gameVersion('environment', 'client')
+                artifacts.register('main') {
+                    from(jar)
+                    displayName = 'Raknetify2 ' + project.version
+                    releaseType = rootProject.curseforgeAlpha
+                    changelog {
+                        format = rootProject.curseforgeMarkdown
+                        from(com.ishland.buildscript.ParseGItHubActionChangelog.getChangelog())
+                    }
+                }
+            }
+        }
+    }
+}

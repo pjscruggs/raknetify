@@ -1,11 +1,5 @@
 apply plugin: 'net.fabricmc.fabric-loom'
 apply plugin: 'com.gradleup.shadow'
-if (rootProject.modrinthProjectId.isPresent()) {
-    apply plugin: 'com.modrinth.minotaur'
-}
-if (rootProject.curseforgeProjectId.isPresent()) {
-    apply plugin: 'io.github.themrmilchmann.curseforge-publish'
-}
 
 base {
     archivesName = project.archives_base_name + '-fabric-26'
@@ -23,12 +17,16 @@ dependencies {
     shadowInclude implementation(project(':common'))
 }
 
+def supported = rootProject.supportedVersions.modern
+
 processResources {
     inputs.property 'version', project.version
-    inputs.property 'minecraft', '>=26.1 <=26.3'
+    inputs.property 'minecraft', groovy.json.JsonOutput.toJson(supported.minecraft)
+    inputs.property 'java', supported.java
+    inputs.property 'loader', supported.fabricloader
     filesMatching('fabric.mod.json') {
         expand version: project.version, minecraft: inputs.properties.minecraft,
-                loader: '>=0.19.5', java: '>=25'
+                loader: inputs.properties.loader, java: inputs.properties.java
     }
 }
 
@@ -57,46 +55,4 @@ assemble.dependsOn(shadowJar)
 
 jar {
     from "../LICENSE"
-}
-
-plugins.withId('com.modrinth.minotaur') {
-    modrinth {
-        versionNumber = project.version
-        versionName = project.version + " devbuild"
-        uploadFile = shadowJar
-        loaders = ["fabric", "quilt"]
-    }
-}
-
-plugins.withId('io.github.themrmilchmann.curseforge-publish') {
-    curseforge {
-        apiToken = System.getenv("CURSEFORGE_TOKEN")
-        publications {
-            register("main") {
-                projectId = rootProject.curseforgeProjectId.get()
-
-                gameVersion("minecraft-26-1", "26-1")
-                gameVersion("minecraft-26-1", "26-1-1")
-                gameVersion("minecraft-26-1", "26-1-2")
-                gameVersion("minecraft-26-2", "26-2")
-                gameVersion("minecraft-26-3", "26-3")
-                gameVersion("java", "java-25")
-                gameVersion("modloader", "fabric")
-                gameVersion("environment", "server")
-                gameVersion("environment", "client")
-
-                artifacts.register("main") {
-                    from(shadowJar)
-
-                    displayName = project.version + " devbuild"
-                    releaseType = rootProject.curseforgeAlpha
-
-                    changelog {
-                        format = rootProject.curseforgeMarkdown
-                        from(com.ishland.buildscript.ParseGItHubActionChangelog.getChangelog())
-                    }
-                }
-            }
-        }
-    }
 }

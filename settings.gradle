@@ -21,6 +21,7 @@ includeBuild('netty-raknet') {
 
 include "fabric"
 include "fabric-26"
+include "fabric-universal"
 include "velocity"
 include "bungee"
 include "common"
