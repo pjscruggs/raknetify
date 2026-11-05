@@ -92,6 +92,7 @@ public abstract class MixinServerNetworkIo {
             try {
                 ThreadLocalUtil.setInitializingRaknet(true);
                 final boolean hasPortOverride = raknetify$portOverride > 0 && raknetify$portOverride < 65535;
+                final int udpPort = hasPortOverride ? raknetify$portOverride : port;
                 if (address == null) {
                     for (NetworkInterface networkInterface : NetworkInterface.networkInterfaces().toList()) {
                         final Iterator<InetAddress> iterator = networkInterface.getInetAddresses().asIterator();
@@ -99,7 +100,7 @@ public abstract class MixinServerNetworkIo {
                             final InetAddress inetAddress = iterator.next();
                             System.out.println("Starting raknetify server on %s".formatted(inetAddress));
                             try {
-                                startTcpServerListener(inetAddress, hasPortOverride ? raknetify$portOverride : port);
+                                startTcpServerListener(inetAddress, udpPort);
                             } catch (IOException t) {
                                 System.out.println("**** FAILED TO BIND TO PORT! %s".formatted(t.getMessage()));
                             }
@@ -108,52 +109,64 @@ public abstract class MixinServerNetworkIo {
 
                     if (this.raknetify$eventListener == null) {
                         this.raknetify$eventListener = event -> {
-                            if (!this.running) {
-                                NetworkInterfaceListener.removeListener(this.raknetify$eventListener);
-                                return;
-                            }
-                            try {
-                                ThreadLocalUtil.setInitializingRaknet(true);
-                                final InetAddress inetAddress = event.address();
-                                if (event.added()) {
-                                    System.out.println("Starting raknetify server on %s".formatted(inetAddress));
-                                    try {
-                                        startTcpServerListener(inetAddress, hasPortOverride ? raknetify$portOverride : port);
-                                    } catch (IOException t) {
-                                        System.out.println("**** FAILED TO BIND TO PORT! %s".formatted(t.getMessage()));
-                                    } catch (Throwable t) {
-                                        t.printStackTrace();
-                                    }
-                                } else {
-                                    synchronized (this.channels) {
-                                        for (Iterator<ChannelFuture> iter = this.channels.iterator(); iter.hasNext(); ) {
-                                            ChannelFuture channel = iter.next();
-                                            final SocketAddress socketAddress = channel.channel().localAddress();
-                                            if (socketAddress instanceof InetSocketAddress channelAddress) {
-                                                if (inetAddress.equals(channelAddress.getAddress())) {
-                                                    System.out.println("Stopping raknetify server on %s".formatted(inetAddress));
-                                                    channel.channel().close();
-                                                    iter.remove();
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            } catch (Throwable e) {
-                                e.printStackTrace();
-                            } finally {
-                                ThreadLocalUtil.setInitializingRaknet(false);
-                            }
+                            raknetify$onInterfaceChange(event, udpPort);
                         };
                         NetworkInterfaceListener.addListener(event -> this.server.submit(() -> raknetify$eventListener.accept(event)));
                     }
                 } else {
                     System.out.println("Starting raknetify server on %s".formatted(address));
-                    startTcpServerListener(address, hasPortOverride ? raknetify$portOverride : port);
+                    startTcpServerListener(address, udpPort);
                 }
             } finally {
                 ThreadLocalUtil.setInitializingRaknet(false);
             }
+        }
+    }
+
+
+    /**
+     * Rebinds UDP listeners after an interface change while retaining the recursive bind guard.
+     *
+     * @param event address added to or removed from a local network interface
+     * @param port effective UDP port captured when the listener was first registered
+     */
+    @Unique
+    private void raknetify$onInterfaceChange(NetworkInterfaceListener.InterfaceAddressChangeEvent event, int port) {
+        if (!this.running) {
+            NetworkInterfaceListener.removeListener(this.raknetify$eventListener);
+            return;
+        }
+        try {
+            ThreadLocalUtil.setInitializingRaknet(true);
+            final InetAddress inetAddress = event.address();
+            if (event.added()) {
+                System.out.println("Starting raknetify server on %s".formatted(inetAddress));
+                try {
+                    startTcpServerListener(inetAddress, port);
+                } catch (IOException t) {
+                    System.out.println("**** FAILED TO BIND TO PORT! %s".formatted(t.getMessage()));
+                } catch (Throwable t) {
+                    t.printStackTrace();
+                }
+            } else {
+                synchronized (this.channels) {
+                    for (Iterator<ChannelFuture> iter = this.channels.iterator(); iter.hasNext(); ) {
+                        ChannelFuture channel = iter.next();
+                        final SocketAddress socketAddress = channel.channel().localAddress();
+                        if (socketAddress instanceof InetSocketAddress channelAddress) {
+                            if (inetAddress.equals(channelAddress.getAddress())) {
+                                System.out.println("Stopping raknetify server on %s".formatted(inetAddress));
+                                channel.channel().close();
+                                iter.remove();
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Throwable e) {
+            e.printStackTrace();
+        } finally {
+            ThreadLocalUtil.setInitializingRaknet(false);
         }
     }
 
