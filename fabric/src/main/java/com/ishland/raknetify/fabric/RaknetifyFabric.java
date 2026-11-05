@@ -164,116 +164,14 @@ public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
                         .stream().map(byteBufPacketPacketTypePacketType -> byteBufPacketPacketTypePacketType.id()).toList();
             }
 
-            record FieldNodeClazzPair(FieldNode fieldNode, Class<?> clazz) {
-            }
+            Map<PacketType<?>, Class<?>> vanillaPacketTypes = collectPacketClasses();
 
-            Map<PacketType<?>, Class<?>> vanillaPacketTypes = new Object2ObjectOpenHashMap<>();
-            for (FieldNodeClazzPair fieldNodeClazzPair : Stream.of(PlayPackets.class, CommonPackets.class, CookiePackets.class, PingPackets.class)
-                    .flatMap(clazz -> {
-                        try {
-                            return MixinService.getService().getBytecodeProvider().getClassNode(Type.getInternalName(clazz)).fields.stream()
-                                    .map(fieldNode -> new FieldNodeClazzPair(fieldNode, clazz));
-                        } catch (ClassNotFoundException | IOException e) {
-                            throw new RuntimeException(e);
-                        }
-                    })
-                    .toList()) {
-                final FieldNode field = fieldNodeClazzPair.fieldNode();
-                final List<Type> parameterGenerics = FieldSignatureParser.parse(field.signature);
-                for (Type type : parameterGenerics) {
-                    try {
-                        final Class<?> clazz = Class.forName(type.getClassName());
-                        if (Packet.class.isAssignableFrom(clazz)) {
-                            final PacketType<?> actualType;
-                            try {
-                                actualType = (PacketType<?>) fieldNodeClazzPair.clazz().getField(field.name).get(null);
-                            } catch (IllegalAccessException | NoSuchFieldException e) {
-                                throw new RuntimeException(e);
-                            }
-                            vanillaPacketTypes.put(actualType, clazz);
-                        }
-                    } catch (ClassNotFoundException ignored) {
-                    }
-                }
-            }
+            recordPacketChannels(s2cPacketTypes, vanillaPacketTypes, s2c);
+            recordPacketChannels(c2sPacketTypes, vanillaPacketTypes, c2s);
 
-            for (int i = 0, s2cPacketTypesSize = s2cPacketTypes.size(); i < s2cPacketTypesSize; i++) {
-                PacketType<Packet<? super ServerPlayPacketListener>> s2cPacketType = s2cPacketTypes.get(i);
-                final Class<?> clazz = vanillaPacketTypes.get(s2cPacketType);
-                if (clazz == null) {
-                    System.out.println("Skipping unmapped packet type: " + s2cPacketType);
-                    continue;
-                }
-                s2c.put(i, RakNetMultiChannel.getPacketChannelOverride(clazz, false));
-//                System.out.println("Mapped packet type: " + s2cPacketType + " to channel " + RakNetMultiChannel.getPacketChannelOverride(clazz));
-            }
-
-            for (int i = 0, c2sPacketTypesSize = c2sPacketTypes.size(); i < c2sPacketTypesSize; i++) {
-                PacketType<Packet<? super ServerPlayPacketListener>> c2sPacketType = c2sPacketTypes.get(i);
-                final Class<?> clazz = vanillaPacketTypes.get(c2sPacketType);
-                if (clazz == null) {
-                    System.out.println("Skipping unmapped packet type: " + c2sPacketType);
-                    continue;
-                }
-                c2s.put(i, RakNetMultiChannel.getPacketChannelOverride(clazz, false));
-//                System.out.println("Mapped packet type: " + c2sPacketType + " to channel " + RakNetMultiChannel.getPacketChannelOverride(clazz));
-            }
         }
 
-        if (SAVE_CHANNEL_MAPPINGS) {
-            auditMixins();
-            final Gson gson = new GsonBuilder()
-                    .setPrettyPrinting()
-                    .create();
-            ProtocolMultiChannelMappings mappings = new ProtocolMultiChannelMappings();
-            // Preserve proxy mappings for versions no longer supported by Fabric.
-            for (int protocol : new int[]{755, 756}) {
-                final ProtocolMultiChannelMappings.VersionMapping retained = ProtocolMultiChannelMappings.INSTANCE.mappings.get(protocol);
-                if (retained != null) mappings.mappings.put(protocol, retained);
-            }
-            Path path = Path.of("channelMappings.json");
-            try {
-                mappings = gson.fromJson(Files.readString(path), ProtocolMultiChannelMappings.class);
-            } catch (IOException e) {
-                System.out.println("Error reading previously generated mappings: " + e.toString());
-            }
-            final ProtocolMultiChannelMappings.VersionMapping versionMapping = new ProtocolMultiChannelMappings.VersionMapping();
-            versionMapping.c2s = c2s;
-            versionMapping.s2c = s2c;
-            mappings.mappings.put(SharedConstants.getProtocolVersion(), versionMapping);
-
-            // reproducible mappings
-            mappings.mappings = mappings.mappings.int2ObjectEntrySet()
-                    .stream()
-                    .map(entry -> {
-                        final ProtocolMultiChannelMappings.VersionMapping value = entry.getValue();
-                        value.s2c = value.s2c.int2IntEntrySet().stream()
-                                .sorted(Comparator.comparingInt(Int2IntMap.Entry::getIntKey))
-                                .collect(Collectors.toMap(Int2IntMap.Entry::getIntKey, Int2IntMap.Entry::getIntValue, (o, o2) -> {
-                                    throw new RuntimeException("Unresolvable conflicts");
-                                }, Int2IntArrayMap::new));
-                        value.c2s = value.c2s.int2IntEntrySet().stream()
-                                .sorted(Comparator.comparingInt(Int2IntMap.Entry::getIntKey))
-                                .collect(Collectors.toMap(Int2IntMap.Entry::getIntKey, Int2IntMap.Entry::getIntValue, (o, o2) -> {
-                                    throw new RuntimeException("Unresolvable conflicts");
-                                }, Int2IntArrayMap::new));
-                        return new AbstractInt2ObjectMap.BasicEntry<>(
-                                entry.getIntKey(),
-                                value
-                        );
-                    })
-                    .sorted(Comparator.comparingInt(Int2ObjectMap.Entry::getIntKey))
-                    .collect(Collectors.toMap(Int2ObjectMap.Entry::getIntKey, Int2ObjectMap.Entry::getValue, (o, o2) -> {
-                        throw new RuntimeException("Unresolvable conflicts");
-                    }, Int2ObjectArrayMap::new));
-
-            try {
-                Files.writeString(path, gson.toJson(mappings), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-            } catch (IOException e) {
-                System.out.println("Error writing generated mappings: " + e.toString());
-            }
-            if (EXIT_AFTER_SAVE_CHANNEL_MAPPINGS) System.exit(0);
-        }
+        if (SAVE_CHANNEL_MAPPINGS) saveMappings(c2s, s2c);
     }
 
     public static Object2IntMap<Class<? extends Packet<?>>> getPacketIdsFromPacketHandler(Object value) {
@@ -286,6 +184,137 @@ public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
             throw new IllegalStateException("Unknown packet handler type: " + value.getClass());
         }
         return packetIds;
+    }
+
+
+    /**
+     * Merges the running protocol's routes into the mapping file and sorts entries for reproducible output.
+     *
+     * @param c2s serverbound packet IDs and their selected ordering channels
+     * @param s2c clientbound packet IDs and their selected ordering channels
+     */
+    private static void saveMappings(Int2IntArrayMap c2s, Int2IntArrayMap s2c) {
+        auditMixins();
+        final Gson gson = new GsonBuilder()
+                .setPrettyPrinting()
+                .create();
+        ProtocolMultiChannelMappings mappings = new ProtocolMultiChannelMappings();
+        // Preserve proxy mappings for versions no longer supported by Fabric.
+        for (int protocol : new int[]{755, 756}) {
+            final ProtocolMultiChannelMappings.VersionMapping retained = ProtocolMultiChannelMappings.INSTANCE.mappings.get(protocol);
+            if (retained != null) mappings.mappings.put(protocol, retained);
+        }
+        Path path = Path.of("channelMappings.json");
+        try {
+            mappings = gson.fromJson(Files.readString(path), ProtocolMultiChannelMappings.class);
+        } catch (IOException e) {
+            System.out.println("Error reading previously generated mappings: " + e.toString());
+        }
+        final ProtocolMultiChannelMappings.VersionMapping versionMapping = new ProtocolMultiChannelMappings.VersionMapping();
+        versionMapping.c2s = c2s;
+        versionMapping.s2c = s2c;
+        mappings.mappings.put(SharedConstants.getProtocolVersion(), versionMapping);
+
+        // reproducible mappings
+        mappings.mappings = mappings.mappings.int2ObjectEntrySet()
+                .stream()
+                .map(entry -> {
+                    final ProtocolMultiChannelMappings.VersionMapping value = entry.getValue();
+                    value.s2c = value.s2c.int2IntEntrySet().stream()
+                            .sorted(Comparator.comparingInt(Int2IntMap.Entry::getIntKey))
+                            .collect(Collectors.toMap(Int2IntMap.Entry::getIntKey, Int2IntMap.Entry::getIntValue, (o, o2) -> {
+                                throw new RuntimeException("Unresolvable conflicts");
+                            }, Int2IntArrayMap::new));
+                    value.c2s = value.c2s.int2IntEntrySet().stream()
+                            .sorted(Comparator.comparingInt(Int2IntMap.Entry::getIntKey))
+                            .collect(Collectors.toMap(Int2IntMap.Entry::getIntKey, Int2IntMap.Entry::getIntValue, (o, o2) -> {
+                                throw new RuntimeException("Unresolvable conflicts");
+                            }, Int2IntArrayMap::new));
+                    return new AbstractInt2ObjectMap.BasicEntry<>(
+                            entry.getIntKey(),
+                            value
+                    );
+                })
+                .sorted(Comparator.comparingInt(Int2ObjectMap.Entry::getIntKey))
+                .collect(Collectors.toMap(Int2ObjectMap.Entry::getIntKey, Int2ObjectMap.Entry::getValue, (o, o2) -> {
+                    throw new RuntimeException("Unresolvable conflicts");
+                }, Int2ObjectArrayMap::new));
+
+        try {
+            Files.writeString(path, gson.toJson(mappings), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (IOException e) {
+            System.out.println("Error writing generated mappings: " + e.toString());
+        }
+        if (EXIT_AFTER_SAVE_CHANNEL_MAPPINGS) System.exit(0);
+    }
+
+    /**
+     * Links registered packet types to implementation classes using their generic field signatures.
+     *
+     * @return packet-type lookup used to apply class-based channel rules in codec registration order
+     * @throws RuntimeException if a registry class or its public packet fields cannot be inspected
+     */
+    private static Map<PacketType<?>, Class<?>> collectPacketClasses() {
+        /**
+         * Associates a generic packet field with the registry class that declares it.
+         *
+         * @param fieldNode bytecode field including its generic signature
+         * @param clazz registry class used to read the corresponding static packet type
+         */
+        record FieldNodeClazzPair(FieldNode fieldNode, Class<?> clazz) {
+        }
+
+        Map<PacketType<?>, Class<?>> vanillaPacketTypes = new Object2ObjectOpenHashMap<>();
+        for (FieldNodeClazzPair fieldNodeClazzPair : Stream.of(PlayPackets.class, CommonPackets.class, CookiePackets.class, PingPackets.class)
+                .flatMap(clazz -> {
+                    try {
+                        return MixinService.getService().getBytecodeProvider().getClassNode(Type.getInternalName(clazz)).fields.stream()
+                                .map(fieldNode -> new FieldNodeClazzPair(fieldNode, clazz));
+                    } catch (ClassNotFoundException | IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                })
+                .toList()) {
+            final FieldNode field = fieldNodeClazzPair.fieldNode();
+            final List<Type> parameterGenerics = FieldSignatureParser.parse(field.signature);
+            for (Type type : parameterGenerics) {
+                try {
+                    final Class<?> clazz = Class.forName(type.getClassName());
+                    if (Packet.class.isAssignableFrom(clazz)) {
+                        final PacketType<?> actualType;
+                        try {
+                            actualType = (PacketType<?>) fieldNodeClazzPair.clazz().getField(field.name).get(null);
+                        } catch (IllegalAccessException | NoSuchFieldException e) {
+                            throw new RuntimeException(e);
+                        }
+                        vanillaPacketTypes.put(actualType, clazz);
+                    }
+                } catch (ClassNotFoundException ignored) {
+                }
+            }
+        }
+        return vanillaPacketTypes;
+    }
+
+    /**
+     * Records routes by codec index, which is the packet ID placed on the Minecraft wire.
+     *
+     * @param packetTypes packet types in registration order for one traffic direction
+     * @param packetClasses implementation classes recovered from the protocol registries
+     * @param channels destination map updated only for packet types with a known implementation
+     */
+    private static void recordPacketChannels(List<? extends PacketType<?>> packetTypes,
+                                             Map<PacketType<?>, Class<?>> packetClasses,
+                                             Int2IntArrayMap channels) {
+        for (int i = 0; i < packetTypes.size(); i++) {
+            PacketType<?> packetType = packetTypes.get(i);
+            final Class<?> clazz = packetClasses.get(packetType);
+            if (clazz == null) {
+                System.out.println("Skipping unmapped packet type: " + packetType);
+                continue;
+            }
+            channels.put(i, RakNetMultiChannel.getPacketChannelOverride(clazz, false));
+        }
     }
 
     private static void auditMixins() {
