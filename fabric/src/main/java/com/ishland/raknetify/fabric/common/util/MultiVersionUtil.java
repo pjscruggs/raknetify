@@ -115,122 +115,195 @@ public class MultiVersionUtil {
                 ClientPlayNetworkHandler$connection = null;
             }
 
-            {
-                final Field pingMillis1_20_1 = getOrNull(() -> ServerPlayerEntity.class.getDeclaredField(resolver.mapFieldName(INTERMEDIARY, "net.minecraft.class_3222", "field_13967", "I")), NoSuchFieldException.class);
-                if (pingMillis1_20_1 != null) {
-                    pingMillis1_20_1.setAccessible(true);
-                    ServerPlayerEntity$pingMillis1_20_1 = MethodHandles
-                            .privateLookupIn(ServerPlayerEntity.class, MethodHandles.lookup())
-                            .unreflectVarHandle(pingMillis1_20_1);
-                } else {
-                    ServerPlayerEntity$pingMillis1_20_1 = null;
-                }
-            }
+            ServerPlayerEntity$pingMillis1_20_1 = findLegacyPing(resolver);
 
-            {
-                clazzNetworkStatePacketHandler = getOrNull(() -> Class.forName(resolver.mapClassName(INTERMEDIARY, CLASSNAME_NetworkStatePacketHandler)), ClassNotFoundException.class);
-                if (clazzNetworkStatePacketHandler != null) {
-                    final Field backingHandler1_20_2 = getOrNull(() -> clazzNetworkStatePacketHandler.getDeclaredField(resolver.mapFieldName(INTERMEDIARY, CLASSNAME_NetworkStatePacketHandler, "field_45674", "L" + resolver.mapClassName(INTERMEDIARY, CLASSNAME_NetworkState$InternalPacketHandler) + ";")), NoSuchFieldException.class);
-                    if (backingHandler1_20_2 != null) {
-                        backingHandler1_20_2.setAccessible(true);
-                        NetworkStatePacketHandler$backingHandler1_20_2 = MethodHandles
-                                .privateLookupIn(clazzNetworkStatePacketHandler, MethodHandles.lookup())
-                                .unreflectVarHandle(backingHandler1_20_2);
-                    } else {
-                        NetworkStatePacketHandler$backingHandler1_20_2 = null;
-                    }
-                } else {
-                    NetworkStatePacketHandler$backingHandler1_20_2 = null;
-                }
-            }
+            clazzNetworkStatePacketHandler = getOrNull(() -> Class.forName(resolver.mapClassName(INTERMEDIARY, CLASSNAME_NetworkStatePacketHandler)), ClassNotFoundException.class);
+            NetworkStatePacketHandler$backingHandler1_20_2 = findBackingHandler(resolver);
 
-            {
-                Method factoryBind = getOrNull(() -> NetworkState.Unbound.class.getDeclaredMethod("bind" /* actually not obfuscated in 1.20.6 */, Function.class), NoSuchMethodException.class, NoClassDefFoundError.class);
-                if (factoryBind == null) {
-                    factoryBind = getOrNull(() -> NetworkState.Unbound.class.getDeclaredMethod(resolver.mapMethodName(INTERMEDIARY, CLASSNAME_NetworkState$Factory, "method_61107", "(Ljava/util/function/Function;)Lnet/minecraft/class_9127;"), Function.class), NoSuchMethodException.class, NoClassDefFoundError.class);
-                }
-                if (factoryBind != null) {
-                    factoryBind.setAccessible(true);
-                    NetworkState$Factory$bind1_20_5 = MethodHandles
-                            .privateLookupIn(NetworkState.Unbound.class, MethodHandles.lookup())
-                            .unreflect(factoryBind);
-                } else {
-                    NetworkState$Factory$bind1_20_5 = null;
-                }
-            }
+            NetworkState$Factory$bind1_20_5 = findFactoryBinding(resolver);
 
             clazzPlayStateFactories = getOrNull(() -> Class.forName(resolver.mapClassName(INTERMEDIARY, CLASSNAME_PlayStateFactories), false, MultiVersionUtil.class.getClassLoader()), ClassNotFoundException.class);
 
-            {
-                if (clazzPlayStateFactories != null) {
-                    final Field playStateFactoriesC2S1_20_5 = getOrNull(() -> clazzPlayStateFactories.getDeclaredField(resolver.mapFieldName(INTERMEDIARY, CLASSNAME_PlayStateFactories, "field_48172", "L" + CLASSNAME_NetworkState$Factory.replace('.', '/') + ";")), NoSuchFieldException.class);
-                    if (playStateFactoriesC2S1_20_5 != null) {
-                        playStateFactoriesC2S1_20_5.setAccessible(true);
-                        PlayStateFactories$C2S1_20_5 = MethodHandles
-                                .privateLookupIn(clazzPlayStateFactories, MethodHandles.lookup())
-                                .unreflectVarHandle(playStateFactoriesC2S1_20_5);
-                    } else {
-                        PlayStateFactories$C2S1_20_5 = null;
-                    }
-                } else {
-                    PlayStateFactories$C2S1_20_5 = null;
-                }
-            }
+            PlayStateFactories$C2S1_20_5 = findServerboundFactory(resolver);
 
-            {
-                if (clazzPlayStateFactories != null) {
-                    final Field playStateFactoriesS2C1_20_5 = getOrNull(() -> clazzPlayStateFactories.getDeclaredField(resolver.mapFieldName(INTERMEDIARY, CLASSNAME_PlayStateFactories, "field_48173", "L" + CLASSNAME_NetworkState$Factory.replace('.', '/') + ";")), NoSuchFieldException.class);
-                    if (playStateFactoriesS2C1_20_5 != null) {
-                        playStateFactoriesS2C1_20_5.setAccessible(true);
-                        PlayStateFactories$S2C1_20_5 = MethodHandles
-                                .privateLookupIn(clazzPlayStateFactories, MethodHandles.lookup())
-                                .unreflectVarHandle(playStateFactoriesS2C1_20_5);
-                    } else {
-                        PlayStateFactories$S2C1_20_5 = null;
-                    }
-                } else {
-                    PlayStateFactories$S2C1_20_5 = null;
-                }
-            }
+            PlayStateFactories$S2C1_20_5 = findClientboundFactory(resolver);
 
-            {
-                final Method writeNbt1_21_5 = getOrNull(() -> HungerManager.class.getDeclaredMethod(resolver.mapMethodName(INTERMEDIARY, CLASSNAME_HungerManager, "method_7582", "(Lnet/minecraft/class_2487;)V"), NbtCompound.class), NoSuchMethodException.class);
-                if (writeNbt1_21_5 != null) {
-                    writeNbt1_21_5.setAccessible(true);
-                    HungerManager$writeNbt1_21_5 = MethodHandles
-                            .privateLookupIn(HungerManager.class, MethodHandles.lookup())
-                            .unreflect(writeNbt1_21_5);
-                } else {
-                    HungerManager$writeNbt1_21_5 = null;
-                }
-            }
+            HungerManager$writeNbt1_21_5 = findHungerWriter(resolver);
 
-            {
-                final Method readNbt1_21_5 = getOrNull(() -> HungerManager.class.getDeclaredMethod(resolver.mapMethodName(INTERMEDIARY, CLASSNAME_HungerManager, "method_7584", "(Lnet/minecraft/class_2487;)V"), NbtCompound.class), NoSuchMethodException.class);
-                if (readNbt1_21_5 != null) {
-                    readNbt1_21_5.setAccessible(true);
-                    HungerManager$readNbt1_21_5 = MethodHandles
-                            .privateLookupIn(HungerManager.class, MethodHandles.lookup())
-                            .unreflect(readNbt1_21_5);
-                } else {
-                    HungerManager$readNbt1_21_5 = null;
-                }
-            }
+            HungerManager$readNbt1_21_5 = findHungerReader(resolver);
 
-            {
-                final Method getEntity1_21_8 = getOrNull(() -> Entity.class.getDeclaredMethod(resolver.mapFieldName(INTERMEDIARY, CLASSNAME_Entity, "method_37908", "()Lnet/minecraft/class_1937;")), NoSuchMethodException.class);
-                if (getEntity1_21_8 != null) {
-                    getEntity1_21_8.setAccessible(true);
-                    Entity$getEntity1_21_8 = MethodHandles
-                            .privateLookupIn(Entity.class, MethodHandles.lookup())
-                            .unreflect(getEntity1_21_8);
-                } else {
-                    Entity$getEntity1_21_8 = null;
-                }
-            }
+            Entity$getEntity1_21_8 = findEntityWorldGetter(resolver);
 
         } catch (Throwable t) {
             throw new RuntimeException(t);
+        }
+    }
+
+
+    /**
+     * Resolves the player latency field used before latency moved to the common packet listener.
+     *
+     * @param resolver mappings for the running Minecraft version
+     * @return handle to the legacy member, or null when that API is absent
+     * @throws IllegalAccessException if an existing member cannot be made accessible
+     */
+    private static VarHandle findLegacyPing(MappingResolver resolver) throws IllegalAccessException {
+        final Field pingMillis1_20_1 = getOrNull(() -> ServerPlayerEntity.class.getDeclaredField(resolver.mapFieldName(INTERMEDIARY, "net.minecraft.class_3222", "field_13967", "I")), NoSuchFieldException.class);
+        if (pingMillis1_20_1 != null) {
+            pingMillis1_20_1.setAccessible(true);
+            return MethodHandles
+                    .privateLookupIn(ServerPlayerEntity.class, MethodHandles.lookup())
+                    .unreflectVarHandle(pingMillis1_20_1);
+        } else {
+            return null;
+        }
+    }
+
+    /**
+     * Resolves the packet-state wrapper field used to reach its packet registration table.
+     *
+     * @param resolver mappings for the running Minecraft version
+     * @return handle to the legacy member, or null when that API is absent
+     * @throws IllegalAccessException if an existing member cannot be made accessible
+     */
+    private static VarHandle findBackingHandler(MappingResolver resolver) throws IllegalAccessException {
+        if (clazzNetworkStatePacketHandler != null) {
+            final Field backingHandler1_20_2 = getOrNull(() -> clazzNetworkStatePacketHandler.getDeclaredField(resolver.mapFieldName(INTERMEDIARY, CLASSNAME_NetworkStatePacketHandler, "field_45674", "L" + resolver.mapClassName(INTERMEDIARY, CLASSNAME_NetworkState$InternalPacketHandler) + ";")), NoSuchFieldException.class);
+            if (backingHandler1_20_2 != null) {
+                backingHandler1_20_2.setAccessible(true);
+                return MethodHandles
+                        .privateLookupIn(clazzNetworkStatePacketHandler, MethodHandles.lookup())
+                        .unreflectVarHandle(backingHandler1_20_2);
+            } else {
+                return null;
+            }
+        } else {
+            return null;
+        }
+    }
+
+    /**
+     * Resolves the packet-state factory binding method across its named and intermediary variants.
+     *
+     * @param resolver mappings for the running Minecraft version
+     * @return handle to the legacy member, or null when that API is absent
+     * @throws IllegalAccessException if an existing member cannot be made accessible
+     */
+    private static MethodHandle findFactoryBinding(MappingResolver resolver) throws IllegalAccessException {
+        Method factoryBind = getOrNull(() -> NetworkState.Unbound.class.getDeclaredMethod("bind" /* actually not obfuscated in 1.20.6 */, Function.class), NoSuchMethodException.class, NoClassDefFoundError.class);
+        if (factoryBind == null) {
+            factoryBind = getOrNull(() -> NetworkState.Unbound.class.getDeclaredMethod(resolver.mapMethodName(INTERMEDIARY, CLASSNAME_NetworkState$Factory, "method_61107", "(Ljava/util/function/Function;)Lnet/minecraft/class_9127;"), Function.class), NoSuchMethodException.class, NoClassDefFoundError.class);
+        }
+        if (factoryBind != null) {
+            factoryBind.setAccessible(true);
+            return MethodHandles
+                    .privateLookupIn(NetworkState.Unbound.class, MethodHandles.lookup())
+                    .unreflect(factoryBind);
+        } else {
+            return null;
+        }
+    }
+
+    /**
+     * Resolves the serverbound play-state factory in versions that expose the legacy factory holder.
+     *
+     * @param resolver mappings for the running Minecraft version
+     * @return handle to the legacy member, or null when that API is absent
+     * @throws IllegalAccessException if an existing member cannot be made accessible
+     */
+    private static VarHandle findServerboundFactory(MappingResolver resolver) throws IllegalAccessException {
+        if (clazzPlayStateFactories != null) {
+            final Field playStateFactoriesC2S1_20_5 = getOrNull(() -> clazzPlayStateFactories.getDeclaredField(resolver.mapFieldName(INTERMEDIARY, CLASSNAME_PlayStateFactories, "field_48172", "L" + CLASSNAME_NetworkState$Factory.replace('.', '/') + ";")), NoSuchFieldException.class);
+            if (playStateFactoriesC2S1_20_5 != null) {
+                playStateFactoriesC2S1_20_5.setAccessible(true);
+                return MethodHandles
+                        .privateLookupIn(clazzPlayStateFactories, MethodHandles.lookup())
+                        .unreflectVarHandle(playStateFactoriesC2S1_20_5);
+            } else {
+                return null;
+            }
+        } else {
+            return null;
+        }
+    }
+
+    /**
+     * Resolves the clientbound play-state factory in versions that expose the legacy factory holder.
+     *
+     * @param resolver mappings for the running Minecraft version
+     * @return handle to the legacy member, or null when that API is absent
+     * @throws IllegalAccessException if an existing member cannot be made accessible
+     */
+    private static VarHandle findClientboundFactory(MappingResolver resolver) throws IllegalAccessException {
+        if (clazzPlayStateFactories != null) {
+            final Field playStateFactoriesS2C1_20_5 = getOrNull(() -> clazzPlayStateFactories.getDeclaredField(resolver.mapFieldName(INTERMEDIARY, CLASSNAME_PlayStateFactories, "field_48173", "L" + CLASSNAME_NetworkState$Factory.replace('.', '/') + ";")), NoSuchFieldException.class);
+            if (playStateFactoriesS2C1_20_5 != null) {
+                playStateFactoriesS2C1_20_5.setAccessible(true);
+                return MethodHandles
+                        .privateLookupIn(clazzPlayStateFactories, MethodHandles.lookup())
+                        .unreflectVarHandle(playStateFactoriesS2C1_20_5);
+            } else {
+                return null;
+            }
+        } else {
+            return null;
+        }
+    }
+
+    /**
+     * Resolves the hunger-state NBT writer used before value input and output replaced NBT access.
+     *
+     * @param resolver mappings for the running Minecraft version
+     * @return handle to the legacy member, or null when that API is absent
+     * @throws IllegalAccessException if an existing member cannot be made accessible
+     */
+    private static MethodHandle findHungerWriter(MappingResolver resolver) throws IllegalAccessException {
+        final Method writeNbt1_21_5 = getOrNull(() -> HungerManager.class.getDeclaredMethod(resolver.mapMethodName(INTERMEDIARY, CLASSNAME_HungerManager, "method_7582", "(Lnet/minecraft/class_2487;)V"), NbtCompound.class), NoSuchMethodException.class);
+        if (writeNbt1_21_5 != null) {
+            writeNbt1_21_5.setAccessible(true);
+            return MethodHandles
+                    .privateLookupIn(HungerManager.class, MethodHandles.lookup())
+                    .unreflect(writeNbt1_21_5);
+        } else {
+            return null;
+        }
+    }
+
+    /**
+     * Resolves the hunger-state NBT reader used before value input and output replaced NBT access.
+     *
+     * @param resolver mappings for the running Minecraft version
+     * @return handle to the legacy member, or null when that API is absent
+     * @throws IllegalAccessException if an existing member cannot be made accessible
+     */
+    private static MethodHandle findHungerReader(MappingResolver resolver) throws IllegalAccessException {
+        final Method readNbt1_21_5 = getOrNull(() -> HungerManager.class.getDeclaredMethod(resolver.mapMethodName(INTERMEDIARY, CLASSNAME_HungerManager, "method_7584", "(Lnet/minecraft/class_2487;)V"), NbtCompound.class), NoSuchMethodException.class);
+        if (readNbt1_21_5 != null) {
+            readNbt1_21_5.setAccessible(true);
+            return MethodHandles
+                    .privateLookupIn(HungerManager.class, MethodHandles.lookup())
+                    .unreflect(readNbt1_21_5);
+        } else {
+            return null;
+        }
+    }
+
+    /**
+     * Resolves the legacy entity world getter used by version-dependent player checks.
+     *
+     * @param resolver mappings for the running Minecraft version
+     * @return handle to the legacy member, or null when that API is absent
+     * @throws IllegalAccessException if an existing member cannot be made accessible
+     */
+    private static MethodHandle findEntityWorldGetter(MappingResolver resolver) throws IllegalAccessException {
+        final Method getEntity1_21_8 = getOrNull(() -> Entity.class.getDeclaredMethod(resolver.mapFieldName(INTERMEDIARY, CLASSNAME_Entity, "method_37908", "()Lnet/minecraft/class_1937;")), NoSuchMethodException.class);
+        if (getEntity1_21_8 != null) {
+            getEntity1_21_8.setAccessible(true);
+            return MethodHandles
+                    .privateLookupIn(Entity.class, MethodHandles.lookup())
+                    .unreflect(getEntity1_21_8);
+        } else {
+            return null;
         }
     }
 

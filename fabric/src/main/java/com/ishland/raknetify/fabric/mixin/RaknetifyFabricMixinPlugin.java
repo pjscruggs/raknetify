@@ -77,19 +77,8 @@ public class RaknetifyFabricMixinPlugin implements IMixinConfigPlugin {
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
         if (mixinClassName.startsWith("com.ishland.raknetify.fabric.mixin.client.")) {
-            if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
-                if (mixinClassName.equals("com.ishland.raknetify.fabric.mixin.client.MixinMultiplayerServerListPinger1_20_2"))
-                    return AFTER_1_20_1 && !AFTER_1_20_4;
-                if (mixinClassName.equals("com.ishland.raknetify.fabric.mixin.client.MixinMultiplayerServerListPinger1_20_5"))
-                    return AFTER_1_20_4 && !AFTER_1_21_10;
-                if (mixinClassName.equals("com.ishland.raknetify.fabric.mixin.client.MixinMultiplayerServerListPinger1_21_11"))
-                    return AFTER_1_21_10;
-                if (mixinClassName.equals("com.ishland.raknetify.fabric.mixin.client.hud.MixinDebugHud1_21_8"))
-                    return !AFTER_1_21_8;
-                return true;
-            } else {
-                return false;
-            }
+            return FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT
+                    && isClientMixinSupported(mixinClassName);
         }
         if (mixinClassName.equals("com.ishland.raknetify.fabric.mixin.server.MixinServerPlayNetworkHandler1_20_1"))
             return !AFTER_1_20_1;
@@ -105,6 +94,25 @@ public class RaknetifyFabricMixinPlugin implements IMixinConfigPlugin {
             return !AFTER_1_20_4;
         if (mixinClassName.equals("com.ishland.raknetify.fabric.mixin.access.INetworkStateInternalPacketHandler"))
             return !AFTER_1_20_4;
+        return true;
+    }
+
+
+    /**
+     * Selects the pinger and debug HUD hooks whose target methods exist in the running client.
+     *
+     * @param mixinClassName fully qualified client mixin name from the configuration
+     * @return whether this Minecraft version has the target API required by the mixin
+     */
+    private static boolean isClientMixinSupported(String mixinClassName) {
+        if (mixinClassName.equals("com.ishland.raknetify.fabric.mixin.client.MixinMultiplayerServerListPinger1_20_2"))
+            return AFTER_1_20_1 && !AFTER_1_20_4;
+        if (mixinClassName.equals("com.ishland.raknetify.fabric.mixin.client.MixinMultiplayerServerListPinger1_20_5"))
+            return AFTER_1_20_4 && !AFTER_1_21_10;
+        if (mixinClassName.equals("com.ishland.raknetify.fabric.mixin.client.MixinMultiplayerServerListPinger1_21_11"))
+            return AFTER_1_21_10;
+        if (mixinClassName.equals("com.ishland.raknetify.fabric.mixin.client.hud.MixinDebugHud1_21_8"))
+            return !AFTER_1_21_8;
         return true;
     }
 
