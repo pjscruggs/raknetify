@@ -97,7 +97,7 @@ public class RakNetBungeeClientChannelEventListener extends ChannelDuplexHandler
                 needResetCompression = true;
                 return;
             }
-        } else if (msg instanceof Respawn || msg instanceof Login || msg instanceof StartConfiguration || msg instanceof FinishConfiguration) {
+        } else if (startsNewPhase(msg)) {
             ctx.write(SynchronizationLayer.SYNC_REQUEST_OBJECT); // sync
             super.write(ctx, msg, promise);
             return;
@@ -107,6 +107,17 @@ public class RakNetBungeeClientChannelEventListener extends ChannelDuplexHandler
             return;
         }
         super.write(ctx, msg, promise);
+    }
+
+
+    /**
+     * Identifies transitions that invalidate packets still queued for the previous world or protocol phase.
+     *
+     * @param msg outgoing decoded Minecraft packet
+     * @return whether channel ordering must be synchronized before forwarding the packet
+     */
+    private static boolean startsNewPhase(Object msg) {
+        return msg instanceof Respawn || msg instanceof Login || msg instanceof StartConfiguration || msg instanceof FinishConfiguration;
     }
 
     @Override

@@ -123,28 +123,7 @@ public class BungeeRaknetifyServer {
 
             int currentActiveIndex = ++activeIndex;
             listener = event -> {
-                if (!active) {
-                    NetworkInterfaceListener.removeListener(listener);
-                }
-
-                if (currentActiveIndex != activeIndex) return; // we can't remove ourselves now, is plugin reloaded?
-
-                if (event.added()) {
-                    for (Channel channel : channels.keySet()) {
-                        injectChannel(instance, channel, false);
-                    }
-                } else {
-                    for (ReferenceOpenHashSet<ChannelFuture> futures : channels.values()) {
-                        for (ObjectIterator<ChannelFuture> iterator = futures.iterator(); iterator.hasNext(); ) {
-                            ChannelFuture future = iterator.next();
-                            if (((InetSocketAddress) future.channel().localAddress()).getAddress().equals(event.address())) {
-                                RaknetifyBungeePlugin.LOGGER.info("Closing Raknetify server %s".formatted(future.channel().localAddress()));
-                                future.channel().close();
-                                iterator.remove();
-                            }
-                        }
-                    }
-                }
+                onInterfaceChange(instance, currentActiveIndex, event);
             };
             NetworkInterfaceListener.addListener(event ->
                     instance.getScheduler().schedule(RaknetifyBungeePlugin.INSTANCE, () -> listener.accept(event), 100, TimeUnit.MILLISECONDS));
@@ -161,36 +140,12 @@ public class BungeeRaknetifyServer {
 
     public static void injectChannel(BungeeCord instance, Channel listener, boolean throwErrors) {
         try {
-            if (!active) return;
+            if (!isListenerCandidate(listener)) return;
 
-            final boolean hasPortOverride = portOverride > 0 && portOverride < 65535;
-            if (hasPortOverride && !channels.isEmpty()) return; // avoid duplicate listeners
-
-            if (!(listener.localAddress() instanceof InetSocketAddress)) return;
-
-            ChannelInitializer<Channel> initializer = null;
-            ListenerInfo info = null;
-
-            for (String name : listener.pipeline().names()) {
-                final ChannelHandler handler = listener.pipeline().get(name);
-                if (handler instanceof QueryHandler) {
-                    return;
-                }
-                if (handler != null && ACCEPTOR_CLASS.isAssignableFrom(handler.getClass())) {
-                    try {
-                        initializer = (ChannelInitializer<Channel>) accessible(ACCEPTOR_CLASS.getDeclaredField("childHandler")).get(handler);
-                        final Map.Entry<AttributeKey<?>, ?>[] attrs = (Map.Entry<AttributeKey<?>, ?>[])
-                                accessible(ACCEPTOR_CLASS.getDeclaredField("childAttrs")).get(handler);
-                        for (var attr : attrs) {
-                            if (attr.getKey() == PipelineUtils.LISTENER) {
-                                info = (ListenerInfo) attr.getValue();
-                            }
-                        }
-                    } catch (IllegalAccessException | NoSuchFieldException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-            }
+            ListenerContext context = findListenerContext(listener);
+            if (context == null) return;
+            ChannelInitializer<Channel> initializer = context.initializer();
+            ListenerInfo info = context.info();
 
             if (initializer == null) {
                 RaknetifyBungeePlugin.LOGGER.severe("Unable to find channel initializer for listener %s".formatted(listener));
@@ -206,25 +161,135 @@ public class BungeeRaknetifyServer {
                 return;
             }
 
-            if (((InetSocketAddress) info.getSocketAddress()).getAddress().isAnyLocalAddress()) {
-                for (NetworkInterface networkInterface : NetworkInterface.networkInterfaces().toList()) {
-                    final Iterator<InetAddress> iterator = networkInterface.getInetAddresses().asIterator();
-                    while (iterator.hasNext()) {
-                        final InetAddress address = iterator.next();
-                        try {
-                            startServer(instance, listener, initializer, info, address);
-                        } catch (Throwable t) {
-                            RaknetifyBungeePlugin.LOGGER.log(Level.SEVERE, "Failed to start Raknetify server", t);
-                        }
-                    }
-                }
-            } else {
-                startServer(instance, listener, initializer, info, null);
-            }
+            bindListenerAddresses(instance, listener, initializer, info);
 
         } catch (Throwable t) {
             if (throwErrors) throw new RuntimeException("Failed to start Raknetify server", t);
             else RaknetifyBungeePlugin.LOGGER.log(Level.SEVERE, "Failed to start Raknetify server", t);
+        }
+    }
+
+
+    /**
+     * Updates wildcard listeners after an address change, ignoring callbacks from an older plugin instance.
+     *
+     * @param instance running proxy used to initialize newly available listeners
+     * @param currentActiveIndex generation captured when this callback was registered
+     * @param event local interface address addition or removal
+     */
+    private static void onInterfaceChange(BungeeCord instance, int currentActiveIndex,
+                                          NetworkInterfaceListener.InterfaceAddressChangeEvent event) {
+        if (!active) {
+            NetworkInterfaceListener.removeListener(listener);
+        }
+
+        if (currentActiveIndex != activeIndex) return; // we can't remove ourselves now, is plugin reloaded?
+
+        if (event.added()) {
+            for (Channel channel : channels.keySet()) {
+                injectChannel(instance, channel, false);
+            }
+        } else {
+            for (ReferenceOpenHashSet<ChannelFuture> futures : channels.values()) {
+                for (ObjectIterator<ChannelFuture> iterator = futures.iterator(); iterator.hasNext(); ) {
+                    ChannelFuture future = iterator.next();
+                    if (((InetSocketAddress) future.channel().localAddress()).getAddress().equals(event.address())) {
+                        RaknetifyBungeePlugin.LOGGER.info("Closing Raknetify server %s".formatted(future.channel().localAddress()));
+                        future.channel().close();
+                        iterator.remove();
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Rejects inactive, non-IP, or duplicate port-override listeners before inspecting their pipeline.
+     *
+     * @param listener proxy listener considered for a companion UDP socket
+     * @return whether the listener can create a new RakNet endpoint
+     */
+    private static boolean isListenerCandidate(Channel listener) {
+        if (!active) return false;
+
+        final boolean hasPortOverride = portOverride > 0 && portOverride < 65535;
+        if (hasPortOverride && !channels.isEmpty()) return false; // avoid duplicate listeners
+
+        if (!(listener.localAddress() instanceof InetSocketAddress)) return false;
+        return true;
+    }
+
+    /**
+     * Reads the proxy acceptor's child initializer and listener metadata, excluding query sockets.
+     *
+     * @param listener bound proxy channel whose acceptor owns the Minecraft child pipeline
+     * @return recovered acceptor metadata, or null when the channel serves query traffic
+     * @throws RuntimeException if the proxy's acceptor fields cannot be inspected
+     */
+    private static ListenerContext findListenerContext(Channel listener) {
+        ChannelInitializer<Channel> initializer = null;
+        ListenerInfo info = null;
+
+        for (String name : listener.pipeline().names()) {
+            final ChannelHandler handler = listener.pipeline().get(name);
+            if (handler instanceof QueryHandler) {
+                return null;
+            }
+            if (handler != null && ACCEPTOR_CLASS.isAssignableFrom(handler.getClass())) {
+                try {
+                    initializer = (ChannelInitializer<Channel>) accessible(ACCEPTOR_CLASS.getDeclaredField("childHandler")).get(handler);
+                    final Map.Entry<AttributeKey<?>, ?>[] attrs = (Map.Entry<AttributeKey<?>, ?>[])
+                            accessible(ACCEPTOR_CLASS.getDeclaredField("childAttrs")).get(handler);
+                    for (var attr : attrs) {
+                        if (attr.getKey() == PipelineUtils.LISTENER) {
+                            info = (ListenerInfo) attr.getValue();
+                        }
+                    }
+                } catch (IllegalAccessException | NoSuchFieldException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
+        return new ListenerContext(initializer, info);
+    }
+
+    /**
+     * Keeps the child initializer paired with the listener attributes from the same acceptor scan.
+     *
+     * @param initializer Minecraft pipeline initializer, or null when no acceptor was found
+     * @param info proxy listener configuration, or null when its required attribute is absent
+     */
+    private record ListenerContext(ChannelInitializer<Channel> initializer, ListenerInfo info) {
+    }
+
+    /**
+     * Expands wildcard binds into one UDP endpoint per address while preserving per-address failure logging.
+     *
+     * @param instance running proxy supplying worker event loops
+     * @param listener original TCP listener that owns the companion UDP endpoints
+     * @param initializer child pipeline initializer recovered from the proxy acceptor
+     * @param info listener address and proxy connection options
+     * @throws java.net.SocketException if local network interfaces cannot be enumerated
+     * @throws NoSuchFieldException if a required event-loop field is absent for a specific-address bind
+     * @throws IllegalAccessException if that event-loop field cannot be read
+     */
+    private static void bindListenerAddresses(BungeeCord instance, Channel listener,
+                                              ChannelInitializer<Channel> initializer, ListenerInfo info)
+            throws java.net.SocketException, NoSuchFieldException, IllegalAccessException {
+        if (((InetSocketAddress) info.getSocketAddress()).getAddress().isAnyLocalAddress()) {
+            for (NetworkInterface networkInterface : NetworkInterface.networkInterfaces().toList()) {
+                final Iterator<InetAddress> iterator = networkInterface.getInetAddresses().asIterator();
+                while (iterator.hasNext()) {
+                    final InetAddress address = iterator.next();
+                    try {
+                        startServer(instance, listener, initializer, info, address);
+                    } catch (Throwable t) {
+                        RaknetifyBungeePlugin.LOGGER.log(Level.SEVERE, "Failed to start Raknetify server", t);
+                    }
+                }
+            }
+        } else {
+            startServer(instance, listener, initializer, info, null);
         }
     }
 
