@@ -25,6 +25,7 @@
 package com.ishland.raknetify.common.connection;
 
 import com.ishland.raknetify.common.Constants;
+import com.ishland.raknetify.api.PacketOrdering;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
 import io.netty.handler.timeout.ReadTimeoutHandler;
@@ -102,6 +103,7 @@ public class RakNetConnectionUtil {
 //            channel.pipeline().addLast("raknetify-flush-consolidation", new FlushConsolidationHandler(Integer.MAX_VALUE, true));
             channel.pipeline().addLast("raknetify-no-flush", new NoFlush());
             channel.pipeline().addLast(MultiChannelingStreamingCompression.NAME, new MultiChannelingStreamingCompression(Constants.RAKNET_GAME_PACKET_ID, Constants.RAKNET_STREAMING_COMPRESSION_PACKET_ID));
+            channel.pipeline().addLast(PayloadOrderingNegotiation.NAME, new PayloadOrderingNegotiation(PacketOrdering.snapshot()));
 //            channel.pipeline().addLast(MultiChannellingDataCodec.NAME, new MultiChannellingDataCodec(Constants.RAKNET_GAME_PACKET_ID));
             channel.pipeline().addLast("raknetify-frame-data-blocker", new FrameDataBlocker());
         }

@@ -15,6 +15,7 @@ dependencies {
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.3'
     testImplementation 'io.netty:netty-all:4.1.25.Final'
+    testRuntimeOnly 'com.google.guava:guava:31.1-jre'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 

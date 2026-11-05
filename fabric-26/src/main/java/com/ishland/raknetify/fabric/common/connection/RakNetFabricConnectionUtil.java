@@ -89,7 +89,7 @@ public class RakNetFabricConnectionUtil {
             channel.pipeline().addLast(NAME_RAKNETIFY_MULTI_CHANNEL_PACKET_CATURE, handler);
             onPipelineReorder(channel.pipeline());
             channel.pipeline().get(RakNetSimpleMultiChannelCodec.class)
-                    .addHandler(handler.getCustomPayloadHandler())
+                    .addHandler(handler.getCustomPayloadHandler(channel))
                     .addHandler(handler.getCaptureBasedHandler());
             channel.pipeline().addLast("raknetify-handle-compression-compatibility", new RakNetCompressionCompatibilityHandler());
             channel.pipeline().addBefore("packet_handler", RakNetFabricChannelEventListener.NAME, new RakNetFabricChannelEventListener());

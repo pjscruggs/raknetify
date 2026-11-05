@@ -94,10 +94,11 @@ public class MultiChannellingPacketCapture extends ChannelOutboundHandlerAdapter
     /**
      * Creates an identifier-aware classifier that activates only for captured custom-payload packets.
      *
-     * @return custom-payload classifier tied to this capture instance
+     * @param channel owning RakNet connection
+     * @return custom-payload classifier tied to this capture instance and its peer declarations
      */
-    public RakNetSimpleMultiChannelCodec.OverrideHandler getCustomPayloadHandler() {
-        return new CustomPayloadChannel.OverrideHandler(value -> packetClass == CustomPayloadS2CPacket.class || packetClass == CustomPayloadC2SPacket.class);
+    public RakNetSimpleMultiChannelCodec.OverrideHandler getCustomPayloadHandler(io.netty.channel.Channel channel) {
+        return new CustomPayloadChannel.OverrideHandler(value -> packetClass == CustomPayloadS2CPacket.class || packetClass == CustomPayloadC2SPacket.class, channel);
     }
 
     /**

@@ -25,11 +25,14 @@
 package com.ishland.raknetify.common.connection.multichannel;
 
 import com.ishland.raknetify.common.Constants;
+import com.ishland.raknetify.api.PacketOrdering;
+import com.ishland.raknetify.common.connection.PayloadOrderingNegotiation;
 import com.ishland.raknetify.common.connection.RakNetSimpleMultiChannelCodec;
 import com.ishland.raknetify.common.util.MathUtil;
 import io.netty.buffer.ByteBuf;
-import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
+import io.netty.channel.Channel;
 
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.IntPredicate;
 
@@ -37,20 +40,6 @@ import java.util.function.IntPredicate;
  * Routes known mod payload identifiers onto the same ordering channels as their related vanilla traffic.
  */
 public class CustomPayloadChannel {
-
-    /**
-     * Custom payload identifiers mapped to ordering channels, with zero deferring to ordinary routing.
-     */
-    public static final Object2IntOpenHashMap<String> identifier2channel;
-
-    static {
-        // See .fabric.common.connection.RakNetMultiChannel
-
-        identifier2channel = new Object2IntOpenHashMap<>();
-        identifier2channel.defaultReturnValue(0);
-        identifier2channel.put("porting_lib:extra_data_entity_spawn", 2);
-        identifier2channel.put("porting_lib:extra_entity_spawn_data", 2); // https://github.com/Fabricators-of-Create/Porting-Lib/commit/4b0cd845731f89eafd9fb39e13e1a7d87f5e14a4
-    }
 
     /**
      * Recognizes a protocol's custom-payload packets before looking up their namespaced identifiers.
@@ -61,6 +50,10 @@ public class CustomPayloadChannel {
          * Protocol-specific predicate identifying custom-payload packet IDs.
          */
         private final IntPredicate isCustomPayload;
+        /** Connection-local peer declarations, absent for classifiers used without a transport. */
+        private final Channel channel;
+        /** Local declarations take precedence over peer preferences and stay fixed for this classifier. */
+        private final Map<String, Integer> local;
 
         /**
          * Creates a classifier for the custom-payload IDs used by one protocol direction.
@@ -68,7 +61,19 @@ public class CustomPayloadChannel {
          * @param isCustomPayload predicate recognizing custom-payload packet IDs
          */
         public OverrideHandler(IntPredicate isCustomPayload) {
+            this(isCustomPayload, null);
+        }
+
+        /**
+         * Creates a classifier using local rules and declarations from this connection's peer.
+         *
+         * @param isCustomPayload predicate recognizing custom-payload packet IDs
+         * @param channel owning connection, or null to use local registrations only
+         */
+        public OverrideHandler(IntPredicate isCustomPayload, Channel channel) {
             this.isCustomPayload = Objects.requireNonNull(isCustomPayload);
+            this.channel = channel;
+            this.local = PacketOrdering.snapshot();
         }
 
         /**
@@ -85,7 +90,7 @@ public class CustomPayloadChannel {
             if (isCustomPayload.test(packetId)) {
                 final String identifier = MathUtil.readString(buf); // we assume modern custom payloads
                 if (Constants.DEBUG) System.out.println("Raknetify: Handling custom payload: " + identifier);
-                return identifier2channel.getInt(identifier);
+                return local.getOrDefault(identifier, PayloadOrderingNegotiation.remoteChannel(channel, identifier));
             } else {
                 return 0;
             }

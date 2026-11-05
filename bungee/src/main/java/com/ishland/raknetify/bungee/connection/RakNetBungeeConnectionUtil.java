@@ -146,7 +146,7 @@ public class RakNetBungeeConnectionUtil {
                         final int pluginMessageId = (int) accessible(Class.forName("net.md_5.bungee.protocol.Protocol$DirectionData").getDeclaredMethod("getId", Class.class, int.class))
                                 .invoke(directionDataToClient, PluginMessage.class, protocolVersion);
                         if (Constants.DEBUG) RaknetifyBungeePlugin.LOGGER.info("PluginMessage packetId=%d at version=%d".formatted(pluginMessageId, protocolVersion));
-                        multiChannelCodec.addHandler(new CustomPayloadChannel.OverrideHandler(value -> value == pluginMessageId));
+                        multiChannelCodec.addHandler(new CustomPayloadChannel.OverrideHandler(value -> value == pluginMessageId, channel));
 
                         // packet id -> channel id
                         multiChannelCodec.addHandler(new RakNetSimpleMultiChannelCodec.PacketIdBasedOverrideHandler(

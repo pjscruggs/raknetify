@@ -118,6 +118,7 @@ public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
         if (FabricLoader.getInstance().isDevelopmentEnvironment())
             auditMixins();
 
+        com.ishland.raknetify.fabric.common.util.PacketChannelEntrypoints.initialize();
         handleMappings();
 
         if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT && RaknetifyFabricMixinPlugin.AFTER_1_21_8) {
