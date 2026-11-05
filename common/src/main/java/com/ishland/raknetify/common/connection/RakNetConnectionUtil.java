@@ -108,6 +108,23 @@ public class RakNetConnectionUtil {
     }
 
     /**
+     * Removes Polymer's TCP HTTP detector after other mods have initialized the application pipeline.
+     * RakNet delivers reference-counted frames here, which the detector cannot forward or release.
+     * HTTP resource-pack downloads still use the separate TCP listener and retain its detector.
+     *
+     * @param channel initialized application channel, left unchanged for TCP connections
+     */
+    public static void removeTcpOnlyHandlers(Channel channel) {
+        if (!(channel.config() instanceof RakNet.Config)) {
+            return;
+        }
+        final String name = "polymer:autohost/protocol_switcher";
+        if (channel.pipeline().get(name) != null) {
+            channel.pipeline().remove(name);
+        }
+    }
+
+    /**
      * Finds the underlying transport channel and installs handlers before cross-thread delivery.
      *
      * @param appChannel application-facing channel or a transport channel without a threaded wrapper

@@ -52,7 +52,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
       - name: build
-        run: ./gradlew build
+        run: ./gradlew build :common:transportProbe
       - name: Linux server transports
         run: >-
           python3 .github/scripts/server-smoke.py
@@ -60,6 +60,14 @@ jobs:
           --work-dir "$RUNNER_TEMP/raknetify-smoke"
           --java-17 "${{ steps.java17.outputs.path }}/bin/java"
           --java-21 "${{ steps.java21.outputs.path }}/bin/java"
+      - name: Polymer shared-port compatibility
+        run: >-
+          python3 .github/scripts/server-smoke.py
+          --jar fabric-universal/build/libs/*.jar
+          --work-dir "$RUNNER_TEMP/raknetify-smoke/polymer"
+          --java-21 "${{ steps.java21.outputs.path }}/bin/java"
+          --versions 1.21.11 26.3
+          --polymer-lock .github/polymer-versions.json
       - name: capture server smoke logs
         if: always()
         uses: actions/upload-artifact@v4

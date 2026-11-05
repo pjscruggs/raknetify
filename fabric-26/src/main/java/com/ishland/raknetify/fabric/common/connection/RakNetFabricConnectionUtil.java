@@ -80,6 +80,7 @@ public class RakNetFabricConnectionUtil {
      */
     public static void postInitChannel(Channel channel, boolean isClientSide) {
         if (channel.config() instanceof RakNet.Config) {
+            RakNetConnectionUtil.removeTcpOnlyHandlers(channel);
             ViaFabricCompatInjector.inject(channel, isClientSide);
             channel.pipeline().replace("timeout", "timeout", new ChannelDuplexHandler()); // no-op
             channel.pipeline().replace("splitter", "splitter", new ChannelDuplexHandler()); // no-op

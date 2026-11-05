@@ -1,12 +1,16 @@
-"""Verify isolated Fabric server startup, TCP status, and the initial RakNet UDP handshake.
+"""Verify isolated Fabric server startup and Minecraft status over TCP and connected RakNet.
 
 Each version runs with native transport enabled and disabled. These checks establish
 listener and pipeline health, not a complete authenticated Minecraft play session.
+The optional pinned Polymer matrix also checks resource-pack downloads over shared-port HTTP.
 Every child server is stopped before the next transport or version uses the port.
 """
 
 import argparse
+import hashlib
+import io
 import json
+import os
 import queue
 import re
 import socket
@@ -16,6 +20,8 @@ import sys
 import threading
 import time
 import urllib.request
+import urllib.error
+import zipfile
 from pathlib import Path
 import shutil
 
@@ -23,7 +29,7 @@ import shutil
 MAGIC = bytes.fromhex('00ffff00fefefefefdfdfdfd12345678')
 """RakNet offline-message marker used by the connection-request exchange."""
 
-PROTOCOLS = {'1.18.2': 758, '1.21.1': 767, '26.1': 775, '26.1.1': 775, '26.1.2': 775, '26.2': 776, '26.3': 777,
+PROTOCOLS = {'1.18.2': 758, '1.21.1': 767, '1.21.11': 774, '26.1': 775, '26.1.1': 775, '26.1.2': 775, '26.2': 776, '26.3': 777,
              '26.4-snapshot-7': 1073742169}
 """Expected wire protocol numbers for the server versions in the smoke matrix."""
 
@@ -80,6 +86,45 @@ def check_udp(port):
         assert len(reply) == 28 and reply[0] == 6, reply.hex()
         assert reply[1:17] == MAGIC and reply[25] == 0, reply.hex()
         assert 128 <= struct.unpack('>H', reply[26:28])[0] <= 1200
+
+
+def check_connected_udp(port, version, java, probe_dir):
+    """Exercise Minecraft's application pipeline over the original single-channel RakNet wire format."""
+    classpath = os.pathsep.join(str(probe_dir.resolve() / part) for part in ('classes', 'lib/*'))
+    output = subprocess.check_output(
+        [java, '-cp', classpath, 'com.ishland.raknetify.common.connection.RaknetStatusProbe',
+         str(port), str(PROTOCOLS[version])], text=True, timeout=30)
+    status = json.loads(next(line for line in output.splitlines() if line.startswith('{')))
+    assert status['version']['protocol'] == PROTOCOLS[version], status
+    assert status['version']['name'] == version.replace('-snapshot-', ' Snapshot '), status
+
+
+def prepare_polymer(folder, dependencies):
+    """Install hash-pinned matching mods and enable Polymer's HTTP hosting on the Minecraft TCP port."""
+    for dependency in dependencies:
+        with urllib.request.urlopen(dependency['url'], timeout=60) as response:
+            data = response.read()
+        assert hashlib.sha512(data).hexdigest() == dependency['sha512'], dependency['filename']
+        (folder / 'mods' / dependency['filename']).write_bytes(data)
+    config = folder / 'config' / 'polymer'
+    config.mkdir(parents=True, exist_ok=True)
+    (config / 'auto-host.json').write_text(json.dumps({'enabled': True, 'type': 'polymer:netty'}))
+
+
+def check_polymer_http(port):
+    """Download the generated resource pack over TCP while RakNet uses UDP on the same port."""
+    url = f'http://127.0.0.1:{port}/eu.pb4.polymer.autohost/polymer/resources+pack.zip'
+    for attempt in range(60):
+        try:
+            with urllib.request.urlopen(url, timeout=10) as response:
+                assert response.headers.get('Server') == 'polymer-autohost'
+                with zipfile.ZipFile(io.BytesIO(response.read())) as pack:
+                    assert 'pack.mcmeta' in pack.namelist()
+            return
+        except urllib.error.HTTPError as error:
+            if error.code != 403 or attempt == 59:
+                raise
+            time.sleep(1)
 
 
 def start_server(folder, log, events, java):
@@ -153,7 +198,7 @@ def check_log(log, version):
         assert failure not in text, failure
 
 
-def check_server(folder, version, native, java):
+def check_server(folder, version, native, java, probe_dir, polymer=False):
     """Run one transport configuration through startup, network probes, and clean shutdown.
 
     The supplied folder is an isolated smoke-test installation. Its properties and
@@ -173,7 +218,12 @@ def check_server(folder, version, native, java):
         await_ready(process, events)
         check_tcp_when_ready(port, version)
         check_udp(port)
-        dump = subprocess.check_output([str(Path(java).with_name('jcmd')), str(process.pid), 'Thread.print'], text=True)
+        check_connected_udp(port, version, java, probe_dir)
+        if polymer:
+            check_polymer_http(port)
+        java_path = Path(shutil.which(java) or java)
+        jcmd = java_path.with_name('jcmd.exe' if os.name == 'nt' else 'jcmd')
+        dump = subprocess.check_output([str(jcmd), str(process.pid), 'Thread.print'], text=True)
         (folder / ('native-threads.log' if native else 'nio-threads.log')).write_text(dump)
         transport = 'Epoll' if native and sys.platform.startswith('linux') else 'NIO'
         assert 'Netty Server ' + transport + ' Raknetify' in dump, transport
@@ -182,7 +232,10 @@ def check_server(folder, version, native, java):
         assert process.wait(timeout=45) == 0
         reader.join(timeout=10)
         check_log(log, version)
-        print('PASS', version, transport, 'startup, TCP status, RakNet UDP response, shutdown', flush=True)
+        checks = 'startup, TCP and connected RakNet status, shutdown'
+        if polymer:
+            checks += ', Polymer HTTP resource-pack download'
+        print('PASS', version, transport, checks, flush=True)
     finally:
         stop_server(process, reader)
 
@@ -194,21 +247,26 @@ def main():
     parser.add_argument('--work-dir', type=Path, required=True)
     parser.add_argument('--java-17', default='java')
     parser.add_argument('--java-21', default='java')
+    parser.add_argument('--probe-dir', type=Path, default=Path('common/build/transport-probe'))
+    parser.add_argument('--polymer-lock', type=Path)
     supported = json.loads((Path(__file__).resolve().parents[2] / 'supported-versions.json').read_text())
     parser.add_argument('--versions', nargs='+', default=['1.18.2', '1.21.1'] + supported['modern']['gameVersions'])
     args = parser.parse_args()
+    polymer = json.loads(args.polymer_lock.read_text()) if args.polymer_lock else {}
     for version in args.versions:
         folder = args.work_dir / version
         (folder / 'mods').mkdir(parents=True, exist_ok=True)
         shutil.copy2(args.jar, folder / 'mods' / args.jar.name)
+        if args.polymer_lock:
+            prepare_polymer(folder, polymer[version])
         launcher = folder / 'fabric-server-launch.jar'
         if not launcher.exists():
             url = f'https://meta.fabricmc.net/v2/versions/loader/{version}/0.20.1/1.1.1/server/jar'
             with urllib.request.urlopen(url, timeout=60) as response:
                 launcher.write_bytes(response.read())
-        java = args.java_17 if version == '1.18.2' else args.java_21 if version == '1.21.1' else 'java'
-        check_server(folder, version, True, java)
-        check_server(folder, version, False, java)
+        java = args.java_17 if version == '1.18.2' else args.java_21 if version.startswith('1.21.') else 'java'
+        check_server(folder, version, True, java, args.probe_dir, bool(polymer))
+        check_server(folder, version, False, java, args.probe_dir, bool(polymer))
 
 
 if __name__ == '__main__':
