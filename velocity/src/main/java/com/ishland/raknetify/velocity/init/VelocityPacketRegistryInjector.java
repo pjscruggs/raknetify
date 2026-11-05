@@ -32,8 +32,17 @@ import java.util.function.Supplier;
 
 import static com.ishland.raknetify.common.util.ReflectionUtil.accessible;
 
+/**
+ * Makes Velocity decode respawn packets so world transitions are visible to transport synchronization.
+ */
 public class VelocityPacketRegistryInjector {
 
+    /**
+     * Adds missing respawn decoders to play registries that already know the corresponding encoder ID.
+     * Existing decoders and protocol IDs remain unchanged.
+     *
+     * @throws RuntimeException if Velocity's packet registry internals cannot be inspected or updated
+     */
     public static void inject() {
         try {
             final StateRegistry.PacketRegistry registry = (StateRegistry.PacketRegistry)

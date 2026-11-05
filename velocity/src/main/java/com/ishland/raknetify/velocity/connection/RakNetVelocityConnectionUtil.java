@@ -46,11 +46,22 @@ import network.ycc.raknet.RakNet;
 import java.util.Arrays;
 import java.util.Collections;
 
+/**
+ * Installs Velocity connection hooks around the shared RakNet transport pipeline.
+ */
 public class RakNetVelocityConnectionUtil {
 
+    /**
+     * Prevents construction of the proxy connection-initialization utility.
+     */
     private RakNetVelocityConnectionUtil() {
     }
 
+    /**
+     * Installs shared transport handlers and Minecraft framing before the proxy initializes its pipeline.
+     *
+     * @param channel accepted application channel, left unchanged when it is not a RakNet channel
+     */
     public static void initChannel(Channel channel) {
         if (channel.config() instanceof RakNet.Config) {
             RakNetConnectionUtil.initChannel(channel);
@@ -60,6 +71,13 @@ public class RakNetVelocityConnectionUtil {
         }
     }
 
+    /**
+     * Replaces TCP framing and timeout behavior after proxy initialization and attaches login hooks.
+     * The HAProxy stream decoder is removed when present because this channel carries RakNet frames.
+     *
+     * @param channel initialized client connection, left unchanged for TCP
+     * @param isClientSide reserved direction flag, currently unused by this server-side integration
+     */
     public static void postInitChannel(Channel channel, boolean isClientSide) {
         if (channel.config() instanceof RakNet.Config) {
             channel.pipeline().replace(Connections.READ_TIMEOUT, Connections.READ_TIMEOUT, new ChannelDuplexHandler()); // no-op
@@ -75,6 +93,12 @@ public class RakNetVelocityConnectionUtil {
         }
     }
 
+    /**
+     * Selects the client's protocol routing table and installs transport-derived ping updates.
+     * Unknown protocol numbers retain the default routing behavior and produce a warning.
+     *
+     * @param evt proxy login event supplying the connected player
+     */
     public static void onPlayerLogin(LoginEvent evt) {
         final ConnectedPlayer player = (ConnectedPlayer) evt.getPlayer();
         final Channel channel = player.getConnection().getChannel();
@@ -106,6 +130,12 @@ public class RakNetVelocityConnectionUtil {
         }
     }
 
+    /**
+     * Attaches backend keepalive handling after a RakNet player connects to a server.
+     * Missing backend connections are logged and left untouched.
+     *
+     * @param evt completed backend connection event for the player
+     */
     public static void onServerSwitch(ServerPostConnectEvent evt) {
         final ConnectedPlayer player = (ConnectedPlayer) evt.getPlayer();
         final VelocityServerConnection connectedServer = player.getConnectedServer();

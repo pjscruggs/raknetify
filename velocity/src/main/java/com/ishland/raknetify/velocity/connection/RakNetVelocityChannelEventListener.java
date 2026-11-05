@@ -45,12 +45,30 @@ import io.netty.channel.ChannelPromise;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 
+/**
+ * Adapts Velocity login, configuration, and world transitions to RakNet frame processing.
+ */
 public class RakNetVelocityChannelEventListener extends ChannelDuplexHandler {
 
+    /**
+     * Pipeline name for Velocity's client-facing transport lifecycle handler.
+     */
     public static final String NAME = "raknetify-velocity-event-listener";
 
+    /**
+     * Captured client login secret used when Velocity reports that encryption has been enabled.
+     */
     private SecretKey encryptionKey = null;
 
+    /**
+     * Suppresses redundant vanilla compression and synchronizes transport ordering at phase boundaries.
+     * The available-command packet triggers multichannel negotiation before play traffic follows.
+     *
+     * @param ctx client-facing outbound context
+     * @param msg decoded Minecraft packet sent by the proxy
+     * @param promise write completion notification, completed locally for a suppressed compression packet
+     * @throws Exception if superclass outbound forwarding fails
+     */
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
         if (msg instanceof SetCompressionPacket) {
@@ -72,6 +90,14 @@ public class RakNetVelocityChannelEventListener extends ChannelDuplexHandler {
         super.write(ctx, msg, promise);
     }
 
+    /**
+     * Captures the encrypted shared secret before Velocity processes the client's login response.
+     * Authentication remains the proxy's responsibility. Capture failures are logged and forwarding continues.
+     *
+     * @param ctx client-facing inbound context
+     * @param msg decoded encryption response or other incoming message
+     * @throws Exception if superclass inbound forwarding fails
+     */
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         if (msg instanceof EncryptionResponsePacket packet) {
@@ -85,6 +111,13 @@ public class RakNetVelocityChannelEventListener extends ChannelDuplexHandler {
         super.channelRead(ctx, msg);
     }
 
+    /**
+     * Reconciles Velocity codec changes with RakNet compression, framing, and per-frame encryption.
+     *
+     * @param ctx client-facing context whose pipeline is being updated
+     * @param evt Velocity connection event describing a codec-state transition
+     * @throws Exception if event forwarding or frame-encryption initialization fails
+     */
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
         super.userEventTriggered(ctx, evt);

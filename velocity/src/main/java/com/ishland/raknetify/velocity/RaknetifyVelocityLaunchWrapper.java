@@ -34,8 +34,15 @@ import static com.ishland.raknetify.velocity.RaknetifyVelocityPlugin.INSTANCE;
 import static com.ishland.raknetify.velocity.RaknetifyVelocityPlugin.LOGGER;
 import static com.ishland.raknetify.velocity.RaknetifyVelocityPlugin.PROXY;
 
+/**
+ * Initializes Velocity integration after the plugin's dependency-isolating class loader is selected.
+ */
 public class RaknetifyVelocityLaunchWrapper {
 
+    /**
+     * Checks required Velocity internals, loads routing tables, and registers connection lifecycle hooks.
+     * An unsupported proxy receives startup and listener-bound diagnostics instead of partial injection.
+     */
     public static void launch() {
         if (!isCompatible()) {
             Runnable runnable = () -> {
@@ -56,6 +63,11 @@ public class RaknetifyVelocityLaunchWrapper {
         PROXY.getEventManager().register(INSTANCE, ServerPostConnectEvent.class, PostOrder.LAST, RakNetVelocityConnectionUtil::onServerSwitch);
     }
 
+    /**
+     * Checks for the Velocity implementation classes required by this integration.
+     *
+     * @return true when encryption utilities and modern plugin-message packets are available
+     */
     private static boolean isCompatible() {
         try {
             Class.forName("com.velocitypowered.proxy.crypto.EncryptionUtils");

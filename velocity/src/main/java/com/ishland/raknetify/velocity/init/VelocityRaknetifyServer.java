@@ -53,10 +53,19 @@ import java.util.concurrent.TimeUnit;
 
 import static com.ishland.raknetify.common.util.ReflectionUtil.accessible;
 
+/**
+ * Mirrors Velocity's Minecraft listener with UDP endpoints using the proxy's own network transport.
+ */
 public class VelocityRaknetifyServer {
 
+    /**
+     * Optional UDP-only port from raknetify.velocity.portOverride, with invalid values ignored.
+     */
     private static final int portOverride = Integer.getInteger("raknetify.velocity.portOverride", -1);
 
+    /**
+     * Accessible ChannelInitializer hook used to reuse Velocity's standard connection setup.
+     */
     private static final Method INIT_CHANNEL;
 
     static {
@@ -67,8 +76,17 @@ public class VelocityRaknetifyServer {
         }
     }
 
+    /**
+     * Bound UDP endpoints, guarded by this set during binding, address removal, and shutdown.
+     */
     private static final ReferenceOpenHashSet<ChannelFuture> channels = new ReferenceOpenHashSet<>();
+    /**
+     * Original Minecraft listener address used to recognize wildcard interface changes.
+     */
     private static volatile InetSocketAddress currentServerAddress = null;
+    /**
+     * Whether interface changes should create or remove companion UDP endpoints.
+     */
     private static volatile boolean active = false;
 
     static {
@@ -99,6 +117,13 @@ public class VelocityRaknetifyServer {
         });
     }
 
+    /**
+     * Creates UDP listeners when Velocity binds its Minecraft listener, expanding wildcard addresses.
+     * Individual interface binding failures are logged while other addresses are still attempted.
+     *
+     * @param evt bound-listener event, ignored for non-Minecraft listener types
+     * @throws RuntimeException if wildcard interface enumeration fails
+     */
     public static void start(ListenerBoundEvent evt) {
         if (evt.getListenerType() != ListenerType.MINECRAFT) return;
         Preconditions.checkArgument(RaknetifyVelocityPlugin.PROXY instanceof VelocityServer);
@@ -126,6 +151,13 @@ public class VelocityRaknetifyServer {
         }
     }
 
+    /**
+     * Binds one UDP endpoint with Velocity's datagram factory, event loops, and child initializer.
+     * Duplicate addresses are skipped while holding the channel-set lock. Bind I/O failures are logged.
+     *
+     * @param address concrete interface address and default Minecraft port
+     * @throws RuntimeException if proxy reflection or a non-I/O initialization step fails
+     */
     private static void startServer(InetSocketAddress address) {
         try {
             final ConnectionManager cm = (ConnectionManager) accessible(VelocityServer.class.getDeclaredField("cm")).get(RaknetifyVelocityPlugin.PROXY);
@@ -152,6 +184,12 @@ public class VelocityRaknetifyServer {
                         }))
                         .group(bossGroup, workerGroup)
                         .childHandler(new ChannelInitializer<>() {
+                            /**
+                             * Wraps Velocity's accepted-channel initialization with RakNet transport and codec setup.
+                             *
+                             * @param channel accepted RakNet application channel
+                             * @throws Exception if invoking Velocity's child initializer fails
+                             */
                             @Override
                             protected void initChannel(Channel channel) throws Exception {
                                 RakNetVelocityConnectionUtil.initChannel(channel);
@@ -176,6 +214,11 @@ public class VelocityRaknetifyServer {
         }
     }
 
+    /**
+     * Disables interface-change handling and closes all UDP endpoints with the Minecraft listener.
+     *
+     * @param evt closed-listener event, ignored for non-Minecraft listener types
+     */
     public static void stop(ListenerCloseEvent evt) {
         if (evt.getListenerType() != ListenerType.MINECRAFT) return;
         Preconditions.checkArgument(RaknetifyVelocityPlugin.PROXY instanceof VelocityServer);
@@ -190,6 +233,11 @@ public class VelocityRaknetifyServer {
         }
     }
 
+    /**
+     * Closes a UDP endpoint and waits for completion, logging any interruption.
+     *
+     * @param channel bind future identifying the listener to close
+     */
     private static void closeServer(ChannelFuture channel) {
         RaknetifyVelocityPlugin.LOGGER.info("Closing Raknetify server {}", channel.channel().localAddress());
         try {

@@ -32,10 +32,19 @@ import java.lang.reflect.Method;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Publishes RakNet RTT plus its standard deviation as the proxy-visible player ping.
+ */
 public class RakNetVelocityPingUpdater extends ChannelDuplexHandler {
 
+    /**
+     * Pipeline name for the transport-based player ping updater.
+     */
     public static final String NAME = "raknetify-velocity-ping-updater";
 
+    /**
+     * Accessible Velocity player mutator used to publish the transport-based ping.
+     */
     private static final Method PLAYER_SET_PING;
 
     static {
@@ -46,14 +55,30 @@ public class RakNetVelocityPingUpdater extends ChannelDuplexHandler {
         }
     }
 
+    /**
+     * Player whose proxy-visible ping follows this connection's transport measurements.
+     */
     private final ConnectedPlayer player;
 
+    /**
+     * Once-per-second event-loop task, or null before installation and after removal.
+     */
     ScheduledFuture<?> updateTask = null;
 
+    /**
+     * Associates transport ping samples with an authenticated proxy player.
+     *
+     * @param player player record whose ping is updated while this handler is installed
+     */
     public RakNetVelocityPingUpdater(ConnectedPlayer player) {
         this.player = Objects.requireNonNull(player);
     }
 
+    /**
+     * Schedules millisecond ping updates using RakNet RTT and its standard deviation.
+     *
+     * @param ctx installed context whose channel supplies transport measurements and scheduling
+     */
     public void handlerAdded(ChannelHandlerContext ctx) {
         if (ctx.channel().config() instanceof RakNet.Config config) {
             updateTask = ctx.channel().eventLoop().scheduleAtFixedRate(
@@ -69,6 +94,11 @@ public class RakNetVelocityPingUpdater extends ChannelDuplexHandler {
         }
     }
 
+    /**
+     * Cancels further ping updates when the player's handler is removed.
+     *
+     * @param ctx removed handler context, unused because the task is already retained
+     */
     public void handlerRemoved(ChannelHandlerContext ctx) {
         if (updateTask != null) {
             updateTask.cancel(false);
