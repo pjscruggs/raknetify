@@ -25,33 +25,36 @@
 package com.ishland.raknetify.common.data;
 
 import com.google.gson.Gson;
+
 import it.unimi.dsi.fastutil.ints.Int2IntArrayMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectArrayMap;
-import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 
-/**
- * Stores packet-ID routing tables by Minecraft protocol number for proxy-side classification.
- */
+/** Stores packet-ID routing tables by Minecraft protocol number for proxy-side classification. */
 public class ProtocolMultiChannelMappings {
 
     /**
-     * Bundled routing tables loaded once from raknetify-channel-mappings.json, or empty after an I/O failure.
+     * Bundled routing tables loaded once from raknetify-channel-mappings.json, or empty after an
+     * I/O failure.
      */
     public static final ProtocolMultiChannelMappings INSTANCE;
 
     static {
-        final InputStream resource = ProtocolMultiChannelMappings.class.getClassLoader().getResourceAsStream("raknetify-channel-mappings.json");
+        final InputStream resource =
+                ProtocolMultiChannelMappings.class
+                        .getClassLoader()
+                        .getResourceAsStream("raknetify-channel-mappings.json");
         if (resource == null) {
             System.err.println("Raknetify: Failed to load raknetify channel mappings");
             INSTANCE = new ProtocolMultiChannelMappings();
         } else {
             ProtocolMultiChannelMappings read = new ProtocolMultiChannelMappings();
-            try (var in = resource;
-                    var reader = new InputStreamReader(resource)) {
+            try (resource;
+                    var reader = new InputStreamReader(resource, StandardCharsets.UTF_8)) {
                 final Gson gson = new Gson();
                 read = gson.fromJson(reader, ProtocolMultiChannelMappings.class);
             } catch (IOException e) {
@@ -63,28 +66,20 @@ public class ProtocolMultiChannelMappings {
     }
 
     /**
-     * Forces class initialization and loading of the bundled routing tables before connections arrive.
+     * Forces class initialization and loading of the bundled routing tables before connections
+     * arrive.
      */
-    public static void init() {
-    }
+    public static void init() {}
 
-    /**
-     * Minecraft protocol numbers mapped to separate clientbound and serverbound routing tables.
-     */
+    /** Minecraft protocol numbers mapped to separate clientbound and serverbound routing tables. */
     public Int2ObjectArrayMap<VersionMapping> mappings = new Int2ObjectArrayMap<>();
 
-    /**
-     * Packet-ID routing tables for both directions of one Minecraft protocol version.
-     */
+    /** Packet-ID routing tables for both directions of one Minecraft protocol version. */
     public static class VersionMapping {
-        /**
-         * Server-to-client packet IDs mapped to ordering channels or special delivery policies.
-         */
+        /** Server-to-client packet IDs mapped to ordering channels or special delivery policies. */
         public Int2IntArrayMap s2c = new Int2IntArrayMap();
-        /**
-         * Client-to-server packet IDs mapped to ordering channels or special delivery policies.
-         */
+
+        /** Client-to-server packet IDs mapped to ordering channels or special delivery policies. */
         public Int2IntArrayMap c2s = new Int2IntArrayMap();
     }
-
 }

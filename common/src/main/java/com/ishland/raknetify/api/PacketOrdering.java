@@ -30,14 +30,15 @@ import java.util.Objects;
 import java.util.regex.Pattern;
 
 /**
- * Declares which vanilla traffic group must remain ordered with a mod's custom payloads.
- * The available groups are {@code ui} for world-independent menus and interactions,
- * {@code entity} for entity spawn, removal, and movement, {@code world_interaction} for
- * inventories and other world-dependent interactions, {@code effects} for sound and particles,
- * and {@code chunk} for terrain, block, and lighting updates. All groups retain reliable ordered delivery.
+ * Declares which vanilla traffic group must remain ordered with a mod's custom payloads. The
+ * available groups are {@code ui} for world-independent menus and interactions, {@code entity} for
+ * entity spawn, removal, and movement, {@code world_interaction} for inventories and other
+ * world-dependent interactions, {@code effects} for sound and particles, and {@code chunk} for
+ * terrain, block, and lighting updates. All groups retain reliable ordered delivery.
  *
  * <p>Fabric mods can implement the following provider using only JDK types and list its class under
- * the {@code raknetify:packet_channels} key in their {@code fabric.mod.json} entrypoints:</p>
+ * the {@code raknetify:packet_channels} key in their {@code fabric.mod.json} entrypoints:
+ *
  * <pre>{@code
  * public final class OrderingProvider implements Consumer<BiConsumer<String, String>> {
  *     public void accept(BiConsumer<String, String> register) {
@@ -45,57 +46,80 @@ import java.util.regex.Pattern;
  *     }
  * }
  * }</pre>
- * <p>Fabric does not invoke this entrypoint when Raknetify2 is absent. Providers should only declare
- * identifiers and groups, without depending on another mod's initialization having finished.
- * Plugins can call {@link #register(String, String)} during their own initialization instead.</p>
  *
- * <p>Each new RakNet connection advertises its declarations before Minecraft traffic. Updated servers
- * and proxies use peer declarations for custom payloads that have no local rule. This lets a modded
- * client describe its requirements to a proxy whose backend does not run Raknetify2. Local declarations
- * take precedence, and rules never affect another connection or classify ordinary vanilla packets.
- * Older peers ignore the advertisement and retain their existing routing behavior.</p>
+ * <p>Fabric does not invoke this entrypoint when Raknetify2 is absent. Providers should only
+ * declare identifiers and groups, without depending on another mod's initialization having
+ * finished. Plugins can call {@link #register(String, String)} during their own initialization
+ * instead.
+ *
+ * <p>Each new RakNet connection advertises its declarations before Minecraft traffic. Updated
+ * servers and proxies use peer declarations for custom payloads that have no local rule. This lets
+ * a modded client describe its requirements to a proxy whose backend does not run Raknetify2. Local
+ * declarations take precedence, and rules never affect another connection or classify ordinary
+ * vanilla packets. Older peers ignore the advertisement and retain their existing routing behavior.
  */
 public final class PacketOrdering {
 
     /** Maximum declarations sent by one endpoint during connection setup. */
     public static final int MAX_ENTRIES = 128;
+
     /** Maximum ASCII identifier length accepted by the declaration protocol. */
     public static final int MAX_IDENTIFIER_LENGTH = 255;
+
     /** Namespaced custom-payload syntax shared by the supported Minecraft versions. */
     private static final Pattern IDENTIFIER = Pattern.compile("[a-z0-9_.-]+:[a-z0-9/._-]+");
+
     /** Named groups retain their existing vanilla ordering-channel assignments. */
-    private static final Map<String, Integer> GROUPS = Map.of(
-            "ui", 1, "entity", 2, "world_interaction", 3, "effects", 4, "chunk", 7);
-    /** Startup declarations copied into each new connection instead of changing active connections. */
-    private static final Map<String, Integer> RULES = new LinkedHashMap<>(Map.of(
-            "porting_lib:extra_data_entity_spawn", 2, "porting_lib:extra_entity_spawn_data", 2));
+    private static final Map<String, Integer> GROUPS =
+            Map.of("ui", 1, "entity", 2, "world_interaction", 3, "effects", 4, "chunk", 7);
+
+    /**
+     * Registration lock stays private so unrelated code cannot block connection snapshots via the
+     * class monitor.
+     */
+    private static final Object RULES_LOCK = new Object();
+
+    /**
+     * Startup declarations copied into each new connection instead of changing active connections.
+     */
+    private static final Map<String, Integer> RULES =
+            new LinkedHashMap<>(
+                    Map.of(
+                            "porting_lib:extra_data_entity_spawn",
+                            2,
+                            "porting_lib:extra_entity_spawn_data",
+                            2));
 
     /** Prevents construction of the process-wide registration API. */
-    private PacketOrdering() {
-    }
+    private PacketOrdering() {}
 
     /**
      * Registers a payload during mod or plugin initialization. Repeating the same rule is harmless.
-     * Fabric mods can expose a {@code raknetify:packet_channels} entrypoint implementing
-     * {@code Consumer<BiConsumer<String, String>>} and call the supplied registrar instead.
-     * The named group keeps reliable ordered delivery. Existing connections retain their snapshot.
+     * Fabric mods can expose a {@code raknetify:packet_channels} entrypoint implementing {@code
+     * Consumer<BiConsumer<String, String>>} and call the supplied registrar instead. The named
+     * group keeps reliable ordered delivery. Existing connections retain their snapshot.
      *
      * @param identifier namespaced mod payload identifier, excluding Minecraft's reserved namespace
      * @param group one of ui, entity, world_interaction, effects, or chunk
-     * @throws IllegalArgumentException if the identifier, group, duplicate rule, or entry count is invalid
+     * @throws IllegalArgumentException if the identifier, group, duplicate rule, or entry count is
+     *     invalid
      */
-    public static synchronized void register(String identifier, String group) {
+    public static void register(final String identifier, final String group) {
         Integer channel = GROUPS.get(Objects.requireNonNull(group));
-        if (channel == null) throw new IllegalArgumentException("Unknown packet ordering group: " + group);
+        if (channel == null) {
+            throw new IllegalArgumentException("Unknown packet ordering group: " + group);
+        }
         validate(identifier, channel);
-        Integer previous = RULES.get(identifier);
-        if (previous != null && !previous.equals(channel)) {
-            throw new IllegalArgumentException("Conflicting packet ordering for " + identifier);
+        synchronized (RULES_LOCK) {
+            Integer previous = RULES.get(identifier);
+            if (previous != null && !previous.equals(channel)) {
+                throw new IllegalArgumentException("Conflicting packet ordering for " + identifier);
+            }
+            if (previous == null && RULES.size() >= MAX_ENTRIES) {
+                throw new IllegalArgumentException("Too many packet ordering declarations");
+            }
+            RULES.put(identifier, channel);
         }
-        if (previous == null && RULES.size() >= MAX_ENTRIES) {
-            throw new IllegalArgumentException("Too many packet ordering declarations");
-        }
-        RULES.put(identifier, channel);
     }
 
     /**
@@ -103,8 +127,10 @@ public final class PacketOrdering {
      *
      * @return registered custom payloads mapped to reliable ordering channels
      */
-    public static synchronized Map<String, Integer> snapshot() {
-        return Map.copyOf(RULES);
+    public static Map<String, Integer> snapshot() {
+        synchronized (RULES_LOCK) {
+            return Map.copyOf(RULES);
+        }
     }
 
     /**
@@ -112,11 +138,13 @@ public final class PacketOrdering {
      *
      * @param identifier complete custom-payload identifier
      * @param channel existing reliable ordering channel associated with a named group
-     * @throws IllegalArgumentException if the declaration refers to a reserved name or unsupported group
+     * @throws IllegalArgumentException if the declaration refers to a reserved name or unsupported
+     *     group
      */
-    public static void validate(String identifier, int channel) {
+    public static void validate(final String identifier, final int channel) {
         Objects.requireNonNull(identifier);
-        if (identifier.length() > MAX_IDENTIFIER_LENGTH || !IDENTIFIER.matcher(identifier).matches()
+        if (identifier.length() > MAX_IDENTIFIER_LENGTH
+                || !IDENTIFIER.matcher(identifier).matches()
                 || identifier.startsWith("minecraft:")) {
             throw new IllegalArgumentException("Invalid mod payload identifier: " + identifier);
         }
