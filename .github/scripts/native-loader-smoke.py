@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import threading
+from types import SimpleNamespace
 import urllib.request
 import uuid
 import zipfile
@@ -90,10 +91,8 @@ def server_metadata(folder, metadata):
         return json.loads(archive.read('version.json'))
 
 
-def server(args, lock, metadata):
-    """Require TCP and connected RakNet responses from the production server JAR, followed by clean shutdown."""
-    folder = install(args, lock, 'server')
-    expected = server_metadata(folder, metadata)
+def configure_server(folder):
+    """Limit the disposable offline server to loopback and the single fixture identity on a minimal flat world."""
     player = str(uuid.UUID(bytes=hashlib.md5(b'OfflinePlayer:TransportProbe').digest(), version=3))
     (folder / 'whitelist.json').write_text(json.dumps([{'uuid': player, 'name': 'TransportProbe'}]), encoding='utf-8')
     (folder / 'eula.txt').write_text('eula=true\n', encoding='utf-8')
@@ -102,6 +101,13 @@ def server(args, lock, metadata):
         'simulation-distance=2\nspawn-chunk-radius=0\nlevel-name=transport-test-world\n'
         'level-type=minecraft:flat\ngenerator-settings={"layers":[{"block":"minecraft:bedrock",'
         '"height":1}],"biome":"minecraft:plains"}\n', encoding='utf-8')
+
+
+def server(args, lock, metadata):
+    """Require TCP and connected RakNet responses from the production server JAR, followed by clean shutdown."""
+    folder = install(args, lock, 'server')
+    expected = server_metadata(folder, metadata)
+    configure_server(folder)
     group = 'minecraftforge' if args.loader == 'forge' else 'neoforged'
     filename = 'win_args.txt' if sys.platform == 'win32' else 'unix_args.txt'
     arguments = folder / 'libraries/net' / group / args.loader / lock['version'] / filename
@@ -121,11 +127,33 @@ def server(args, lock, metadata):
         smoke.check_connected_udp(28990, expected, args.java, args.probe_dir)
         if args.side == 'both':
             client(args, lock, metadata, join=True)
+            shutil.copy2(args.work_dir / 'client.log', args.work_dir / 'native-client.log')
     finally:
         smoke.stop_server(process, reader)
     assert process.returncode == 0, process.returncode
     check_failures(log)
     print('PASS', args.loader, lock['minecraft'], 'packaged server TCP, RakNet and clean shutdown', flush=True)
+
+
+def fabric_server(args, lock, metadata):
+    """Require the native client to join a Fabric server so loader negotiation cannot silently break interoperability."""
+    smoke = sibling('server-smoke')
+    settings = SimpleNamespace(work_dir=args.work_dir / 'fabric-server', jar=args.fabric_jar,
+                               encryption_legacy=None, encryption_modern=None)
+    folder = smoke.prepare_server(settings, lock['minecraft'], {}, {}, {})
+    configure_server(folder)
+    log = args.work_dir / 'fabric-server.log'
+    events = queue.Queue()
+    process, reader = smoke.start_server(folder, log, events, args.java)
+    try:
+        smoke.await_ready(process, events)
+        client(args, lock, metadata, join=True)
+        shutil.copy2(args.work_dir / 'client.log', args.work_dir / 'fabric-client.log')
+    finally:
+        smoke.stop_server(process, reader)
+    assert process.returncode == 0, process.returncode
+    check_failures(log)
+    print('PASS', args.loader, 'client joined Fabric server over RakNet', flush=True)
 
 
 def rule_matches(rule):
@@ -245,6 +273,7 @@ def main():
     parser.add_argument('--loader', choices=['forge', 'neoforge'], required=True)
     parser.add_argument('--jar', type=Path, required=True)
     parser.add_argument('--fixture', type=Path, required=True)
+    parser.add_argument('--fabric-jar', type=Path)
     parser.add_argument('--probe-dir', type=Path, required=True)
     parser.add_argument('--work-dir', type=Path, required=True)
     parser.add_argument('--assets-dir', type=Path)
@@ -261,6 +290,8 @@ def main():
         server(args, lock, metadata)
     if args.side == 'client':
         client(args, lock, metadata)
+    if args.fabric_jar and args.side == 'both':
+        fabric_server(args, lock, metadata)
 
 
 if __name__ == '__main__':
