@@ -25,6 +25,7 @@
 package com.ishland.raknetify.fabric.mixin.server;
 
 import com.ishland.raknetify.common.Constants;
+import com.ishland.raknetify.common.proxy.ProxyProtocol;
 import com.ishland.raknetify.common.connection.RakNetConnectionUtil;
 import com.ishland.raknetify.common.connection.RaknetifyEventLoops;
 import com.ishland.raknetify.common.util.ThreadLocalUtil;
@@ -234,7 +235,7 @@ public abstract class MixinServerNetworkIo {
         final boolean useEpoll = Epoll.isAvailable() && this.server.isUsingNativeTransport();
         return ThreadLocalUtil.isInitializingRaknet()
                 ? instance.channelFactory(() -> {
-            RakNetServerChannel channel = new RakNetServerChannel(() -> {
+            RakNetServerChannel channel = ProxyProtocol.create(() -> {
                 final DatagramChannel channel1 = useEpoll ? new EpollDatagramChannel() : new NioDatagramChannel();
                 channel1.config().setOption(ChannelOption.SO_REUSEADDR, true);
                 channel1.config().setOption(ChannelOption.IP_TOS, RakNetConnectionUtil.DEFAULT_IP_TOS);

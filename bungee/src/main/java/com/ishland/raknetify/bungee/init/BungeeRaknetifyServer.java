@@ -48,7 +48,7 @@ import net.md_5.bungee.api.ProxyServer;
 import net.md_5.bungee.api.config.ListenerInfo;
 import net.md_5.bungee.netty.PipelineUtils;
 import net.md_5.bungee.query.QueryHandler;
-import network.ycc.raknet.server.channel.RakNetServerChannel;
+import com.ishland.raknetify.common.proxy.ProxyProtocol;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -369,7 +369,7 @@ public class BungeeRaknetifyServer {
         final ReflectiveChannelFactory<? extends DatagramChannel> factory = new ReflectiveChannelFactory<>(PipelineUtils.getDatagramChannel());
         final InetAddress actualAddress = address == null ? ((InetSocketAddress) info.getSocketAddress()).getAddress() : address;
         final ChannelFuture future = new ServerBootstrap()
-                .channelFactory(() -> new RakNetServerChannel(() -> {
+                .channelFactory(() -> ProxyProtocol.create(() -> {
                     final DatagramChannel channel = factory.newChannel();
                     channel.config().setOption(ChannelOption.IP_TOS, RakNetConnectionUtil.DEFAULT_IP_TOS);
                     channel.config().setRecvByteBufAllocator(new FixedRecvByteBufAllocator(Constants.LARGE_MTU + 512).maxMessagesPerRead(128));

@@ -35,6 +35,7 @@ import com.ishland.raknetify.common.data.ProtocolMultiChannelMappings;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.handler.codec.haproxy.HAProxyMessageDecoder;
+import com.ishland.raknetify.common.proxy.ProxyProtocol;
 import net.md_5.bungee.ServerConnection;
 import net.md_5.bungee.UserConnection;
 import net.md_5.bungee.api.event.PostLoginEvent;
@@ -99,7 +100,7 @@ public class RakNetBungeeConnectionUtil {
 
     /**
      * Replaces TCP framing and timeout behavior after proxy initialization and attaches login hooks.
-     * The HAProxy stream decoder is removed when present because this channel carries RakNet frames.
+     * A required HAProxy stream decoder is removed only after the UDP layer has validated the identity.
      *
      * @param channel initialized client connection, left unchanged for TCP
      * @param isClientSide reserved direction flag, currently unused by this server-side integration
@@ -109,8 +110,10 @@ public class RakNetBungeeConnectionUtil {
             channel.pipeline().replace(PipelineUtils.TIMEOUT_HANDLER, PipelineUtils.TIMEOUT_HANDLER, new ChannelDuplexHandler()); // no-op
             channel.pipeline().replace(PipelineUtils.FRAME_DECODER, PipelineUtils.FRAME_DECODER, new ChannelDuplexHandler()); // no-op
             channel.pipeline().addBefore(PipelineUtils.FRAME_PREPENDER_AND_COMPRESS, StripFrameHandler.NAME, StripFrameHandler.INSTANCE); // no-op
-            if (channel.pipeline().get(HAProxyMessageDecoder.class) != null)
+            if (channel.pipeline().get(HAProxyMessageDecoder.class) != null) {
+                ProxyProtocol.requireForwarded(channel);
                 channel.pipeline().remove(HAProxyMessageDecoder.class);
+            }
 //            channel.pipeline().replace(PipelineUtils.WRITE_TIMEOUT_HANDLER, PipelineUtils.WRITE_TIMEOUT_HANDLER, new DebugWriteTimeoutHandler(30));
             channel.pipeline().addBefore(PipelineUtils.BOSS_HANDLER, RakNetBungeeClientChannelEventListener.NAME, new RakNetBungeeClientChannelEventListener());
 //            System.out.println(channel.pipeline().names());

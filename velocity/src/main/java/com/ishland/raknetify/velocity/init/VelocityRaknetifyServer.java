@@ -42,7 +42,7 @@ import io.netty.channel.FixedRecvByteBufAllocator;
 import io.netty.channel.socket.DatagramChannel;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
-import network.ycc.raknet.server.channel.RakNetServerChannel;
+import com.ishland.raknetify.common.proxy.ProxyProtocol;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -176,7 +176,7 @@ public class VelocityRaknetifyServer {
                 }
 
                 ChannelFuture future = new ServerBootstrap()
-                        .channelFactory(() -> new RakNetServerChannel(() -> {
+                        .channelFactory(() -> ProxyProtocol.create(() -> {
                             final DatagramChannel channel = datagramChannelFactory.newChannel();
                             channel.config().setOption(ChannelOption.IP_TOS, RakNetConnectionUtil.DEFAULT_IP_TOS);
                             channel.config().setRecvByteBufAllocator(new FixedRecvByteBufAllocator(Constants.LARGE_MTU + 512).maxMessagesPerRead(128));

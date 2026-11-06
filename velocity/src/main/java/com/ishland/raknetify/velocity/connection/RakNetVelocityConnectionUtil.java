@@ -41,6 +41,7 @@ import com.velocitypowered.proxy.protocol.packet.PluginMessagePacket;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.handler.codec.haproxy.HAProxyMessageDecoder;
+import com.ishland.raknetify.common.proxy.ProxyProtocol;
 import network.ycc.raknet.RakNet;
 
 import java.util.Arrays;
@@ -73,7 +74,7 @@ public class RakNetVelocityConnectionUtil {
 
     /**
      * Replaces TCP framing and timeout behavior after proxy initialization and attaches login hooks.
-     * The HAProxy stream decoder is removed when present because this channel carries RakNet frames.
+     * A required HAProxy stream decoder is removed only after the UDP layer has validated the identity.
      *
      * @param channel initialized client connection, left unchanged for TCP
      * @param isClientSide reserved direction flag, currently unused by this server-side integration
@@ -83,8 +84,10 @@ public class RakNetVelocityConnectionUtil {
             channel.pipeline().replace(Connections.READ_TIMEOUT, Connections.READ_TIMEOUT, new ChannelDuplexHandler()); // no-op
             channel.pipeline().replace(Connections.FRAME_DECODER, Connections.FRAME_DECODER, new ChannelDuplexHandler()); // no-op
             channel.pipeline().replace(Connections.FRAME_ENCODER, Connections.FRAME_ENCODER, new ChannelDuplexHandler()); // no-op
-            if (channel.pipeline().get(HAProxyMessageDecoder.class) != null)
+            if (channel.pipeline().get(HAProxyMessageDecoder.class) != null) {
+                ProxyProtocol.requireForwarded(channel);
                 channel.pipeline().remove(HAProxyMessageDecoder.class);
+            }
             channel.pipeline().addBefore(Connections.HANDLER, RakNetVelocityChannelEventListener.NAME, new RakNetVelocityChannelEventListener());
 //            System.out.println(channel.pipeline().names());
 //            final MultiChannellingPacketCapture handler = new MultiChannellingPacketCapture();

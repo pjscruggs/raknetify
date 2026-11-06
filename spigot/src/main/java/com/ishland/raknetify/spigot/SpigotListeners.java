@@ -25,6 +25,7 @@
 package com.ishland.raknetify.spigot;
 
 import com.ishland.raknetify.common.Constants;
+import com.ishland.raknetify.common.proxy.ProxyProtocol;
 import com.ishland.raknetify.common.connection.RakNetConnectionUtil;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
@@ -100,7 +101,7 @@ final class SpigotListeners implements AutoCloseable {
      * @return unregistered RakNet server channel
      */
     private RakNetServerChannel newServerChannel() {
-        RakNetServerChannel channel = new RakNetServerChannel(() -> {
+        RakNetServerChannel channel = ProxyProtocol.create(() -> {
             NioDatagramChannel datagram = new NioDatagramChannel();
             datagram.config().setOption(ChannelOption.IP_TOS, RakNetConnectionUtil.DEFAULT_IP_TOS);
             datagram.config().setRecvByteBufAllocator(new FixedRecvByteBufAllocator(Constants.LARGE_MTU + 512));

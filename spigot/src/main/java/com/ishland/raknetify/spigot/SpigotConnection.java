@@ -25,6 +25,7 @@
 package com.ishland.raknetify.spigot;
 
 import com.ishland.raknetify.common.Constants;
+import com.ishland.raknetify.common.proxy.ProxyProtocol;
 import com.ishland.raknetify.common.connection.MultiChannelingStreamingCompression;
 import com.ishland.raknetify.common.connection.RakNetConnectionUtil;
 import com.ishland.raknetify.common.connection.RakNetSimpleMultiChannelCodec;
@@ -54,12 +55,13 @@ final class SpigotConnection {
      * Replaces TCP framing and installs connection-local login and protocol-transition observers.
      * @param channel channel initialized by the server's normal child initializer
      * @param key native server login key used to recover the negotiated shared secret
-     * @throws IllegalStateException if TCP proxy headers are required or the tested packet map is absent
+     * @throws IllegalStateException if a required proxy identity or the tested packet map is absent
      */
     static void finish(Channel channel, PrivateKey key) {
         ChannelPipeline pipeline = channel.pipeline();
         if (pipeline.get("haproxy-decoder") != null) {
-            throw new IllegalStateException("RakNet does not yet support this server's required PROXY headers");
+            ProxyProtocol.requireForwarded(channel);
+            pipeline.remove("haproxy-decoder");
         }
         var mapping = ProtocolMultiChannelMappings.INSTANCE.mappings.get(777);
         if (mapping == null) throw new IllegalStateException("Missing Minecraft 26.3 packet routing table");
