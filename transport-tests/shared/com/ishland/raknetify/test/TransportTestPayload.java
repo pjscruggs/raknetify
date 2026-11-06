@@ -30,12 +30,14 @@ import io.netty.buffer.ByteBufAllocator;
 /** Generates bounded deterministic messages that cross Minecraft's usual packet-size limits. */
 public final class TransportTestPayload {
 
-    /** Slightly exceeds the largest vanilla packet bound without allowing unbounded test allocations. */
+    /**
+     * Slightly exceeds the largest vanilla packet bound without allowing unbounded test
+     * allocations.
+     */
     public static final int LARGE_SIZE = 8 * 1024 * 1024 + 64;
 
     /** Prevents instantiation of deterministic payload helpers. */
-    private TransportTestPayload() {
-    }
+    private TransportTestPayload() {}
 
     /**
      * Allocates a marker followed by a byte pattern independent of encryption and fragmentation.
@@ -46,10 +48,15 @@ public final class TransportTestPayload {
      * @return owned message transferred to the caller
      * @throws IllegalArgumentException if the size falls outside the bounded fixture range
      */
-    public static ByteBuf create(ByteBufAllocator allocator, int size, long marker) {
-        if (size < 8 || size > LARGE_SIZE) throw new IllegalArgumentException("Invalid fixture payload size");
+    public static ByteBuf create(
+            final ByteBufAllocator allocator, final int size, final long marker) {
+        if (size < 8 || size > LARGE_SIZE) {
+            throw new IllegalArgumentException("Invalid fixture payload size");
+        }
         ByteBuf buffer = allocator.buffer(size).writeLong(marker);
-        for (int i = 8; i < size; i++) buffer.writeByte(i % 251);
+        for (int i = 8; i < size; i++) {
+            buffer.writeByte(i % 251);
+        }
         return buffer;
     }
 
@@ -60,11 +67,15 @@ public final class TransportTestPayload {
      * @param marker expected direction-specific challenge
      * @throws IllegalArgumentException if the bounded length, marker, or any byte differs
      */
-    public static void verify(ByteBuf buffer, long marker) {
+    public static void verify(final ByteBuf buffer, final long marker) {
         int size = buffer.readableBytes();
         int start = buffer.readerIndex();
-        if (size < 8 || size > LARGE_SIZE) throw new IllegalArgumentException("Invalid fixture payload size");
-        if (buffer.getLong(start) != marker) throw new IllegalArgumentException("Encrypted challenge mismatch");
+        if (size < 8 || size > LARGE_SIZE) {
+            throw new IllegalArgumentException("Invalid fixture payload size");
+        }
+        if (buffer.getLong(start) != marker) {
+            throw new IllegalArgumentException("Encrypted challenge mismatch");
+        }
         for (int i = 8; i < size; i++) {
             if (buffer.getUnsignedByte(start + i) != i % 251) {
                 throw new IllegalArgumentException("Corrupt fixture payload at " + i);

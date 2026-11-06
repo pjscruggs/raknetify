@@ -25,52 +25,70 @@
 package com.ishland.raknetify.test;
 
 import com.ishland.raknetify.common.connection.GracefulCloseHandler;
+
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.nio.NioEventLoopGroup;
+
 import network.ycc.raknet.client.RakNetClient;
 
 import java.util.concurrent.TimeUnit;
 
-/** Exercises physical socket closure against the Netty implementation supplied by the running platform. */
+/**
+ * Exercises physical socket closure against the Netty implementation supplied by the running
+ * platform.
+ */
 public final class ThreadedChannelCloseWitness {
     /** Prevents constructing the shared socket lifecycle witness. */
-    private ThreadedChannelCloseWitness() {
-    }
+    private ThreadedChannelCloseWitness() {}
 
     /**
      * A lower transport can close before an application drain has requested its own close.
+     *
      * @throws Exception if socket registration or bounded cleanup fails
-     * @throws IllegalStateException if the application channel remains open after its physical socket closes
+     * @throws IllegalStateException if the application channel remains open after its physical
+     *     socket closes
      */
     public static void verify() throws Exception {
         NioEventLoopGroup group = new NioEventLoopGroup(1);
         Channel client = null;
         try {
-            client = new Bootstrap().group(group).channel(RakNetClient.THREADED_CHANNEL)
-                    .handler(initializer()).bind("127.0.0.1", 0).sync().channel();
+            client =
+                    new Bootstrap()
+                            .group(group)
+                            .channel(RakNetClient.THREADED_CHANNEL)
+                            .handler(initializer())
+                            .bind("127.0.0.1", 0)
+                            .sync()
+                            .channel();
             client.parent().close().sync();
             if (!client.closeFuture().await(2, TimeUnit.SECONDS)) {
                 throw new IllegalStateException("Physical close stranded the application channel");
             }
         } finally {
-            if (client != null) client.close().awaitUninterruptibly(3000);
+            if (client != null) {
+                client.close().awaitUninterruptibly(3000);
+            }
             group.shutdownGracefully(0, 3, TimeUnit.SECONDS).sync();
         }
     }
 
     /**
      * Installs the production drain handler before the physical socket is registered.
+     *
      * @return independently owned application initializer
      */
     private static ChannelInitializer<Channel> initializer() {
         return new ChannelInitializer<>() {
             /**
-             * Preserves the real threaded channel lifecycle while installing the application close policy.
+             * Preserves the real threaded channel lifecycle while installing the application close
+             * policy.
+             *
              * @param channel application channel owned by the fixture
              */
-            @Override protected void initChannel(Channel channel) {
+            @Override
+            protected void initChannel(final Channel channel) {
                 channel.pipeline().addLast(new GracefulCloseHandler());
             }
         };

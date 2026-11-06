@@ -35,8 +35,7 @@ public final class NativeCompressionWitness {
     private static final long MARKER = 0x316db29e074ac58fL;
 
     /** Prevents construction of the static codec witness. */
-    private NativeCompressionWitness() {
-    }
+    private NativeCompressionWitness() {}
 
     /**
      * Round-trips a message larger than eight MiB through the native, mixin-transformed codecs.
@@ -46,17 +45,25 @@ public final class NativeCompressionWitness {
      * @throws ReflectiveOperationException if the native constructor contract changes
      * @throws IllegalStateException if compression produces no complete payload
      */
-    public static void verify(Class<?> encoder, Class<?> decoder) throws ReflectiveOperationException {
-        ChannelHandler encodeHandler = (ChannelHandler) encoder.getConstructor(int.class).newInstance(0);
+    public static void verify(final Class<?> encoder, final Class<?> decoder)
+            throws ReflectiveOperationException {
+        ChannelHandler encodeHandler =
+                (ChannelHandler) encoder.getConstructor(int.class).newInstance(0);
         EmbeddedChannel outgoing = new EmbeddedChannel(encodeHandler);
         EmbeddedChannel incoming = new EmbeddedChannel(decoder(decoder));
         try {
-            outgoing.writeOutbound(TransportTestPayload.create(outgoing.alloc(), TransportTestPayload.LARGE_SIZE, MARKER));
+            outgoing.writeOutbound(
+                    TransportTestPayload.create(
+                            outgoing.alloc(), TransportTestPayload.LARGE_SIZE, MARKER));
             ByteBuf compressed = outgoing.readOutbound();
-            if (compressed == null) throw new IllegalStateException("No compressed payload");
+            if (compressed == null) {
+                throw new IllegalStateException("No compressed payload");
+            }
             incoming.writeInbound(compressed);
             ByteBuf decoded = incoming.readInbound();
-            if (decoded == null) throw new IllegalStateException("No decompressed payload");
+            if (decoded == null) {
+                throw new IllegalStateException("No decompressed payload");
+            }
             try {
                 TransportTestPayload.verify(decoded, MARKER);
                 if (decoded.readableBytes() != TransportTestPayload.LARGE_SIZE) {
@@ -79,9 +86,10 @@ public final class NativeCompressionWitness {
      * @return decoder with compression enabled and size validation left active
      * @throws ReflectiveOperationException if neither supported constructor exists
      */
-    private static ChannelHandler decoder(Class<?> type) throws ReflectiveOperationException {
+    private static ChannelHandler decoder(final Class<?> type) throws ReflectiveOperationException {
         try {
-            return (ChannelHandler) type.getConstructor(int.class, boolean.class).newInstance(0, true);
+            return (ChannelHandler)
+                    type.getConstructor(int.class, boolean.class).newInstance(0, true);
         } catch (NoSuchMethodException ignored) {
             return (ChannelHandler) type.getConstructor(int.class).newInstance(0);
         }

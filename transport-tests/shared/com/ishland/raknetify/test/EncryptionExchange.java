@@ -26,11 +26,13 @@ package com.ishland.raknetify.test;
 
 import com.ishland.raknetify.common.connection.FrameDataBlocker;
 import com.ishland.raknetify.common.connection.MultiChannellingEncryption;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
+
 import network.ycc.raknet.RakNet;
 import network.ycc.raknet.frame.FrameData;
 
@@ -44,8 +46,7 @@ public final class EncryptionExchange extends SimpleChannelInboundHandler<FrameD
     private static final long CHALLENGE = 0x5d37a91b046ce28fL;
 
     /** Prevents installation except through the guarded loopback fixture entry point. */
-    private EncryptionExchange() {
-    }
+    private EncryptionExchange() {}
 
     /**
      * Finds the connection's Netty channel without depending on version-specific field names.
@@ -55,9 +56,11 @@ public final class EncryptionExchange extends SimpleChannelInboundHandler<FrameD
      * @throws ReflectiveOperationException if the native field layout changes
      * @throws NoSuchFieldException if no Channel field is declared
      */
-    public static Channel channel(Object connection) throws ReflectiveOperationException {
+    public static Channel channel(final Object connection) throws ReflectiveOperationException {
         for (Field field : connection.getClass().getDeclaredFields()) {
-            if (field.getType() != Channel.class) continue;
+            if (field.getType() != Channel.class) {
+                continue;
+            }
             field.setAccessible(true);
             return (Channel) field.get(connection);
         }
@@ -71,11 +74,17 @@ public final class EncryptionExchange extends SimpleChannelInboundHandler<FrameD
      * @param channel disposable native server connection after its encryption setup
      * @throws IllegalStateException if the isolated fixture or real frame encryption is missing
      */
-    public static void install(Channel channel) {
-        if (!Boolean.getBoolean("raknetify.test.encryption")) throw new IllegalStateException("Test mode required");
-        if (!(channel.config() instanceof RakNet.Config)) throw new IllegalStateException("RakNet required");
+    public static void install(final Channel channel) {
+        if (!Boolean.getBoolean("raknetify.test.encryption")) {
+            throw new IllegalStateException("Test mode required");
+        }
+        if (!(channel.config() instanceof RakNet.Config)) {
+            throw new IllegalStateException("RakNet required");
+        }
         InetSocketAddress peer = (InetSocketAddress) channel.remoteAddress();
-        if (!peer.getAddress().isLoopbackAddress()) throw new IllegalStateException("Loopback required");
+        if (!peer.getAddress().isLoopbackAddress()) {
+            throw new IllegalStateException("Loopback required");
+        }
         if (channel.pipeline().get(MultiChannellingEncryption.class) == null) {
             throw new IllegalStateException("Frame encryption was not installed");
         }
@@ -84,15 +93,19 @@ public final class EncryptionExchange extends SimpleChannelInboundHandler<FrameD
     }
 
     /**
-     * Validates the decrypted challenge and replies through the real outbound cipher before closing.
+     * Validates the decrypted challenge and replies through the real outbound cipher before
+     * closing.
      *
      * @param context pipeline context after frame decryption and before unsupported-frame disposal
      * @param frame owned inbound test frame, released by the superclass
-     * @throws IllegalArgumentException if the decrypted request has an unexpected identifier or payload
+     * @throws IllegalArgumentException if the decrypted request has an unexpected identifier or
+     *     payload
      */
     @Override
-    protected void channelRead0(ChannelHandlerContext context, FrameData frame) {
-        if (frame.getPacketId() != 0xF7) throw new IllegalArgumentException("Unexpected test frame");
+    protected void channelRead0(final ChannelHandlerContext context, final FrameData frame) {
+        if (frame.getPacketId() != 0xF7) {
+            throw new IllegalArgumentException("Unexpected test frame");
+        }
         ByteBuf bytes = frame.createData();
         try {
             bytes.skipBytes(1);
