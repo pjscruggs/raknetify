@@ -20,6 +20,10 @@
 
 package com.ishland.raknetify.velocity;
 
+import static com.ishland.raknetify.velocity.RaknetifyVelocityPlugin.INSTANCE;
+import static com.ishland.raknetify.velocity.RaknetifyVelocityPlugin.LOGGER;
+import static com.ishland.raknetify.velocity.RaknetifyVelocityPlugin.PROXY;
+
 import com.ishland.raknetify.common.data.ProtocolMultiChannelMappings;
 import com.ishland.raknetify.velocity.connection.RakNetVelocityConnectionUtil;
 import com.ishland.raknetify.velocity.init.VelocityPacketRegistryInjector;
@@ -30,37 +34,65 @@ import com.velocitypowered.api.event.player.ServerPostConnectEvent;
 import com.velocitypowered.api.event.proxy.ListenerBoundEvent;
 import com.velocitypowered.api.event.proxy.ListenerCloseEvent;
 
-import static com.ishland.raknetify.velocity.RaknetifyVelocityPlugin.INSTANCE;
-import static com.ishland.raknetify.velocity.RaknetifyVelocityPlugin.LOGGER;
-import static com.ishland.raknetify.velocity.RaknetifyVelocityPlugin.PROXY;
-
 /**
- * Initializes Velocity integration after the plugin's dependency-isolating class loader is selected.
+ * Initializes Velocity integration after the plugin's dependency-isolating class loader is
+ * selected.
  */
 public class RaknetifyVelocityLaunchWrapper {
 
     /**
-     * Checks required Velocity internals, loads routing tables, and registers connection lifecycle hooks.
-     * An unsupported proxy receives startup and listener-bound diagnostics instead of partial injection.
+     * Checks required Velocity internals, loads routing tables, and registers connection lifecycle
+     * hooks. An unsupported proxy receives startup and listener-bound diagnostics instead of
+     * partial injection.
      */
     public static void launch() {
         if (!isCompatible()) {
-            Runnable runnable = () -> {
-                LOGGER.error("This version of Raknetify is NOT compatible with your version of Velocity");
-                LOGGER.error("Please update your Velocity at https://papermc.io/downloads#Velocity");
-            };
+            Runnable runnable =
+                    () -> {
+                        LOGGER.error(
+                                "This version of Raknetify is NOT compatible with your version of"
+                                        + " Velocity");
+                        LOGGER.error(
+                                "Please update your Velocity at"
+                                        + " https://papermc.io/downloads#Velocity");
+                    };
             runnable.run();
-            PROXY.getEventManager().register(INSTANCE, ListenerBoundEvent.class, PostOrder.LAST, ignored -> runnable.run());
+            PROXY.getEventManager()
+                    .register(
+                            INSTANCE,
+                            ListenerBoundEvent.class,
+                            PostOrder.LAST,
+                            ignored -> runnable.run());
             return;
         }
 
         ProtocolMultiChannelMappings.init();
         VelocityPacketRegistryInjector.inject();
 
-        PROXY.getEventManager().register(INSTANCE, LoginEvent.class, PostOrder.LAST, RakNetVelocityConnectionUtil::onPlayerLogin);
-        PROXY.getEventManager().register(INSTANCE, ListenerBoundEvent.class, PostOrder.LAST, VelocityRaknetifyServer::start);
-        PROXY.getEventManager().register(INSTANCE, ListenerCloseEvent.class, PostOrder.LAST, VelocityRaknetifyServer::stop);
-        PROXY.getEventManager().register(INSTANCE, ServerPostConnectEvent.class, PostOrder.LAST, RakNetVelocityConnectionUtil::onServerSwitch);
+        PROXY.getEventManager()
+                .register(
+                        INSTANCE,
+                        LoginEvent.class,
+                        PostOrder.LAST,
+                        RakNetVelocityConnectionUtil::onPlayerLogin);
+        PROXY.getEventManager()
+                .register(
+                        INSTANCE,
+                        ListenerBoundEvent.class,
+                        PostOrder.LAST,
+                        VelocityRaknetifyServer::start);
+        PROXY.getEventManager()
+                .register(
+                        INSTANCE,
+                        ListenerCloseEvent.class,
+                        PostOrder.LAST,
+                        VelocityRaknetifyServer::stop);
+        PROXY.getEventManager()
+                .register(
+                        INSTANCE,
+                        ServerPostConnectEvent.class,
+                        PostOrder.LAST,
+                        RakNetVelocityConnectionUtil::onServerSwitch);
     }
 
     /**
@@ -77,5 +109,4 @@ public class RaknetifyVelocityLaunchWrapper {
             return false;
         }
     }
-
 }

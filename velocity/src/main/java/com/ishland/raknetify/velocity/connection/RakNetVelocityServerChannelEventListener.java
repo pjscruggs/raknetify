@@ -24,28 +24,27 @@ import com.google.common.base.Preconditions;
 import com.ishland.raknetify.common.Constants;
 import com.ishland.raknetify.velocity.RaknetifyVelocityPlugin;
 import com.velocitypowered.proxy.protocol.packet.KeepAlivePacket;
+
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
+
 import network.ycc.raknet.RakNet;
 
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Answers backend keepalives using the RakNet client's measured RTT instead of relaying them to the client.
+ * Answers backend keepalives using the RakNet client's measured RTT instead of relaying them to the
+ * client.
  */
 public class RakNetVelocityServerChannelEventListener extends ChannelDuplexHandler {
 
-    /**
-     * Pipeline name for the backend-facing keepalive and connection diagnostic handler.
-     */
+    /** Pipeline name for the backend-facing keepalive and connection diagnostic handler. */
     public static final String NAME = "raknetify-bungee-downstream-event-listener";
 
-    /**
-     * RakNet client connection whose transport RTT determines backend keepalive reply timing.
-     */
+    /** RakNet client connection whose transport RTT determines backend keepalive reply timing. */
     private final Channel clientChannel;
 
     /**
@@ -53,30 +52,39 @@ public class RakNetVelocityServerChannelEventListener extends ChannelDuplexHandl
      *
      * @param clientChannel client-facing channel required to have a RakNet configuration
      */
-    public RakNetVelocityServerChannelEventListener(Channel clientChannel) {
+    public RakNetVelocityServerChannelEventListener(final Channel clientChannel) {
         Preconditions.checkArgument(clientChannel.config() instanceof RakNet.Config);
         this.clientChannel = clientChannel;
     }
 
     /**
-     * Answers backend keepalives locally and forwards other decoded packets to the proxy.
-     * Replies are delayed by the client RTT minus four milliseconds, bounded below by zero,
-     * to account for scheduling overhead without involving Minecraft's client keepalive path.
+     * Answers backend keepalives locally and forwards other decoded packets to the proxy. Replies
+     * are delayed by the client RTT minus four milliseconds, bounded below by zero, to account for
+     * scheduling overhead without involving Minecraft's client keepalive path.
      *
      * @param ctx backend-facing context used to schedule and send the reply
      * @param msg decoded backend packet
      * @throws Exception if superclass forwarding fails
      */
     @Override
-    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+    public void channelRead(final ChannelHandlerContext ctx, final Object msg) throws Exception {
         if (msg instanceof KeepAlivePacket) {
-            if (Constants.DEBUG) RaknetifyVelocityPlugin.LOGGER.info("Received downstream keepalive, swallowing it");
+            if (Constants.DEBUG) {
+                RaknetifyVelocityPlugin.LOGGER.info("Received downstream keepalive, swallowing it");
+            }
             final long rttNanos = RakNet.config(clientChannel).getRTTNanos();
-//            RaknetifyVelocityPlugin.PROXY.getScheduler().buildTask(RaknetifyVelocityPlugin.INSTANCE, () -> ctx.write(msg))
-//                    .delay(Math.max(rttNanos - 4_000_000, 0), TimeUnit.NANOSECONDS) // reduce delay to aid scheduling overhead
-//                    .clearRepeat()
-//                    .schedule();
-            ctx.channel().eventLoop().schedule(() -> ctx.writeAndFlush(msg), Math.max(rttNanos - 4_000_000, 0), TimeUnit.NANOSECONDS); // reduce delay to aid scheduling overhead
+            //
+            // RaknetifyVelocityPlugin.PROXY.getScheduler().buildTask(RaknetifyVelocityPlugin.INSTANCE, () -> ctx.write(msg))
+            //                    .delay(Math.max(rttNanos - 4_000_000, 0), TimeUnit.NANOSECONDS) //
+            // reduce delay to aid scheduling overhead
+            //                    .clearRepeat()
+            //                    .schedule();
+            ctx.channel()
+                    .eventLoop()
+                    .schedule(
+                            () -> ctx.writeAndFlush(msg),
+                            Math.max(rttNanos - 4_000_000, 0),
+                            TimeUnit.NANOSECONDS); // reduce delay to aid scheduling overhead
             return; // prevent keepalive from being sent to clients
         }
         super.channelRead(ctx, msg);
@@ -90,11 +98,14 @@ public class RakNetVelocityServerChannelEventListener extends ChannelDuplexHandl
      * @throws Exception if superclass exception forwarding fails
      */
     @Override
-    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+    public void exceptionCaught(final ChannelHandlerContext ctx, final Throwable cause)
+            throws Exception {
         super.exceptionCaught(ctx, cause);
         cause.printStackTrace();
-        for (Map.Entry<String, ChannelHandler> entry : ctx.channel().pipeline().toMap().entrySet()) {
-            System.out.println("%s: %s".formatted(entry.getKey(), entry.getValue().getClass().getName()));
+        for (Map.Entry<String, ChannelHandler> entry :
+                ctx.channel().pipeline().toMap().entrySet()) {
+            System.out.println(
+                    "%s: %s".formatted(entry.getKey(), entry.getValue().getClass().getName()));
         }
     }
 }

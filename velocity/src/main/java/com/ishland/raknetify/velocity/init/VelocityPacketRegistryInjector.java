@@ -20,44 +20,64 @@
 
 package com.ishland.raknetify.velocity.init;
 
+import static com.ishland.raknetify.common.util.ReflectionUtil.accessible;
+
 import com.velocitypowered.api.network.ProtocolVersion;
 import com.velocitypowered.proxy.protocol.MinecraftPacket;
 import com.velocitypowered.proxy.protocol.StateRegistry;
 import com.velocitypowered.proxy.protocol.packet.RespawnPacket;
+
 import io.netty.util.collection.IntObjectMap;
+
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 
 import java.util.Map;
 import java.util.function.Supplier;
 
-import static com.ishland.raknetify.common.util.ReflectionUtil.accessible;
-
 /**
- * Makes Velocity decode respawn packets so world transitions are visible to transport synchronization.
+ * Makes Velocity decode respawn packets so world transitions are visible to transport
+ * synchronization.
  */
 public class VelocityPacketRegistryInjector {
 
     /**
-     * Adds missing respawn decoders to play registries that already know the corresponding encoder ID.
-     * Existing decoders and protocol IDs remain unchanged.
+     * Adds missing respawn decoders to play registries that already know the corresponding encoder
+     * ID. Existing decoders and protocol IDs remain unchanged.
      *
-     * @throws RuntimeException if Velocity's packet registry internals cannot be inspected or updated
+     * @throws RuntimeException if Velocity's packet registry internals cannot be inspected or
+     *     updated
      */
     public static void inject() {
         try {
-            final StateRegistry.PacketRegistry registry = (StateRegistry.PacketRegistry)
-                    accessible(StateRegistry.class.getDeclaredField("clientbound")).get(StateRegistry.PLAY);
-            final var versions = (Map<ProtocolVersion, StateRegistry.PacketRegistry.ProtocolRegistry>)
-                    accessible(StateRegistry.PacketRegistry.class.getDeclaredField("versions")).get(registry);
+            final StateRegistry.PacketRegistry registry =
+                    (StateRegistry.PacketRegistry)
+                            accessible(StateRegistry.class.getDeclaredField("clientbound"))
+                                    .get(StateRegistry.PLAY);
+            final var versions =
+                    (Map<ProtocolVersion, StateRegistry.PacketRegistry.ProtocolRegistry>)
+                            accessible(
+                                            StateRegistry.PacketRegistry.class.getDeclaredField(
+                                                    "versions"))
+                                    .get(registry);
             for (StateRegistry.PacketRegistry.ProtocolRegistry value : versions.values()) {
-                final var packetClassToId = (Object2IntMap<Class<? extends MinecraftPacket>>)
-                        accessible(StateRegistry.PacketRegistry.ProtocolRegistry.class.getDeclaredField("packetClassToId")).get(value);
-                final var packetIdToSupplier = (IntObjectMap<Supplier<? extends MinecraftPacket>>)
-                        accessible(StateRegistry.PacketRegistry.ProtocolRegistry.class.getDeclaredField("packetIdToSupplier")).get(value);
+                final var packetClassToId =
+                        (Object2IntMap<Class<? extends MinecraftPacket>>)
+                                accessible(
+                                                StateRegistry.PacketRegistry.ProtocolRegistry.class
+                                                        .getDeclaredField("packetClassToId"))
+                                        .get(value);
+                final var packetIdToSupplier =
+                        (IntObjectMap<Supplier<? extends MinecraftPacket>>)
+                                accessible(
+                                                StateRegistry.PacketRegistry.ProtocolRegistry.class
+                                                        .getDeclaredField("packetIdToSupplier"))
+                                        .get(value);
                 if (packetClassToId.containsKey(RespawnPacket.class)) {
                     final int packetId = packetClassToId.getInt(RespawnPacket.class);
                     if (!packetIdToSupplier.containsKey(packetId)) {
-                        packetIdToSupplier.put(packetId, RespawnPacket::new); // make respawn packet no longer encodeOnly
+                        packetIdToSupplier.put(
+                                packetId,
+                                RespawnPacket::new); // make respawn packet no longer encodeOnly
                     }
                 }
             }
@@ -65,5 +85,4 @@ public class VelocityPacketRegistryInjector {
             throw new RuntimeException("Failed to inject velocity packet registry", t);
         }
     }
-
 }
