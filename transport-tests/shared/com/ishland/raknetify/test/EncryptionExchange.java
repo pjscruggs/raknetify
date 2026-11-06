@@ -96,10 +96,8 @@ public final class EncryptionExchange extends SimpleChannelInboundHandler<FrameD
         ByteBuf bytes = frame.createData();
         try {
             bytes.skipBytes(1);
-            if (bytes.readableBytes() != 8 || bytes.readLong() != CHALLENGE) {
-                throw new IllegalArgumentException("Encrypted challenge mismatch");
-            }
-            bytes.clear().writeLong(~CHALLENGE);
+            TransportTestPayload.verify(bytes, CHALLENGE);
+            bytes.setLong(bytes.readerIndex(), ~CHALLENGE);
             FrameData reply = FrameData.create(context.alloc(), 0xF8, bytes);
             context.writeAndFlush(reply).addListener(ChannelFutureListener.CLOSE);
             System.out.println("PASS native encrypted challenge exchange");

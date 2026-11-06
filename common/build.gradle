@@ -28,3 +28,6 @@ tasks.register('transportProbe', Sync) {
     from(sourceSets.main.output) { into 'classes' }
     from(configurations.testRuntimeClasspath.filter { it.name.endsWith('.jar') }) { into 'lib' }
 }
+
+// Share bounded payload witnesses with the isolated native test mods.
+sourceSets.test.java.srcDir rootProject.file('transport-tests/shared')

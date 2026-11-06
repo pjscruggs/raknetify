@@ -24,6 +24,9 @@
 
 package com.ishland.raknetify.common.connection;
 
+import com.ishland.raknetify.test.TransportTestPayload;
+import com.ishland.raknetify.common.Constants;
+import network.ycc.raknet.RakNet;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -59,6 +62,9 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
     /** Negotiated native protocol determines the historical login packet fields. */
     private final int protocol;
 
+    /** Message size used to exercise either ordinary or fragmented encrypted frames. */
+    private final int payloadSize;
+
     /** Completes only after the encrypted server reply is decrypted and checked. */
     private final CompletableFuture<Void> result = new CompletableFuture<>();
 
@@ -66,20 +72,22 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
      * Creates state owned by one probe connection.
      *
      * @param protocol native Minecraft protocol number
+     * @param payloadSize bounded plaintext challenge length
      */
-    private RaknetEncryptionProbe(int protocol) {
+    private RaknetEncryptionProbe(int protocol, int payloadSize) {
         this.protocol = protocol;
+        this.payloadSize = payloadSize;
     }
 
     /**
-     * Connects only to loopback and fails if the encrypted exchange does not complete within ten seconds.
+     * Connects only to loopback and fails if the encrypted exchange does not complete within thirty seconds.
      *
-     * @param args local server port and native protocol number
+     * @param args local server port, native protocol number, and optional plaintext payload size
      * @throws Exception if transport, RSA, AES, or challenge validation fails
      */
     public static void main(String[] args) throws Exception {
         int port = Integer.parseInt(args[0]);
-        RaknetEncryptionProbe probe = new RaknetEncryptionProbe(Integer.parseInt(args[1]));
+        RaknetEncryptionProbe probe = new RaknetEncryptionProbe(Integer.parseInt(args[1]), args.length > 2 ? Integer.parseInt(args[2]) : 8);
         NioEventLoopGroup group = new NioEventLoopGroup(1);
         Channel channel = null;
         try {
@@ -88,7 +96,7 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
                     .handler(probe.initializer()).connect("127.0.0.1", port).sync().channel();
             channel.writeAndFlush(RaknetStatusProbe.handshake(port, probe.protocol, 2)).sync();
             channel.writeAndFlush(probe.hello()).sync();
-            probe.result.get(10, TimeUnit.SECONDS);
+            probe.result.get(30, TimeUnit.SECONDS);
             System.out.println("PASS native RSA and bidirectional RakNet encryption");
         } finally {
             if (channel != null) channel.close().sync();
@@ -110,6 +118,7 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
              */
             @Override
             protected void initChannel(Channel channel) {
+                ((RakNet.Config) channel.config()).setMaxQueuedBytes(Constants.MAX_QUEUED_SIZE);
                 channel.pipeline().addLast("game", new UserDataCodec(0xFD));
                 channel.pipeline().addLast("probe", RaknetEncryptionProbe.this);
             }
@@ -168,7 +177,7 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
         writeBytes(reply, encrypt(key, nonce));
         context.writeAndFlush(reply);
         context.pipeline().addBefore("game", "encryption", new MultiChannellingEncryption(KEY));
-        ByteBuf challenge = context.alloc().buffer(8).writeLong(CHALLENGE);
+        ByteBuf challenge = TransportTestPayload.create(context.alloc(), payloadSize, CHALLENGE);
         try {
             context.writeAndFlush(FrameData.create(context.alloc(), 0xF7, challenge));
         } finally {
@@ -228,9 +237,10 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
         ByteBuf bytes = frame.createData();
         try {
             bytes.skipBytes(1);
-            if (bytes.readableBytes() != 8 || bytes.readLong() != ~CHALLENGE) {
+            if (bytes.readableBytes() != payloadSize) {
                 throw new IllegalArgumentException("Encrypted reply mismatch");
             }
+            TransportTestPayload.verify(bytes, ~CHALLENGE);
             result.complete(null);
         } finally {
             bytes.release();
