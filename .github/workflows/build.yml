@@ -43,6 +43,14 @@ jobs:
     needs: quality
     uses: ./.github/workflows/security.yml
 
+  source-security:
+    needs: quality
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    uses: ./.github/workflows/codeql.yml
+
   build:
     name: Build and unit tests
     needs: quality
@@ -483,7 +491,7 @@ jobs:
 
   downloads:
     name: Verified downloads
-    needs: [quality, mappings, security, build, network, native-loaders, spigot]
+    needs: [quality, mappings, security, source-security, build, network, native-loaders, spigot]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
