@@ -70,8 +70,9 @@ public class MixinCCConnect {
      * @param raknetify$eventLoop shared local carrying the original transport group to channel creation
      * @return bootstrap configured with application loops for RakNet or the original group for TCP
      */
+    // Intermediary method IDs remain stable when Minecraft changes the backend parameter type.
     @Dynamic("method_10753, method_52271 for compat")
-    @WrapOperation(method = {"connect(Ljava/net/InetSocketAddress;Lnet/minecraft/network/NetworkingBackend;Lnet/minecraft/network/ClientConnection;)Lio/netty/channel/ChannelFuture;", "method_52271(Ljava/net/InetSocketAddress;ZLnet/minecraft/network/ClientConnection;)Lio/netty/channel/ChannelFuture;", "method_10753(Ljava/net/InetSocketAddress;Z)Lnet/minecraft/network/ClientConnection;", "method_10753"}, at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/Bootstrap;group(Lio/netty/channel/EventLoopGroup;)Lio/netty/bootstrap/AbstractBootstrap;", remap = false), require = 1)
+    @WrapOperation(remap = false, method = {"connect(Ljava/net/InetSocketAddress;Lnet/minecraft/network/NetworkingBackend;Lnet/minecraft/network/ClientConnection;)Lio/netty/channel/ChannelFuture;", "method_52271", "method_10753"}, at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/Bootstrap;group(Lio/netty/channel/EventLoopGroup;)Lio/netty/bootstrap/AbstractBootstrap;", remap = false), require = 1)
     private static AbstractBootstrap<Bootstrap, Channel> redirectGroup(Bootstrap instance, EventLoopGroup eventLoopGroup, Operation<AbstractBootstrap<Bootstrap, Channel>> original, InetSocketAddress address, @Share("raknetify$eventLoop") LocalRef<EventLoopGroup> raknetify$eventLoop) {
         raknetify$eventLoop.set(eventLoopGroup);
         return ThreadLocalUtil.isInitializingRaknet()
@@ -90,8 +91,9 @@ public class MixinCCConnect {
      * @param raknetify$eventLoop shared local containing the retained vanilla transport event loops
      * @return bootstrap using the RakNet factory or the original TCP channel class
      */
+    // Intermediary method IDs remain stable when Minecraft changes the backend parameter type.
     @Dynamic("method_10753, method_52271 for compat")
-    @WrapOperation(method = {"connect(Ljava/net/InetSocketAddress;Lnet/minecraft/network/NetworkingBackend;Lnet/minecraft/network/ClientConnection;)Lio/netty/channel/ChannelFuture;", "method_52271(Ljava/net/InetSocketAddress;ZLnet/minecraft/network/ClientConnection;)Lio/netty/channel/ChannelFuture;", "method_10753(Ljava/net/InetSocketAddress;Z)Lnet/minecraft/network/ClientConnection;", "method_10753"}, at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/Bootstrap;channel(Ljava/lang/Class;)Lio/netty/bootstrap/AbstractBootstrap;", remap = false), require = 1)
+    @WrapOperation(remap = false, method = {"connect(Ljava/net/InetSocketAddress;Lnet/minecraft/network/NetworkingBackend;Lnet/minecraft/network/ClientConnection;)Lio/netty/channel/ChannelFuture;", "method_52271", "method_10753"}, at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/Bootstrap;channel(Ljava/lang/Class;)Lio/netty/bootstrap/AbstractBootstrap;", remap = false), require = 1)
     private static AbstractBootstrap<Bootstrap, Channel> redirectChannel(Bootstrap instance, Class<? extends SocketChannel> aClass, Operation<AbstractBootstrap<Bootstrap, Channel>> original, InetSocketAddress address, @Share("raknetify$eventLoop") LocalRef<EventLoopGroup> raknetify$eventLoop) {
         EventLoopGroup eventLoopGroup = raknetify$eventLoop.get();
         return ThreadLocalUtil.isInitializingRaknet()

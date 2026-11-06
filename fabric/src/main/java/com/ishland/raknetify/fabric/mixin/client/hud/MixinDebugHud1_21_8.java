@@ -45,8 +45,9 @@ public class MixinDebugHud1_21_8 {
      *
      * @param cir return callback containing the mutable vanilla HUD line list
      */
+    // This intermediary name belongs to versions before the current compile target.
     @Dynamic
-    @Inject(method = "method_1835", at = @At("RETURN"))
+    @Inject(method = "method_1835", remap = false, at = @At("RETURN"))
     private void getLeftText(CallbackInfoReturnable<List<String>> cir) {
         DebugHudUtil.getDebugString(cir.getReturnValue()::add);
     }

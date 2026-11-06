@@ -28,11 +28,14 @@ import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import net.minecraft.network.NetworkPhase;
 import net.minecraft.network.packet.Packet;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
 /**
  * Exposes packet IDs from the internal handler used by older Minecraft protocol registries.
  */
+// The mixin plugin enables this accessor only on versions that still contain this registry.
+@Pseudo
 @Mixin(targets = "net/minecraft/class_2539$class_4532")
 public interface INetworkStateInternalPacketHandler {
 
@@ -41,7 +44,7 @@ public interface INetworkStateInternalPacketHandler {
      *
      * @return live map used to generate proxy channel mappings
      */
-    @Accessor(value = "field_20596")
+    @Accessor(value = "field_20596", remap = false)
     Object2IntMap<Class<? extends Packet<?>>> getPacketIds();
     
 }

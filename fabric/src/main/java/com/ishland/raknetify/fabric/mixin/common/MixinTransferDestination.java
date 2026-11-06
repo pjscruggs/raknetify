@@ -48,8 +48,9 @@ public abstract class MixinTransferDestination {
      * @param packet outgoing packet after all public send overloads converge
      * @return original packet or an equivalent transfer selecting the configured RakNet endpoint
      */
+    // The intermediary ID spans both PacketCallbacks and ChannelFutureListener signatures.
     @Dynamic
-    @ModifyVariable(method = {"sendImmediately", "method_10764(Lnet/minecraft/class_2596;Lnet/minecraft/class_7648;Z)V"},
+    @ModifyVariable(remap = false, method = {"sendImmediately", "method_10764"},
             at = @At("HEAD"), argsOnly = true, require = 1)
     private Packet<?> raknetify$selectTransferDestination(Packet<?> packet) {
         if (!(packet instanceof ServerTransferS2CPacket transfer)) return packet;

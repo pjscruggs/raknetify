@@ -45,7 +45,7 @@ public class MixinSampleSubscriptionTracker {
     /**
      * Vanilla queue of pending debug-sample subscription requests.
      */
-    @Shadow(aliases = "field_48812") @Final private Queue<?> pendingQueue;
+    @Shadow(aliases = "field_48812", remap = false) @Final private Queue<?> pendingQueue;
 
     /**
      * Clears pending requests after the target update has finished processing them.
@@ -53,7 +53,7 @@ public class MixinSampleSubscriptionTracker {
      * @param ci return injection callback, unused because cleanup follows the completed update
      */
     @Dynamic
-    @Inject(method = "method_56654", at = @At("RETURN"))
+    @Inject(method = "method_56654", remap = false, at = @At("RETURN"))
     private void cleanQueue(CallbackInfo ci) {
         this.pendingQueue.clear();
     }

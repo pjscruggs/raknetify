@@ -62,8 +62,9 @@ public class MixinServerLoginNetworkHandler {
      * @param server Minecraft server supplying the normal compression threshold
      * @return -1 to disable vanilla compression, otherwise the configured server threshold
      */
+    // Legacy login completion and modern verification use distinct intermediary method IDs.
     @Dynamic
-    @Redirect(method = {"method_14384()V", "tickVerify"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/server/MinecraftServer;getNetworkCompressionThreshold()I"), require = 1)
+    @Redirect(remap = false, method = {"method_14384", "tickVerify", "method_52419"}, at = @At(remap = true, value = "INVOKE", target = "Lnet/minecraft/server/MinecraftServer;getNetworkCompressionThreshold()I"), require = 1)
     private int stopCompressionIfStreamingCompressionExists(MinecraftServer server) {
         final MultiChannelingStreamingCompression compression = ((IClientConnection) this.connection).getChannel().pipeline().get(MultiChannelingStreamingCompression.class);
         if (compression != null && compression.isActive()) {

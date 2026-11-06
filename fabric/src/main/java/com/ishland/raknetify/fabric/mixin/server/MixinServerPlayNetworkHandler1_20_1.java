@@ -78,7 +78,7 @@ public class MixinServerPlayNetworkHandler1_20_1 {
      * @return false for RakNet to suppress this disconnect, true for ordinary TCP behavior
      */
     @Dynamic
-    @WrapWithCondition(method = "method_12082", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/network/ServerPlayNetworkHandler;method_14367(Lnet/minecraft/text/Text;)V"))
+    @WrapWithCondition(method = "method_12082", remap = false, at = @At(remap = true, value = "INVOKE", target = "Lnet/minecraft/server/network/ServerPlayNetworkHandler;method_14367(Lnet/minecraft/text/Text;)V"))
     private boolean stopTimeoutPlayersOnKeepAlive(ServerPlayNetworkHandler instance, Text reason) {
         return !(((IClientConnection) MultiVersionUtil.ServerPlayNetworkHandler$connection.get((ServerPlayNetworkHandler) (Object) this)).getChannel().config() instanceof RakNet.Config);
     }
@@ -91,7 +91,7 @@ public class MixinServerPlayNetworkHandler1_20_1 {
      * @return false for RakNet, true when vanilla should store the TCP measurement
      */
     @Dynamic
-    @WrapWithCondition(method = "method_12082", at = @At(value = "FIELD", target = "Lnet/minecraft/server/network/ServerPlayerEntity;field_13967:I", opcode = Opcodes.PUTFIELD))
+    @WrapWithCondition(method = "method_12082", remap = false, at = @At(remap = true, value = "FIELD", target = "Lnet/minecraft/server/network/ServerPlayerEntity;field_13967:I", opcode = Opcodes.PUTFIELD))
     private boolean redirectPingStoring(ServerPlayerEntity instance, int value) {
         return !(((IClientConnection) MultiVersionUtil.ServerPlayNetworkHandler$connection.get((ServerPlayNetworkHandler) (Object) this)).getChannel().config() instanceof RakNet.Config);
     }

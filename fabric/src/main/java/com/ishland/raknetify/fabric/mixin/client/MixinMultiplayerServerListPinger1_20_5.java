@@ -57,8 +57,9 @@ public class MixinMultiplayerServerListPinger1_20_5 {
      * @param runnable vanilla status-completion callback, unused by transport selection
      * @return status connection using RakNet or ordinary TCP as requested
      */
+    // The two literal selectors cover named development and intermediary production runtimes.
     @Dynamic
-    @WrapOperation(method = {"add", "method_3003"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/network/ClientConnection;method_10753(Ljava/net/InetSocketAddress;ZLnet/minecraft/util/profiler/MultiValueDebugSampleLogImpl;)Lnet/minecraft/network/ClientConnection;"))
+    @WrapOperation(remap = false, method = {"add", "method_3003"}, at = @At(value = "INVOKE", remap = true, target = "Lnet/minecraft/network/ClientConnection;method_10753(Ljava/net/InetSocketAddress;ZLnet/minecraft/util/profiler/MultiValueDebugSampleLogImpl;)Lnet/minecraft/network/ClientConnection;"))
     private ClientConnection redirectConnect(InetSocketAddress address, boolean useEpoll, MultiValueDebugSampleLogImpl log, Operation<ClientConnection> original, ServerInfo entry, Runnable runnable) {
         final PrefixUtil.Info info = PrefixUtil.getInfo(entry.address);
         return info.useRakNet() ? RakNetClientConnectionUtil.connect(address, useEpoll, info.largeMTU(), original, true) : original.call(address, useEpoll, null);

@@ -85,6 +85,8 @@ processResources {
 tasks.withType(JavaCompile).configureEach {
 	// Minecraft 1.18 (1.18-pre2) upwards uses Java 17.
 	it.options.release = 17
+	// A missing Mixin mapping must fail compilation instead of disappearing among CI annotations.
+	it.options.compilerArgs.add("-Werror")
 }
 
 java {
