@@ -48,7 +48,7 @@ public final class RaknetStatusProbe {
     }
 
     /**
-     * Connects to a disposable loopback server and prints its status JSON after receiving a game frame.
+     * Connects to a disposable loopback server and writes UTF-8 status JSON after receiving a game frame.
      *
      * @param args local server port and Minecraft protocol number
      * @throws Exception if connection, status decoding, or bounded shutdown fails
@@ -65,7 +65,8 @@ public final class RaknetStatusProbe {
                     .handler(initializer(response)).connect("127.0.0.1", port).sync().channel();
             channel.writeAndFlush(handshake(port, protocol, 1)).sync();
             channel.writeAndFlush(Unpooled.buffer(1).writeByte(0)).sync();
-            System.out.println(response.get(10, TimeUnit.SECONDS));
+            System.out.write((response.get(10, TimeUnit.SECONDS) + "\n").getBytes(StandardCharsets.UTF_8));
+            System.out.flush();
         } finally {
             if (channel != null) channel.close().sync();
             group.shutdownGracefully(0, 5, TimeUnit.SECONDS).sync();
