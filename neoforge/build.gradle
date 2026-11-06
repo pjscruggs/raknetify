@@ -1,0 +1,81 @@
+/** Packages the shared modern Minecraft transport with native NeoForge loader entrypoints. */
+apply plugin: 'net.neoforged.moddev'
+apply plugin: 'com.gradleup.shadow'
+
+base { archivesName = project.archives_base_name + '-neoforge' }
+def supported = rootProject.nativeLoaders.neoforge
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+java.sourceCompatibility = JavaVersion.VERSION_25
+java.targetCompatibility = JavaVersion.VERSION_25
+
+neoForge {
+    enable {
+        version = supported.version
+        disableRecompilation = true
+    }
+    validateAccessTransformers = true
+    runs {
+        server {
+            server()
+            programArgument '--nogui'
+            gameDirectory = layout.buildDirectory.dir('run/server')
+        }
+        client {
+            client()
+            gameDirectory = layout.buildDirectory.dir('run/client')
+        }
+    }
+    mods {
+        raknetify { sourceSet sourceSets.main }
+    }
+}
+
+sourceSets.main.java.srcDir rootProject.file('fabric-26/src/main/java')
+sourceSets.main.resources {
+    srcDir rootProject.file('fabric-26/src/main/resources')
+    exclude 'fabric.mod.json', '*.accesswidener'
+}
+
+configurations { shadowInclude }
+dependencies {
+    shadowInclude implementation(project(':common'))
+}
+
+processResources {
+    inputs.property 'version', project.version
+    inputs.property 'minecraft', supported.minecraft
+    inputs.property 'neoforge', supported.version
+    filesMatching('META-INF/neoforge.mods.toml') {
+        expand version: project.version, minecraft: inputs.properties.minecraft, neoforge: inputs.properties.neoforge
+    }
+    from rootProject.file('icon.png')
+}
+
+shadowJar {
+    configurations = [project.configurations.shadowInclude]
+    archiveClassifier = ''
+    // Minecraft supplies FastUtil. Bundling it would create duplicate packages in the loader's module layer.
+    dependencies { exclude(dependency('it.unimi.dsi:fastutil')) }
+    from rootProject.file('LICENSE')
+    from(rootProject.file('netty-raknet/LICENSE')) { into 'META-INF/licenses/netty-raknet' }
+    mergeServiceFiles()
+}
+
+jar { archiveClassifier = 'dev' }
+assemble.dependsOn shadowJar
+
+sourceSets {
+    transportTest {
+        java.srcDir rootProject.file('transport-test-client/src/shared/java')
+        java.srcDir rootProject.file('transport-test-client/src/native/java')
+        resources.srcDir rootProject.file('transport-test-client/src/native/resources')
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
+    }
+}
+tasks.register('transportTestJar', Jar) {
+    archiveClassifier = 'transport-test'
+    from sourceSets.transportTest.output
+}
+assemble.dependsOn transportTestJar

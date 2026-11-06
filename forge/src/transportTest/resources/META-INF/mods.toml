@@ -1,0 +1,7 @@
+modLoader="javafml"
+loaderVersion="[1,)"
+license="MIT"
+[[mods]]
+modId="raknetify_transport_test"
+version="1.0.0"
+displayName="Raknetify transport tests"

@@ -1,0 +1,97 @@
+/** Packages the shared modern Minecraft transport with native Forge loader entrypoints. */
+apply plugin: 'net.minecraftforge.gradle'
+apply plugin: 'com.gradleup.shadow'
+
+base { archivesName = project.archives_base_name + '-forge' }
+def supported = rootProject.nativeLoaders.forge
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+// Forge's Mixin 0.8.7 accepts Java 21 mixins while the game and compiler still require Java 25.
+java.sourceCompatibility = JavaVersion.VERSION_21
+java.targetCompatibility = JavaVersion.VERSION_21
+tasks.withType(JavaCompile).configureEach { options.release = 21 }
+// Dependency resolution must still select the Java 25 game and loader libraries.
+configurations.configureEach {
+    if (name in ['compileClasspath', 'runtimeClasspath', 'testCompileClasspath', 'testRuntimeClasspath', 'apiElements', 'runtimeElements']) {
+        attributes.attribute(org.gradle.api.attributes.java.TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 25)
+    }
+}
+
+
+minecraft {
+    useDefaultAccessTransformer()
+    runs {
+        configureEach {
+            workingDir = layout.buildDirectory.dir('run/' + name)
+            systemProperty 'eventbus.api.strictRuntimeChecks', 'true'
+            args '--mixin', 'raknetify-fabric.mixins.json'
+        }
+        register('client')
+        register('server') { args '--nogui' }
+    }
+}
+
+repositories {
+    minecraft.mavenizer(it)
+    maven fg.forgeMaven
+    maven fg.minecraftLibsMaven
+}
+
+sourceSets.main.java.srcDir rootProject.file('fabric-26/src/main/java')
+sourceSets.main.resources {
+    srcDir rootProject.file('fabric-26/src/main/resources')
+    exclude 'fabric.mod.json', '*.accesswidener'
+}
+
+configurations { shadowInclude }
+dependencies {
+    implementation minecraft.dependency('net.minecraftforge:forge:' + supported.version)
+    annotationProcessor 'net.minecraftforge:eventbus-validator:7.0.6'
+    shadowInclude implementation(project(':common'))
+}
+
+processResources {
+    inputs.property 'version', project.version
+    inputs.property 'minecraft', supported.minecraft
+    inputs.property 'forge', supported.version.substring(supported.minecraft.length() + 1)
+    inputs.property 'mixinJavaCompatibility', 'JAVA_21'
+    filesMatching('META-INF/mods.toml') {
+        expand version: project.version, minecraft: inputs.properties.minecraft, forge: inputs.properties.forge
+    }
+    filesMatching('raknetify-fabric.mixins.json') {
+        filter { line -> line.replace('JAVA_25', inputs.properties.mixinJavaCompatibility) }
+    }
+    from rootProject.file('icon.png')
+}
+
+shadowJar {
+    configurations = [project.configurations.shadowInclude]
+    archiveClassifier = ''
+    // Minecraft supplies FastUtil. Bundling it would create duplicate packages in the loader's module layer.
+    dependencies { exclude(dependency('it.unimi.dsi:fastutil')) }
+    from rootProject.file('LICENSE')
+    from(rootProject.file('netty-raknet/LICENSE')) { into 'META-INF/licenses/netty-raknet' }
+    mergeServiceFiles()
+    manifest { attributes 'MixinConfigs': 'raknetify-fabric.mixins.json' }
+}
+
+jar {
+    archiveClassifier = 'dev'
+    manifest { attributes 'MixinConfigs': 'raknetify-fabric.mixins.json' }
+}
+assemble.dependsOn shadowJar
+
+sourceSets {
+    transportTest {
+        java.srcDir rootProject.file('transport-test-client/src/shared/java')
+        java.srcDir rootProject.file('transport-test-client/src/native/java')
+        resources.srcDir rootProject.file('transport-test-client/src/native/resources')
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
+    }
+}
+tasks.register('transportTestJar', Jar) {
+    archiveClassifier = 'transport-test'
+    from sourceSets.transportTest.output
+    manifest { attributes 'MixinConfigs': 'raknetify-transport-test.mixins.json' }
+}
+assemble.dependsOn transportTestJar

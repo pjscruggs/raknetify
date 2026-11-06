@@ -70,6 +70,8 @@ public class RaknetifyFabricMixinPlugin implements IMixinConfigPlugin {
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
         return switch (mixinClassName.substring("com.ishland.raknetify.fabric.mixin.".length())) {
+            case "compat.fabricapi.MixinServerLoginNetworkAddon" -> ModPlatform.get().isModLoaded("fabric-networking-api-v1");
+            case "compat.qsl.MixinServerLoginNetworkAddon" -> ModPlatform.get().isModLoaded("quilt_networking");
             case "compat.packetfixer.MixinSplitterHandler" -> ModPlatform.get().isModLoaded("packetfixer");
             case "access.IDebugHudEntries", "compat.krypton.MixinServerLoginNetworkHandler" -> !MinecraftVersions.IS_26_4_SNAPSHOT;
             case "client.hud.MixinDebugHudEntries26_4", "common.encryption.MixinClientConnection26_4",

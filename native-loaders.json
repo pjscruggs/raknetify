@@ -1,0 +1,14 @@
+{
+  "forge": {
+    "minecraft": "26.3",
+    "version": "26.3-66.1.5",
+    "installer": "https://maven.minecraftforge.net/net/minecraftforge/forge/26.3-66.1.5/forge-26.3-66.1.5-installer.jar",
+    "sha256": "4ba54a1bc216ad12dde032eecb999cb3c617b1d0c92ad67add4b6531f45e58b4"
+  },
+  "neoforge": {
+    "minecraft": "26.3",
+    "version": "26.3.0.101",
+    "installer": "https://maven.neoforged.net/releases/net/neoforged/neoforge/26.3.0.101/neoforge-26.3.0.101-installer.jar",
+    "sha256": "6bac566026d3f18b1dd9a529e7a4041fbc3141841e72d869c54f06730a38f09d"
+  }
+}

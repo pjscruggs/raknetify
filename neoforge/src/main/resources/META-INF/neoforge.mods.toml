@@ -1,0 +1,28 @@
+license="MIT"
+issueTrackerURL="https://github.com/pjscruggs/raknetify2/issues"
+
+[[mods]]
+modId="raknetify"
+version="${version}"
+displayName="Raknetify2"
+authors="ishland, pjscruggs"
+displayURL="https://github.com/pjscruggs/raknetify2"
+iconFile="icon.png"
+description="RakNet networking for Minecraft clients and servers."
+
+[[mixins]]
+config="raknetify-fabric.mixins.json"
+
+[[dependencies.raknetify]]
+modId="neoforge"
+type="required"
+versionRange="[${neoforge},)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.raknetify]]
+modId="minecraft"
+type="required"
+versionRange="[${minecraft}]"
+ordering="NONE"
+side="BOTH"
