@@ -89,7 +89,7 @@ def check_connected_udp(port, metadata, java, probe_dir):
     classpath = os.pathsep.join(str(probe_dir.resolve() / part) for part in ('classes', 'lib/*'))
     output = subprocess.check_output(
         [java, '-cp', classpath, 'com.ishland.raknetify.common.connection.RaknetStatusProbe',
-         str(port), str(metadata['protocol_version'])], text=True, timeout=30)
+         str(port), str(metadata['protocol_version'])], text=True, encoding='utf-8', timeout=30)
     status = json.loads(next(line for line in output.splitlines() if line.startswith('{')))
     assert status['version']['protocol'] == metadata['protocol_version'], status
     assert status['version']['name'] == metadata['name'], status

@@ -75,6 +75,7 @@ jobs:
           cp --parents fabric-universal/build/libs/*.jar fabric-universal/build/generated/metadata/compatibility.json ci-input/
           cp --parents velocity/build/libs/*-all.jar bungee/build/libs/*-all.jar ci-input/
           cp --parents transport-test-legacy/build/libs/*.jar transport-test-modern/build/libs/*.jar transport-test-client/build/libs/*.jar ci-input/
+          cp --parents forge/build/libs/*.jar neoforge/build/libs/*.jar ci-input/
           cp --parents -r common/build/transport-probe ci-input/
           cd ci-input
           find . -type f -print0 | sort -z | xargs -0 sha256sum > ../test-inputs.sha256
@@ -270,9 +271,61 @@ jobs:
           path: ${{ runner.temp }}/raknetify-smoke/**/*.log
           if-no-files-found: warn
 
+  native-loaders:
+    name: ${{ matrix.loader }} packaged runtime (${{ matrix.os }})
+    needs: build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+        loader: [forge, neoforge]
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: Test-inputs
+      - name: Verify exact build inputs
+        run: sha256sum --check test-inputs.sha256
+      - uses: actions/setup-python@v7.1.0
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: 25
+      - name: Install Linux client display dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 libasound2t64 libxkbcommon0
+      - name: Test packaged native loaders
+        env:
+          LOADER: ${{ matrix.loader }}
+          LIBGL_ALWAYS_SOFTWARE: 'true'
+        run: |
+          jar=$(find "$LOADER/build/libs" -name '*.jar' ! -name '*-dev.jar' ! -name '*-transport-test.jar')
+          fixture=$(find "$LOADER/build/libs" -name '*-transport-test.jar')
+          command=(python .github/scripts/native-loader-smoke.py --loader "$LOADER" --jar "$jar" --fixture "$fixture" --probe-dir common/build/transport-probe --work-dir "$RUNNER_TEMP/native-$LOADER")
+          if [ "$RUNNER_OS" = Linux ]; then
+            xvfb-run -a "${command[@]}"
+          else
+            "${command[@]}" --side server
+          fi
+      - name: Preserve native runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: Native-${{ matrix.loader }}-${{ matrix.os }}-logs
+          path: ${{ runner.temp }}/native-${{ matrix.loader }}/*.log
+          if-no-files-found: error
+
   downloads:
     name: Verified downloads
-    needs: [quality, mappings, build, network]
+    needs: [quality, mappings, build, network, native-loaders]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -285,6 +338,7 @@ jobs:
           mkdir -p downloads
           cp fabric-universal/build/libs/*.jar fabric-universal/build/generated/metadata/compatibility.json downloads/
           cp velocity/build/libs/*-all.jar bungee/build/libs/*-all.jar downloads/
+          find forge/build/libs neoforge/build/libs -name '*.jar' ! -name '*-dev.jar' ! -name '*-transport-test.jar' -exec cp {} downloads/ \;
           cd downloads
           sha256sum ./*.jar ./compatibility.json > SHA256SUMS
       - uses: actions/upload-artifact@v7.0.2
