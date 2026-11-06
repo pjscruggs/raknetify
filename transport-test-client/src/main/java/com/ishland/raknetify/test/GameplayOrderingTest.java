@@ -86,7 +86,7 @@ final class GameplayOrderingTest {
      * @param label diagnostic group name written to the fixture log
      * @throws ReflectiveOperationException if a native packet or classifier is unavailable
      */
-    private static void verifyGroup(String[][] packets, String label) throws ReflectiveOperationException {
+    static void verifyGroup(String[][] packets, String label) throws ReflectiveOperationException {
         int[] routes = nativeRoutes(packets);
         RakNetSimpleMultiChannelCodec codec = new RakNetSimpleMultiChannelCodec(253);
         codec.addHandler((buffer, silent) -> routes[buffer.getUnsignedByte(buffer.readerIndex())]);
@@ -115,7 +115,7 @@ final class GameplayOrderingTest {
      * @return actual channel assignments for this runtime's equivalent gameplay packets
      * @throws ReflectiveOperationException if packet lookup or the routing entry point fails
      */
-    private static int[] nativeRoutes(String[][] packets) throws ReflectiveOperationException {
+    static int[] nativeRoutes(String[][] packets) throws ReflectiveOperationException {
         boolean modern = FabricLoader.getInstance().getModContainer("minecraft").orElseThrow()
                 .getMetadata().getVersion().getFriendlyString().startsWith("26.");
         Method route = Class.forName("com.ishland.raknetify.fabric.common.connection.RakNetMultiChannel")

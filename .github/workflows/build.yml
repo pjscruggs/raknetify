@@ -137,7 +137,7 @@ jobs:
           --krypton-lock .github/krypton-versions.json
           --encryption-legacy transport-test-legacy/build/libs/*.jar
           --encryption-modern transport-test-modern/build/libs/*.jar
-      - name: Native gameplay packet ordering
+      - name: Native gameplay and signed chat ordering
         run: >-
           python3 .github/scripts/client-address-check.py --ordering-only
           --jar fabric-universal/build/libs/*.jar

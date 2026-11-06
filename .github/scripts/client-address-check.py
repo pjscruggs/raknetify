@@ -124,6 +124,7 @@ def run(args, version, metadata, lock):
         assert 'PASS native gameplay ordering 12' in text
         assert 'PASS native entity lifecycle ordering 4' in text
         check_transfer_witness(version, text)
+        check_chat_witness(version, text)
         if not args.ordering_only:
             assert text.count('PASS connect address ') == 18
             assert text.count('PASS ping address ') == 18
@@ -133,6 +134,17 @@ def run(args, version, metadata, lock):
     if args.ordering_only:
         scope = 'native gameplay packet ordering under reversed delivery'
     print('PASS', version, scope, flush=True)
+
+
+def check_chat_witness(version, text):
+    """Require native session dependencies and cryptographic chain validation on session-indexed chat versions."""
+    if version.startswith('26.') or tuple(map(int, version.split('.'))) >= (1, 19, 3):
+        assert 'PASS native serverbound chat ordering 5' in text
+        assert 'PASS native clientbound chat ordering 5' in text
+        assert 'PASS native signed chat chain with rejected out-of-order control' in text
+        print('PASS', version, 'native signed chat chain and session ordering', flush=True)
+    if version.startswith('26.') or tuple(map(int, version.split('.'))) >= (1, 20, 5):
+        assert 'PASS native signed command ordering 4' in text
 
 
 def check_transfer_witness(version, text):
