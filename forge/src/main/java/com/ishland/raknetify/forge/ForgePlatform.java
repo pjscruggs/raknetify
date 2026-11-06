@@ -25,31 +25,37 @@
 package com.ishland.raknetify.forge;
 
 import com.ishland.raknetify.minecraft.ModPlatform;
+
 import net.minecraftforge.fml.loading.FMLLoader;
-import net.minecraftforge.fml.loading.LoadingModList;
 import net.minecraftforge.fml.loading.FMLPaths;
+import net.minecraftforge.fml.loading.LoadingModList;
+
 import java.nio.file.Path;
 
 /** Reads Forge's early discovery state without forcing Minecraft class initialization. */
 public final class ForgePlatform implements ModPlatform {
 
     /** Constructs the loader service before game mixins are selected. */
-    public ForgePlatform() {
-    }
+    public ForgePlatform() {}
 
     /**
      * Reads the built-in Minecraft mod entry without loading game code.
+     *
      * @return Minecraft's version from Forge's built-in mod metadata
      */
     @Override
     public String minecraftVersion() {
-        return LoadingModList.getModFileById("minecraft")
-                .getMods().stream().filter(mod -> mod.getModId().equals("minecraft"))
-                .findFirst().orElseThrow().getVersion().toString();
+        return LoadingModList.getModFileById("minecraft").getMods().stream()
+                .filter(mod -> "minecraft".equals(mod.getModId()))
+                .findFirst()
+                .orElseThrow()
+                .getVersion()
+                .toString();
     }
 
     /**
      * Selects the physical distribution used for client-only initialization.
+     *
      * @return whether Forge is running its physical client distribution
      */
     @Override
@@ -59,6 +65,7 @@ public final class ForgePlatform implements ModPlatform {
 
     /**
      * Determines whether development-only mixin auditing is appropriate.
+     *
      * @return whether Forge is running a development launch
      */
     @Override
@@ -68,16 +75,18 @@ public final class ForgePlatform implements ModPlatform {
 
     /**
      * Queries the early mod inventory used while mixin configurations are loaded.
+     *
      * @param id Forge mod identifier
      * @return whether the mod was discovered for this launch
      */
     @Override
-    public boolean isModLoaded(String id) {
+    public boolean isModLoaded(final String id) {
         return LoadingModList.getModFileById(id) != null;
     }
 
     /**
      * Uses the instance configuration directory selected by the loader.
+     *
      * @return Forge's instance configuration directory
      */
     @Override
@@ -87,6 +96,5 @@ public final class ForgePlatform implements ModPlatform {
 
     /** Leaves registration to mods calling the optional PacketOrdering API during their setup. */
     @Override
-    public void initializePacketOrdering() {
-    }
+    public void initializePacketOrdering() {}
 }

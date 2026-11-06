@@ -25,6 +25,7 @@
 package com.ishland.raknetify.forge;
 
 import com.ishland.raknetify.fabric.MinecraftRuntime;
+
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
@@ -35,17 +36,19 @@ public final class RaknetifyForge {
 
     /**
      * Registers startup on the mod's lifecycle bus without touching Minecraft during discovery.
+     *
      * @param context loader-provided context for this mod container
      */
-    public RaknetifyForge(FMLJavaModLoadingContext context) {
+    public RaknetifyForge(final FMLJavaModLoadingContext context) {
         FMLCommonSetupEvent.getBus(context.getModBusGroup()).addListener(this::initialize);
     }
 
     /**
      * Defers packet registration and transport startup to the serial setup queue.
+     *
      * @param event common setup event shared by client and dedicated-server distributions
      */
-    private void initialize(FMLCommonSetupEvent event) {
+    private void initialize(final FMLCommonSetupEvent event) {
         event.enqueueWork(MinecraftRuntime::initialize);
     }
 }

@@ -26,26 +26,39 @@ package com.ishland.raknetify.forge.mixin;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.common.ForgeHooks;
+
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
-/** Gives Forge's retained custom payloads GC-owned bytes instead of an allocator buffer with no release owner. */
+/**
+ * Gives Forge's retained custom payloads GC-owned bytes instead of an allocator buffer with no
+ * release owner.
+ */
 @Mixin(value = ForgeHooks.class, remap = false)
 public abstract class MixinForgePayloadStorage {
     /**
-     * Copies into an independent byte array because Forge payload events may retain data after dispatch.
-     * Forge has no final-release callback for those events. A pooled or direct allocation therefore leaks,
-     * while releasing after dispatch would invalidate deferred readers. The ordinary wrapper is kept by Forge.
+     * Copies into an independent byte array because Forge payload events may retain data after
+     * dispatch. Forge has no final-release callback for those events. A pooled or direct allocation
+     * therefore leaks, while releasing after dispatch would invalidate deferred readers. The
+     * ordinary wrapper is kept by Forge.
+     *
      * @param source inbound buffer whose lifetime still belongs to the packet decoder
      * @param length byte count already validated against Forge's payload size limit
      * @return independent heap storage reclaimed with the payload, including when dispatch throws
      */
-    @Redirect(method = "lambda$getCustomPayloadCodec$1", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/network/FriendlyByteBuf;readBytes(I)Lio/netty/buffer/ByteBuf;"), require = 1)
-    private static ByteBuf copyPayloadBytes(FriendlyByteBuf source, int length) {
+    @Redirect(
+            method = "lambda$getCustomPayloadCodec$1",
+            at =
+                    @At(
+                            value = "INVOKE",
+                            target =
+                                    "Lnet/minecraft/network/FriendlyByteBuf;readBytes(I)Lio/netty/buffer/ByteBuf;"),
+            require = 1)
+    private static ByteBuf copyPayloadBytes(final FriendlyByteBuf source, final int length) {
         byte[] bytes = new byte[length];
         source.readBytes(bytes);
         return Unpooled.wrappedBuffer(bytes);

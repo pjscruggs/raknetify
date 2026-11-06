@@ -34,17 +34,19 @@ public final class ForgeClientTest {
 
     /**
      * Registers a fixture callback that is never packaged in the production mod.
+     *
      * @param context loader-created context for the separate test mod
      */
-    public ForgeClientTest(FMLJavaModLoadingContext context) {
+    public ForgeClientTest(final FMLJavaModLoadingContext context) {
         FMLLoadCompleteEvent.getBus(context.getModBusGroup()).addListener(this::complete);
     }
 
     /**
      * Schedules deterministic packet checks on the client thread after setup work has completed.
+     *
      * @param event final mod lifecycle event
      */
-    private void complete(FMLLoadCompleteEvent event) {
+    private void complete(final FMLLoadCompleteEvent event) {
         event.enqueueWork(() -> {
             try {
                 ForgePayloadOwnershipTest.verify();
