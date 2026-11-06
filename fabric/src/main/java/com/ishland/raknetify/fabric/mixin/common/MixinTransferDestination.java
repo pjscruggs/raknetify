@@ -26,17 +26,23 @@ package com.ishland.raknetify.fabric.mixin.common;
 
 import com.ishland.raknetify.common.connection.TransferDestinations;
 import com.ishland.raknetify.common.connection.TransferSupport;
+
 import io.netty.channel.Channel;
+
 import net.minecraft.network.ClientConnection;
 import net.minecraft.network.packet.Packet;
 import net.minecraft.network.packet.s2c.common.ServerTransferS2CPacket;
-import org.spongepowered.asm.mixin.Mixin;
+
 import org.spongepowered.asm.mixin.Dynamic;
+import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
-/** Rewrites configured transfer destinations at the shared send path, including transfers with completion callbacks. */
+/**
+ * Rewrites configured transfer destinations at the shared send path, including transfers with
+ * completion callbacks.
+ */
 @Mixin(ClientConnection.class)
 public abstract class MixinTransferDestination {
 
@@ -44,17 +50,28 @@ public abstract class MixinTransferDestination {
     @Shadow private Channel channel;
 
     /**
-     * Substitutes only the native transfer packet and retains the caller's original send completion behavior.
+     * Substitutes only the native transfer packet and retains the caller's original send completion
+     * behavior.
+     *
      * @param packet outgoing packet after all public send overloads converge
      * @return original packet or an equivalent transfer selecting the configured RakNet endpoint
      */
     // The intermediary ID spans both PacketCallbacks and ChannelFutureListener signatures.
     @Dynamic
-    @ModifyVariable(remap = false, method = {"sendImmediately", "method_10764"},
-            at = @At("HEAD"), argsOnly = true, require = 1)
-    private Packet<?> raknetify$selectTransferDestination(Packet<?> packet) {
-        if (!(packet instanceof ServerTransferS2CPacket transfer)) return packet;
-        TransferDestinations.Endpoint selected = TransferSupport.select(this.channel, transfer.host(), transfer.port());
-        return selected == null ? packet : new ServerTransferS2CPacket(selected.host(), selected.port());
+    @ModifyVariable(
+            remap = false,
+            method = {"sendImmediately", "method_10764"},
+            at = @At("HEAD"),
+            argsOnly = true,
+            require = 1)
+    private Packet<?> raknetify$selectTransferDestination(final Packet<?> packet) {
+        if (!(packet instanceof ServerTransferS2CPacket transfer)) {
+            return packet;
+        }
+        TransferDestinations.Endpoint selected =
+                TransferSupport.select(this.channel, transfer.host(), transfer.port());
+        return selected == null
+                ? packet
+                : new ServerTransferS2CPacket(selected.host(), selected.port());
     }
 }

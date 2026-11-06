@@ -26,11 +26,15 @@ package com.ishland.raknetify.fabric.mixin.server;
 
 import com.ishland.raknetify.common.connection.RakNetSimpleMultiChannelCodec;
 import com.ishland.raknetify.fabric.mixin.access.IClientConnection;
+
 import io.netty.channel.Channel;
+
 import net.minecraft.network.ClientConnection;
 import net.minecraft.server.PlayerManager;
 import net.minecraft.server.network.ServerPlayerEntity;
+
 import network.ycc.raknet.RakNet;
+
 import org.spongepowered.asm.mixin.Dynamic;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -39,7 +43,8 @@ import org.spongepowered.asm.mixin.injection.Surrogate;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Handles both legacy player-join signatures when logging and starting RakNet multichannel delivery.
+ * Handles both legacy player-join signatures when logging and starting RakNet multichannel
+ * delivery.
  */
 @Mixin(PlayerManager.class)
 public class MixinPlayerManager1_20_1 {
@@ -54,10 +59,22 @@ public class MixinPlayerManager1_20_1 {
      */
     // The two literal selectors cover named development and intermediary production runtimes.
     @Dynamic
-    @Inject(remap = false, method = {"onPlayerConnect", "method_14570"}, at = @At("HEAD"), require = 1)
-    private void onJoin(ClientConnection connection, ServerPlayerEntity player, int latency, CallbackInfo ci) {
-        if (((IClientConnection) connection).getChannel().config() instanceof RakNet.Config config) {
-            System.out.println(String.format("Raknetify: %s logged in via RakNet, mtu %d", player.getName().getString(), config.getMTU()));
+    @Inject(
+            remap = false,
+            method = {"onPlayerConnect", "method_14570"},
+            at = @At("HEAD"),
+            require = 1)
+    private void onJoin(
+            final ClientConnection connection,
+            final ServerPlayerEntity player,
+            final int latency,
+            final CallbackInfo ci) {
+        if (((IClientConnection) connection).getChannel().config()
+                instanceof RakNet.Config config) {
+            System.out.println(
+                    String.format(
+                            "Raknetify: %s logged in via RakNet, mtu %d",
+                            player.getName().getString(), config.getMTU()));
         }
     }
 
@@ -70,14 +87,22 @@ public class MixinPlayerManager1_20_1 {
      * @param ci injection callback, left uncancelled so vanilla join processing is unchanged
      */
     @Surrogate
-    private void onJoin(ClientConnection connection, ServerPlayerEntity player, CallbackInfo ci) {
-        if (((IClientConnection) connection).getChannel().config() instanceof RakNet.Config config) {
-            System.out.println(String.format("Raknetify: %s logged in via RakNet, mtu %d", player.getName().getString(), config.getMTU()));
+    private void onJoin(
+            final ClientConnection connection,
+            final ServerPlayerEntity player,
+            final CallbackInfo ci) {
+        if (((IClientConnection) connection).getChannel().config()
+                instanceof RakNet.Config config) {
+            System.out.println(
+                    String.format(
+                            "Raknetify: %s logged in via RakNet, mtu %d",
+                            player.getName().getString(), config.getMTU()));
         }
     }
 
     /**
-     * Requests multichannel negotiation after vanilla finishes sending the player's initial join state.
+     * Requests multichannel negotiation after vanilla finishes sending the player's initial join
+     * state.
      *
      * @param connection player's initialized Minecraft connection
      * @param player server player entering the world
@@ -86,34 +111,48 @@ public class MixinPlayerManager1_20_1 {
      */
     // The two literal selectors cover named development and intermediary production runtimes.
     @Dynamic
-    @Inject(remap = false, method = {"onPlayerConnect", "method_14570"}, at = @At("RETURN"), require = 1)
-    private void postJoin(ClientConnection connection, ServerPlayerEntity player, int latency, CallbackInfo ci) {
+    @Inject(
+            remap = false,
+            method = {"onPlayerConnect", "method_14570"},
+            at = @At("RETURN"),
+            require = 1)
+    private void postJoin(
+            final ClientConnection connection,
+            final ServerPlayerEntity player,
+            final int latency,
+            final CallbackInfo ci) {
         final Channel channel = ((IClientConnection) connection).getChannel();
         if (channel == null) {
             //noinspection RedundantStringFormatCall
-            System.err.println("Raknetify: Warning: %s don't have valid channel when logged in, not sending sync packet".formatted(this));
+            System.err.println(
+                    "Raknetify: Warning: %s don't have valid channel when logged in, not sending sync packet"
+                            .formatted(this));
             return;
         }
         channel.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL);
     }
 
     /**
-     * Requests multichannel negotiation after vanilla finishes sending the player's initial join state.
-     * This surrogate serves Minecraft versions without the explicit latency argument.
+     * Requests multichannel negotiation after vanilla finishes sending the player's initial join
+     * state. This surrogate serves Minecraft versions without the explicit latency argument.
      *
      * @param connection player's initialized Minecraft connection
      * @param player server player entering the world
      * @param ci injection callback, left uncancelled so vanilla join processing is unchanged
      */
     @Surrogate
-    private void postJoin(ClientConnection connection, ServerPlayerEntity player, CallbackInfo ci) {
+    private void postJoin(
+            final ClientConnection connection,
+            final ServerPlayerEntity player,
+            final CallbackInfo ci) {
         final Channel channel = ((IClientConnection) connection).getChannel();
         if (channel == null) {
             //noinspection RedundantStringFormatCall
-            System.err.println("Raknetify: Warning: %s don't have valid channel when logged in, not sending sync packet".formatted(this));
+            System.err.println(
+                    "Raknetify: Warning: %s don't have valid channel when logged in, not sending sync packet"
+                            .formatted(this));
             return;
         }
         channel.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL);
     }
-
 }

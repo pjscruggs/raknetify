@@ -27,14 +27,17 @@ package com.ishland.raknetify.fabric.mixin.common;
 import com.ishland.raknetify.common.Constants;
 import com.ishland.raknetify.common.util.DebugUtil;
 import com.ishland.raknetify.fabric.common.util.NetworkStates;
+
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.util.AttributeKey;
+
 import net.minecraft.network.ClientConnection;
 import net.minecraft.network.NetworkPhase;
 import net.minecraft.network.NetworkSide;
 import net.minecraft.network.listener.PacketListener;
+
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -47,28 +50,22 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import java.net.SocketAddress;
 import java.nio.channels.ClosedChannelException;
 
-/**
- * Avoids blocking disconnect waits and adds transport-aware connection diagnostics.
- */
+/** Avoids blocking disconnect waits and adds transport-aware connection diagnostics. */
 @Mixin(ClientConnection.class)
 public abstract class MixinClientConnection {
 
-    /**
-     * Vanilla application channel whose state is combined with the local closing flag.
-     */
-    @Shadow
-    private Channel channel;
+    /** Vanilla application channel whose state is combined with the local closing flag. */
+    @Shadow private Channel channel;
 
     /**
      * Exposes vanilla's remote-address accessor on the mixed-in connection.
      *
      * @return remote socket address retained by Minecraft
      */
-    @Shadow public abstract SocketAddress getAddress();
+    @Shadow
+    public abstract SocketAddress getAddress();
 
-    /**
-     * Remote socket address used to identify protocol errors in concise diagnostics.
-     */
+    /** Remote socket address used to identify protocol errors in concise diagnostics. */
     @Shadow private SocketAddress address;
 
     /**
@@ -76,69 +73,92 @@ public abstract class MixinClientConnection {
      *
      * @return receiving network direction configured for the connection
      */
-    @Shadow public abstract NetworkSide getSide();
+    @Shadow
+    public abstract NetworkSide getSide();
 
-    /**
-     * Current Minecraft protocol listener, read as a snapshot when reporting failures.
-     */
+    /** Current Minecraft protocol listener, read as a snapshot when reporting failures. */
     @Shadow private volatile @Nullable PacketListener packetListener;
-    /**
-     * Whether disconnect has begun even if the asynchronous Netty close has not completed.
-     */
-    @Unique
-    private volatile boolean isClosing = false;
+
+    /** Whether disconnect has begun even if the asynchronous Netty close has not completed. */
+    @Unique private volatile boolean isClosing;
 
     /**
-     * Marks the connection as closing and lets Netty finish asynchronously instead of blocking the caller.
+     * Marks the connection as closing and lets Netty finish asynchronously instead of blocking the
+     * caller.
      *
      * @param instance close future that vanilla would otherwise wait on
      * @return the unchanged close future without waiting
      */
-    @Redirect(method = {"disconnect(Lnet/minecraft/text/Text;)V", "disconnect(Lnet/minecraft/network/DisconnectionInfo;)V"}, at = @At(value = "INVOKE", target = "Lio/netty/channel/ChannelFuture;awaitUninterruptibly()Lio/netty/channel/ChannelFuture;", remap = false), require = 1)
-    private ChannelFuture noDisconnectWait(ChannelFuture instance) {
+    @Redirect(
+            method = {
+                "disconnect(Lnet/minecraft/text/Text;)V",
+                "disconnect(Lnet/minecraft/network/DisconnectionInfo;)V"
+            },
+            at =
+                    @At(
+                            value = "INVOKE",
+                            target =
+                                    "Lio/netty/channel/ChannelFuture;awaitUninterruptibly()Lio/netty/channel/ChannelFuture;",
+                            remap = false),
+            require = 1)
+    private ChannelFuture noDisconnectWait(final ChannelFuture instance) {
         isClosing = true;
-//        if (instance.channel().eventLoop().inEventLoop()) {
-//            return instance; // no-op
-//        } else {
-//            return instance.awaitUninterruptibly();
-//        }
+        //        if (instance.channel().eventLoop().inEventLoop()) {
+        //            return instance; // no-op
+        //        } else {
+        //            return instance.awaitUninterruptibly();
+        //        }
         return instance;
     }
 
     /**
      * Treats a closing connection as unavailable before its asynchronous channel close completes.
      *
-     * @param instance intercepted channel receiver, unused because this connection owns the authoritative channel
+     * @param instance intercepted channel receiver, unused because this connection owns the
+     *     authoritative channel
      * @return true only when the owned channel exists, is open, and has not begun closing
      */
-    @Redirect(method = "*", at = @At(value = "INVOKE", target = "Lio/netty/channel/Channel;isOpen()Z", remap = false))
-    private boolean redirectIsOpen(Channel instance) {
+    @Redirect(
+            method = "*",
+            at =
+                    @At(
+                            value = "INVOKE",
+                            target = "Lio/netty/channel/Channel;isOpen()Z",
+                            remap = false))
+    private boolean redirectIsOpen(final Channel instance) {
         return this.channel != null && (this.channel.isOpen() && !this.isClosing);
     }
 
-//    @Inject(method = "channelActive", at = @At("HEAD"))
-//    private void onChannelActive(ChannelHandlerContext ctx, CallbackInfo ci) {
-//        final Channel channel = ctx.channel();
-//        if (channel.config() instanceof RakNet.Config config) {
-//            if (this.side == NetworkSide.SERVERBOUND) {
-//                System.out.println(String.format("RakNet connection from %s, mtu %d", channel.remoteAddress(), config.getMTU()));
-//            } else if (this.side == NetworkSide.CLIENTBOUND) {
-//                System.out.println(String.format("RakNet conncted to %s, mtu %d", channel.remoteAddress(), config.getMTU()));
-//            }
-//        }
-//    }
+    //    @Inject(method = "channelActive", at = @At("HEAD"))
+    //    private void onChannelActive(ChannelHandlerContext ctx, CallbackInfo ci) {
+    //        final Channel channel = ctx.channel();
+    //        if (channel.config() instanceof RakNet.Config config) {
+    //            if (this.side == NetworkSide.SERVERBOUND) {
+    //                System.out.println(String.format("RakNet connection from %s, mtu %d",
+    // channel.remoteAddress(), config.getMTU()));
+    //            } else if (this.side == NetworkSide.CLIENTBOUND) {
+    //                System.out.println(String.format("RakNet conncted to %s, mtu %d",
+    // channel.remoteAddress(), config.getMTU()));
+    //            }
+    //        }
+    //    }
 
     /**
      * Adds detailed transport diagnostics in debug mode and concise phase-aware errors otherwise.
-     * Expected closed-channel errors are ignored by this diagnostic hook. Vanilla error handling still runs.
+     * Expected closed-channel errors are ignored by this diagnostic hook. Vanilla error handling
+     * still runs.
      *
-     * @param context handler context supplied by Netty, unused because connection fields identify the channel
+     * @param context handler context supplied by Netty, unused because connection fields identify
+     *     the channel
      * @param ex original connection failure
      * @param ci injection callback, left uncancelled for vanilla exception handling
      */
     @Inject(method = "exceptionCaught", at = @At("HEAD"))
-    private void onExceptionCaught(ChannelHandlerContext context, Throwable ex, CallbackInfo ci) {
-        if (ex instanceof ClosedChannelException) return;
+    private void onExceptionCaught(
+            final ChannelHandlerContext context, final Throwable ex, final CallbackInfo ci) {
+        if (ex instanceof ClosedChannelException) {
+            return;
+        }
         if (Constants.DEBUG) {
             System.err.println("Exception caught for connection %s".formatted(this.channel));
             for (String s : DebugUtil.printChannelDetails(this.channel).split("\n")) {
@@ -147,7 +167,8 @@ public abstract class MixinClientConnection {
             ex.printStackTrace();
         } else {
             final NetworkPhase state;
-            Object handler = this.channel.attr(AttributeKey.valueOf("protocol")).get(); // pre-1.20.2
+            Object handler =
+                    this.channel.attr(AttributeKey.valueOf("protocol")).get(); // pre-1.20.2
             if (handler != null) {
                 if (handler instanceof NetworkPhase state1) {
                     state = state1;
@@ -160,9 +181,11 @@ public abstract class MixinClientConnection {
                 state = packetListener1 != null ? packetListener1.getPhase() : null;
             }
             if (state != null && state != NetworkPhase.HANDSHAKING) {
-                System.err.println(String.format("%s %s %s", this.address, NetworkStates.getName(state), ex.toString()));
+                System.err.println(
+                        String.format(
+                                "%s %s %s",
+                                this.address, NetworkStates.getName(state), ex.toString()));
             }
         }
     }
-
 }

@@ -25,10 +25,13 @@
 package com.ishland.raknetify.fabric.mixin.common.encryption;
 
 import com.ishland.raknetify.fabric.common.connection.encryption.PacketEncryptionManagerInterface;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
+
 import net.minecraft.network.encryption.PacketEncryptionManager;
 import net.minecraft.network.encryption.PacketEncryptor;
+
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -42,9 +45,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(PacketEncryptor.class)
 public class MixinPacketEncryptor {
 
-    /**
-     * Vanilla cipher-buffer helper whose context is set before each payload is processed.
-     */
+    /** Vanilla cipher-buffer helper whose context is set before each payload is processed. */
     @Shadow @Final private PacketEncryptionManager manager;
 
     /**
@@ -55,9 +56,15 @@ public class MixinPacketEncryptor {
      * @param byteBuf2 vanilla encrypted-output buffer, unused by this context hook
      * @param ci injection callback, left uncancelled so vanilla processing continues
      */
-    @Inject(method = "encode(Lio/netty/channel/ChannelHandlerContext;Lio/netty/buffer/ByteBuf;Lio/netty/buffer/ByteBuf;)V", at = @At("HEAD"))
-    private void preEncrypt(ChannelHandlerContext ctx, ByteBuf byteBuf, ByteBuf byteBuf2, CallbackInfo ci) {
+    @Inject(
+            method =
+                    "encode(Lio/netty/channel/ChannelHandlerContext;Lio/netty/buffer/ByteBuf;Lio/netty/buffer/ByteBuf;)V",
+            at = @At("HEAD"))
+    private void preEncrypt(
+            final ChannelHandlerContext ctx,
+            final ByteBuf byteBuf,
+            final ByteBuf byteBuf2,
+            final CallbackInfo ci) {
         ((PacketEncryptionManagerInterface) this.manager).setContext(ctx);
     }
-
 }

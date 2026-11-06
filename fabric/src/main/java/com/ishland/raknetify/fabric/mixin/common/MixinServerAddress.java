@@ -28,11 +28,14 @@ import com.ishland.raknetify.common.Constants;
 import com.ishland.raknetify.common.util.PrefixUtil;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+
 import net.minecraft.client.network.ServerAddress;
+
 import org.spongepowered.asm.mixin.Mixin;
 
 /**
- * Preserves transport prefixes through Minecraft address parsing without passing them to host parsing.
+ * Preserves transport prefixes through Minecraft address parsing without passing them to host
+ * parsing.
  */
 @Mixin(ServerAddress.class)
 public class MixinServerAddress {
@@ -45,17 +48,17 @@ public class MixinServerAddress {
      * @return parsed address retaining the selected RakNet prefix, or the ordinary TCP address
      */
     @WrapMethod(method = "parse")
-    private static ServerAddress wrapParsing(String address, Operation<ServerAddress> original) {
+    private static ServerAddress wrapParsing(
+            final String address, final Operation<ServerAddress> original) {
         PrefixUtil.Info info = PrefixUtil.getInfo(address);
         if (info.useRakNet()) {
             ServerAddress addr = original.call(info.stripped());
             return new ServerAddress(
-                    (info.largeMTU() ? Constants.RAKNET_LARGE_MTU_PREFIX : Constants.RAKNET_PREFIX) + addr.getAddress(),
-                    addr.getPort()
-            );
+                    (info.largeMTU() ? Constants.RAKNET_LARGE_MTU_PREFIX : Constants.RAKNET_PREFIX)
+                            + addr.getAddress(),
+                    addr.getPort());
         } else {
             return original.call(address);
         }
     }
-
 }

@@ -25,13 +25,14 @@
 package com.ishland.raknetify.fabric.mixin.server;
 
 import com.ishland.raknetify.common.Constants;
-import com.ishland.raknetify.common.proxy.ProxyProtocol;
 import com.ishland.raknetify.common.connection.RakNetConnectionUtil;
 import com.ishland.raknetify.common.connection.RaknetifyEventLoops;
-import com.ishland.raknetify.common.util.ThreadLocalUtil;
+import com.ishland.raknetify.common.proxy.ProxyProtocol;
 import com.ishland.raknetify.common.util.NetworkInterfaceListener;
+import com.ishland.raknetify.common.util.ThreadLocalUtil;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+
 import io.netty.bootstrap.AbstractBootstrap;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelFuture;
@@ -44,9 +45,12 @@ import io.netty.channel.epoll.EpollDatagramChannel;
 import io.netty.channel.socket.DatagramChannel;
 import io.netty.channel.socket.ServerSocketChannel;
 import io.netty.channel.socket.nio.NioDatagramChannel;
+
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.ServerNetworkIo;
+
 import network.ycc.raknet.server.channel.RakNetServerChannel;
+
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -73,20 +77,19 @@ import java.util.function.Consumer;
 public abstract class MixinServerNetworkIo {
 
     /**
-     * Optional UDP-only listener port read from raknetify.fabric.portOverride, with invalid values ignored.
+     * Optional UDP-only listener port read from raknetify.fabric.portOverride, with invalid values
+     * ignored.
      */
     @Unique
-    private static final int raknetify$portOverride = Integer.getInteger("raknetify.fabric.portOverride", -1);
+    private static final int raknetify$portOverride =
+            Integer.getInteger("raknetify.fabric.portOverride", -1);
+
+    /** Vanilla server supplying native-transport preference and interface-change scheduling. */
+    @Shadow @Final private MinecraftServer server;
 
     /**
-     * Vanilla server supplying native-transport preference and interface-change scheduling.
-     */
-    @Shadow
-    @Final
-    private MinecraftServer server;
-
-    /**
-     * Invokes vanilla listener creation, with transport selection controlled by the thread-local bootstrap flag.
+     * Invokes vanilla listener creation, with transport selection controlled by the thread-local
+     * bootstrap flag.
      *
      * @param address local interface address, or null for a wildcard listener
      * @param port local port to bind
@@ -95,27 +98,21 @@ public abstract class MixinServerNetworkIo {
     @Shadow
     public abstract void bind(@Nullable InetAddress address, int port) throws IOException;
 
-    /**
-     * Vanilla listener lifecycle flag checked before reacting to an interface change.
-     */
-    @Shadow
-    public volatile boolean active;
+    /** Vanilla listener lifecycle flag checked before reacting to an interface change. */
+    @Shadow public volatile boolean active;
 
     /**
      * Vanilla list of bound channels, synchronized while removing listeners for a departed address.
      */
-    @Shadow
-    @Final
-    private List<ChannelFuture> channels;
-    /**
-     * Per-server interface-change callback, created once for wildcard binding.
-     */
+    @Shadow @Final private List<ChannelFuture> channels;
+
+    /** Per-server interface-change callback, created once for wildcard binding. */
     @Unique
-    private Consumer<NetworkInterfaceListener.InterfaceAddressChangeEvent> raknetify$eventListener = null;
+    private Consumer<NetworkInterfaceListener.InterfaceAddressChangeEvent> raknetify$eventListener;
 
     /**
-     * Creates the requested UDP endpoints before the original TCP bind continues.
-     * The thread-local guard makes recursive calls select RakNet without creating another companion listener.
+     * Creates the requested UDP endpoints before the original TCP bind continues. The thread-local
+     * guard makes recursive calls select RakNet without creating another companion listener.
      *
      * @param address requested local address, or null to enumerate every interface
      * @param port vanilla Minecraft port, used unless a valid UDP override is configured
@@ -123,31 +120,40 @@ public abstract class MixinServerNetworkIo {
      * @throws IOException if interface enumeration or an explicit-address UDP bind fails
      */
     @Inject(method = "bind", at = @At("HEAD"))
-    private void bindUdp(InetAddress address, int port, CallbackInfo ci) throws IOException {
+    private void bindUdp(final InetAddress address, final int port, final CallbackInfo ci)
+            throws IOException {
         if (!ThreadLocalUtil.isInitializingRaknet()) {
             try {
                 ThreadLocalUtil.setInitializingRaknet(true);
-                final boolean hasPortOverride = raknetify$portOverride > 0 && raknetify$portOverride < 65535;
+                final boolean hasPortOverride =
+                        raknetify$portOverride > 0 && raknetify$portOverride < 65535;
                 final int udpPort = hasPortOverride ? raknetify$portOverride : port;
                 if (address == null) {
-                    for (NetworkInterface networkInterface : NetworkInterface.networkInterfaces().toList()) {
-                        final Iterator<InetAddress> iterator = networkInterface.getInetAddresses().asIterator();
+                    for (NetworkInterface networkInterface :
+                            NetworkInterface.networkInterfaces().toList()) {
+                        final Iterator<InetAddress> iterator =
+                                networkInterface.getInetAddresses().asIterator();
                         while (iterator.hasNext()) {
                             final InetAddress inetAddress = iterator.next();
-                            System.out.println("Starting raknetify server on %s".formatted(inetAddress));
+                            System.out.println(
+                                    "Starting raknetify server on %s".formatted(inetAddress));
                             try {
                                 bind(inetAddress, udpPort);
                             } catch (IOException t) {
-                                System.out.println("**** FAILED TO BIND TO PORT! %s".formatted(t.getMessage()));
+                                System.out.println(
+                                        "**** FAILED TO BIND TO PORT! %s"
+                                                .formatted(t.getMessage()));
                             }
                         }
                     }
 
                     if (this.raknetify$eventListener == null) {
-                        this.raknetify$eventListener = event -> {
-                            raknetify$onInterfaceChange(event, udpPort);
-                        };
-                        NetworkInterfaceListener.addListener(event -> this.server.submit(() -> raknetify$eventListener.accept(event)));
+                        this.raknetify$eventListener =
+                                event -> {
+                                    raknetify$onInterfaceChange(event, udpPort);
+                                };
+                        NetworkInterfaceListener.addListener(event ->
+                                this.server.submit(() -> raknetify$eventListener.accept(event)));
                     }
                 } else {
                     System.out.println("Starting raknetify server on %s".formatted(address));
@@ -159,7 +165,6 @@ public abstract class MixinServerNetworkIo {
         }
     }
 
-
     /**
      * Rebinds UDP listeners after an interface change while retaining the recursive bind guard.
      *
@@ -167,7 +172,8 @@ public abstract class MixinServerNetworkIo {
      * @param port effective UDP port captured when the listener was first registered
      */
     @Unique
-    private void raknetify$onInterfaceChange(NetworkInterfaceListener.InterfaceAddressChangeEvent event, int port) {
+    private void raknetify$onInterfaceChange(
+            final NetworkInterfaceListener.InterfaceAddressChangeEvent event, final int port) {
         if (!this.active) {
             NetworkInterfaceListener.removeListener(this.raknetify$eventListener);
             return;
@@ -186,12 +192,14 @@ public abstract class MixinServerNetworkIo {
                 }
             } else {
                 synchronized (this.channels) {
-                    for (Iterator<ChannelFuture> iter = this.channels.iterator(); iter.hasNext(); ) {
+                    for (Iterator<ChannelFuture> iter = this.channels.iterator();
+                            iter.hasNext(); ) {
                         ChannelFuture channel = iter.next();
                         final SocketAddress socketAddress = channel.channel().localAddress();
                         if (socketAddress instanceof InetSocketAddress channelAddress) {
                             if (inetAddress.equals(channelAddress.getAddress())) {
-                                System.out.println("Stopping raknetify server on %s".formatted(inetAddress));
+                                System.out.println(
+                                        "Stopping raknetify server on %s".formatted(inetAddress));
                                 channel.channel().close();
                                 iter.remove();
                             }
@@ -214,11 +222,25 @@ public abstract class MixinServerNetworkIo {
      * @param original intercepted bootstrap group call
      * @return bootstrap configured for RakNet NIO or epoll, or the original TCP group
      */
-    @WrapOperation(method = "bind", at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/ServerBootstrap;group(Lio/netty/channel/EventLoopGroup;)Lio/netty/bootstrap/ServerBootstrap;", remap = false))
-    private ServerBootstrap redirectGroup(ServerBootstrap instance, EventLoopGroup group, Operation<ServerBootstrap> original) {
+    @WrapOperation(
+            method = "bind",
+            at =
+                    @At(
+                            value = "INVOKE",
+                            target =
+                                    "Lio/netty/bootstrap/ServerBootstrap;group(Lio/netty/channel/EventLoopGroup;)Lio/netty/bootstrap/ServerBootstrap;",
+                            remap = false))
+    private ServerBootstrap redirectGroup(
+            final ServerBootstrap instance,
+            final EventLoopGroup group,
+            final Operation<ServerBootstrap> original) {
         final boolean useEpoll = Epoll.isAvailable() && this.server.isUsingNativeTransport();
         return ThreadLocalUtil.isInitializingRaknet()
-                ? original.call(instance, useEpoll ? RaknetifyEventLoops.EPOLL_EVENT_LOOP_GROUP.get() : RaknetifyEventLoops.NIO_EVENT_LOOP_GROUP.get())
+                ? original.call(
+                        instance,
+                        useEpoll
+                                ? RaknetifyEventLoops.EPOLL_EVENT_LOOP_GROUP.get()
+                                : RaknetifyEventLoops.NIO_EVENT_LOOP_GROUP.get())
                 : original.call(instance, group);
     }
 
@@ -230,22 +252,43 @@ public abstract class MixinServerNetworkIo {
      * @param original intercepted bootstrap channel-class call
      * @return bootstrap using the UDP-backed RakNet factory or the original TCP channel class
      */
-    @WrapOperation(method = "bind", at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/ServerBootstrap;channel(Ljava/lang/Class;)Lio/netty/bootstrap/AbstractBootstrap;", remap = false))
-    private AbstractBootstrap<ServerBootstrap, ServerChannel> redirectChannel(ServerBootstrap instance, Class<? extends ServerSocketChannel> aClass, Operation<AbstractBootstrap<ServerBootstrap, ServerChannel>> original) {
+    @WrapOperation(
+            method = "bind",
+            at =
+                    @At(
+                            value = "INVOKE",
+                            target =
+                                    "Lio/netty/bootstrap/ServerBootstrap;channel(Ljava/lang/Class;)Lio/netty/bootstrap/AbstractBootstrap;",
+                            remap = false))
+    private AbstractBootstrap<ServerBootstrap, ServerChannel> redirectChannel(
+            final ServerBootstrap instance,
+            final Class<? extends ServerSocketChannel> aClass,
+            final Operation<AbstractBootstrap<ServerBootstrap, ServerChannel>> original) {
         final boolean useEpoll = Epoll.isAvailable() && this.server.isUsingNativeTransport();
         return ThreadLocalUtil.isInitializingRaknet()
                 ? instance.channelFactory(() -> {
-            RakNetServerChannel channel = ProxyProtocol.create(() -> {
-                final DatagramChannel channel1 = useEpoll ? new EpollDatagramChannel() : new NioDatagramChannel();
-                channel1.config().setOption(ChannelOption.SO_REUSEADDR, true);
-                channel1.config().setOption(ChannelOption.IP_TOS, RakNetConnectionUtil.DEFAULT_IP_TOS);
-                channel1.config().setRecvByteBufAllocator(new FixedRecvByteBufAllocator(Constants.LARGE_MTU + 512).maxMessagesPerRead(128));
-                return channel1;
-            });
-            channel.setProvidedApplicationEventLoop(RaknetifyEventLoops.DEFAULT_EVENT_LOOP_GROUP.get().next());
-            return channel;
-        })
+                    RakNetServerChannel channel =
+                            ProxyProtocol.create(() -> {
+                                final DatagramChannel channel1 =
+                                        useEpoll
+                                                ? new EpollDatagramChannel()
+                                                : new NioDatagramChannel();
+                                channel1.config().setOption(ChannelOption.SO_REUSEADDR, true);
+                                channel1.config()
+                                        .setOption(
+                                                ChannelOption.IP_TOS,
+                                                RakNetConnectionUtil.DEFAULT_IP_TOS);
+                                channel1.config()
+                                        .setRecvByteBufAllocator(
+                                                new FixedRecvByteBufAllocator(
+                                                                Constants.LARGE_MTU + 512)
+                                                        .maxMessagesPerRead(128));
+                                return channel1;
+                            });
+                    channel.setProvidedApplicationEventLoop(
+                            RaknetifyEventLoops.DEFAULT_EVENT_LOOP_GROUP.get().next());
+                    return channel;
+                })
                 : original.call(instance, aClass);
     }
-
 }

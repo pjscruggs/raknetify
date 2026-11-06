@@ -27,11 +27,13 @@ package com.ishland.raknetify.fabric.mixin.common.quirks;
 import com.ishland.raknetify.fabric.common.quirks.ClientHungerManager;
 import com.ishland.raknetify.fabric.common.util.LegacySupportUtil;
 import com.ishland.raknetify.fabric.mixin.access.IWorld;
+
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.HungerManager;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.world.World;
+
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -39,14 +41,13 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Installs hunger handling that ignores client prediction while preserving server-controlled player state.
+ * Installs hunger handling that ignores client prediction while preserving server-controlled player
+ * state.
  */
 @Mixin(PlayerEntity.class)
 public abstract class MixinPlayerEntity extends LivingEntity {
 
-    /**
-     * Vanilla hunger state replaced only for players in a logical client world.
-     */
+    /** Vanilla hunger state replaced only for players in a logical client world. */
     @Shadow protected HungerManager hungerManager;
 
     /**
@@ -55,7 +56,8 @@ public abstract class MixinPlayerEntity extends LivingEntity {
      * @param entityType living-entity type passed through to the vanilla superclass
      * @param world world containing the entity
      */
-    protected MixinPlayerEntity(EntityType<? extends LivingEntity> entityType, World world) {
+    protected MixinPlayerEntity(
+            final EntityType<? extends LivingEntity> entityType, final World world) {
         super(entityType, world);
     }
 
@@ -65,10 +67,9 @@ public abstract class MixinPlayerEntity extends LivingEntity {
      * @param ci constructor-return callback, unused after vanilla state initialization
      */
     @Inject(method = "<init>", at = @At("RETURN"), remap = false)
-    private void replaceHungerManager(CallbackInfo ci) {
+    private void replaceHungerManager(final CallbackInfo ci) {
         if (((IWorld) LegacySupportUtil.getEntityWorld(this)).raknetify$isClient()) {
             this.hungerManager = ClientHungerManager.from(this.hungerManager);
         }
     }
-
 }

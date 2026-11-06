@@ -28,14 +28,17 @@ import com.ishland.raknetify.fabric.common.util.MultiVersionUtil;
 import com.ishland.raknetify.fabric.mixin.access.IClientConnection;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.WrapWithCondition;
+
 import io.netty.channel.Channel;
+
 import net.minecraft.network.ClientConnection;
 import net.minecraft.network.listener.ServerCommonPacketListener;
 import net.minecraft.server.network.ServerCommonNetworkHandler;
-import net.minecraft.server.network.ServerPlayNetworkHandler;
 import net.minecraft.text.Text;
 import net.minecraft.util.Util;
+
 import network.ycc.raknet.RakNet;
+
 import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -44,15 +47,11 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/**
- * Uses RakNet transport liveness and RTT instead of Minecraft keepalive timing.
- */
+/** Uses RakNet transport liveness and RTT instead of Minecraft keepalive timing. */
 @Mixin(ServerCommonNetworkHandler.class)
 public abstract class MixinServerCommonNetworkHandler implements ServerCommonPacketListener {
 
-    /**
-     * Vanilla player connection inspected for RakNet transport configuration.
-     */
+    /** Vanilla player connection inspected for RakNet transport configuration. */
     @Shadow @Final protected ClientConnection connection;
 
     /**
@@ -66,9 +65,17 @@ public abstract class MixinServerCommonNetworkHandler implements ServerCommonPac
      * @param original vanilla timestamp of the last keepalive check
      * @return current monotonic time for RakNet, or the original timestamp for TCP
      */
-    @ModifyExpressionValue(method = "baseTick", at = @At(value = "FIELD", target = "Lnet/minecraft/server/network/ServerCommonNetworkHandler;lastKeepAliveTime:J", opcode = Opcodes.GETFIELD))
-    private long disableKeepAlive(long original) {
-        if (!(((IClientConnection) this.connection).getChannel().config() instanceof RakNet.Config)) {
+    @ModifyExpressionValue(
+            method = "baseTick",
+            at =
+                    @At(
+                            value = "FIELD",
+                            target =
+                                    "Lnet/minecraft/server/network/ServerCommonNetworkHandler;lastKeepAliveTime:J",
+                            opcode = Opcodes.GETFIELD))
+    private long disableKeepAlive(final long original) {
+        if (!(((IClientConnection) this.connection).getChannel().config()
+                instanceof RakNet.Config)) {
             return original;
         }
         return Util.getMeasuringTimeMs();
@@ -81,9 +88,21 @@ public abstract class MixinServerCommonNetworkHandler implements ServerCommonPac
      * @param reason vanilla keepalive disconnect reason
      * @return false for RakNet to suppress this disconnect, true for ordinary TCP behavior
      */
-    @WrapWithCondition(method = "onKeepAlive", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/network/ServerCommonNetworkHandler;disconnect(Lnet/minecraft/text/Text;)V"))
-    private boolean stopTimeoutPlayersOnKeepAlive(ServerCommonNetworkHandler instance, Text reason) {
-        return !(((IClientConnection) MultiVersionUtil.ServerPlayNetworkHandler$connection.get((ServerCommonNetworkHandler) (Object) this)).getChannel().config() instanceof RakNet.Config);
+    @WrapWithCondition(
+            method = "onKeepAlive",
+            at =
+                    @At(
+                            value = "INVOKE",
+                            target =
+                                    "Lnet/minecraft/server/network/ServerCommonNetworkHandler;disconnect(Lnet/minecraft/text/Text;)V"))
+    private boolean stopTimeoutPlayersOnKeepAlive(
+            final ServerCommonNetworkHandler instance, final Text reason) {
+        return !(((IClientConnection)
+                                MultiVersionUtil.ServerPlayNetworkHandler$connection.get(
+                                        (ServerCommonNetworkHandler) (Object) this))
+                        .getChannel()
+                        .config()
+                instanceof RakNet.Config);
     }
 
     /**
@@ -93,9 +112,22 @@ public abstract class MixinServerCommonNetworkHandler implements ServerCommonPac
      * @param value latency measured from the vanilla keepalive exchange
      * @return false for RakNet, true when vanilla should store the TCP measurement
      */
-    @WrapWithCondition(method = "onKeepAlive", at = @At(value = "FIELD", target = "Lnet/minecraft/server/network/ServerCommonNetworkHandler;latency:I", opcode = Opcodes.PUTFIELD))
-    private boolean redirectPingStoring(ServerCommonNetworkHandler instance, int value) {
-        return !(((IClientConnection) MultiVersionUtil.ServerPlayNetworkHandler$connection.get((ServerCommonNetworkHandler) (Object) this)).getChannel().config() instanceof RakNet.Config);
+    @WrapWithCondition(
+            method = "onKeepAlive",
+            at =
+                    @At(
+                            value = "FIELD",
+                            target =
+                                    "Lnet/minecraft/server/network/ServerCommonNetworkHandler;latency:I",
+                            opcode = Opcodes.PUTFIELD))
+    private boolean redirectPingStoring(
+            final ServerCommonNetworkHandler instance, final int value) {
+        return !(((IClientConnection)
+                                MultiVersionUtil.ServerPlayNetworkHandler$connection.get(
+                                        (ServerCommonNetworkHandler) (Object) this))
+                        .getChannel()
+                        .config()
+                instanceof RakNet.Config);
     }
 
     /**
@@ -104,11 +136,14 @@ public abstract class MixinServerCommonNetworkHandler implements ServerCommonPac
      * @param ci tick injection callback, left uncancelled so other vanilla maintenance continues
      */
     @Inject(method = "baseTick", at = @At("HEAD"))
-    private void onTick(CallbackInfo ci) {
-        final Channel channel = ((IClientConnection) MultiVersionUtil.ServerPlayNetworkHandler$connection.get((ServerCommonNetworkHandler) (Object) this)).getChannel();
+    private void onTick(final CallbackInfo ci) {
+        final Channel channel =
+                ((IClientConnection)
+                                MultiVersionUtil.ServerPlayNetworkHandler$connection.get(
+                                        (ServerCommonNetworkHandler) (Object) this))
+                        .getChannel();
         if (channel != null && channel.config() instanceof RakNet.Config config) {
             this.latency = (int) ((config.getRTTNanos() + config.getRTTStdDevNanos()) / 1_000_000);
         }
     }
-
 }

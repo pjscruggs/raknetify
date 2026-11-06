@@ -36,16 +36,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import java.util.Queue;
 
 /**
- * Prevents already-processed debug-sample subscriptions from accumulating in the legacy pending queue.
+ * Prevents already-processed debug-sample subscriptions from accumulating in the legacy pending
+ * queue.
  */
 @Pseudo
 @Mixin(targets = "net.minecraft.class_9188")
 public class MixinSampleSubscriptionTracker {
 
-    /**
-     * Vanilla queue of pending debug-sample subscription requests.
-     */
-    @Shadow(aliases = "field_48812", remap = false) @Final private Queue<?> pendingQueue;
+    /** Vanilla queue of pending debug-sample subscription requests. */
+    @Shadow(aliases = "field_48812", remap = false)
+    @Final
+    private Queue<?> pendingQueue;
 
     /**
      * Clears pending requests after the target update has finished processing them.
@@ -54,8 +55,7 @@ public class MixinSampleSubscriptionTracker {
      */
     @Dynamic
     @Inject(method = "method_56654", remap = false, at = @At("RETURN"))
-    private void cleanQueue(CallbackInfo ci) {
+    private void cleanQueue(final CallbackInfo ci) {
         this.pendingQueue.clear();
     }
-
 }
