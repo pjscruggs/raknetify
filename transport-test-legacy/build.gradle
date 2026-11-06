@@ -15,6 +15,3 @@ java {
 }
 
 loom { mixin { useLegacyMixinAp = true } }
-
-// Test fixtures are built for CI only and have no Maven publication.
-publishing { publications.clear() }

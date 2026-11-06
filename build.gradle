@@ -24,7 +24,8 @@ tasks.register('qualityChecks') {
 subprojects {
 	apply plugin: 'java'
 	apply plugin: 'java-library'
-	apply plugin: 'maven-publish'
+	// Integration fixtures must never become Maven release artifacts.
+	if (!project.name.startsWith('transport-test-')) apply plugin: 'maven-publish'
 	apply plugin: 'dev.yumi.gradle.licenser'
 	tasks.named('check') { dependsOn rootProject.tasks.named('qualityChecks') }
 
@@ -49,20 +50,22 @@ subprojects {
 		maven { url 'https://oss.sonatype.org/content/repositories/snapshots' }
 	}
 
-	// configure the maven publication
-	publishing {
-		publications {
-			mavenJava(MavenPublication) {
-				from components.java
+	plugins.withId('maven-publish') {
+		// configure the maven publication
+		publishing {
+			publications {
+				mavenJava(MavenPublication) {
+					from components.java
+				}
 			}
-		}
 
-		// See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
-		repositories {
-			// Add repositories to publish to here.
-			// Notice: This block does NOT have the same function as the block in the top level.
-			// The repositories here will be used for publishing your artifact, not for
-			// retrieving dependencies.
+			// See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
+			repositories {
+				// Add repositories to publish to here.
+				// Notice: This block does NOT have the same function as the block in the top level.
+				// The repositories here will be used for publishing your artifact, not for
+				// retrieving dependencies.
+			}
 		}
 	}
 
