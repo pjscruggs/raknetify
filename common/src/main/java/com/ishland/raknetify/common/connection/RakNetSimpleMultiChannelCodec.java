@@ -33,11 +33,11 @@ import io.netty.channel.ChannelPromise;
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
-import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import network.ycc.raknet.frame.FrameData;
 import network.ycc.raknet.packet.FramedPacket;
 
-import java.util.LinkedList;
+import java.util.ArrayDeque;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Queue;
 
@@ -73,9 +73,11 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
     }
 
     /**
-     * Channel overrides in precedence order, guarded by this list as a monitor.
+     * Immutable classifier snapshot published after registration changes, in precedence order.
      */
-    private final ObjectArrayList<OverrideHandler> handlers = new ObjectArrayList<>();
+    private volatile OverrideHandler[] handlers = new OverrideHandler[0];
+    /** Serializes rare registration changes without locking the packet-processing path. */
+    private final Object handlersLock = new Object();
 
     /**
      * Appends an override after the existing rules. Earlier nonzero results take precedence.
@@ -84,8 +86,10 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
      * @return this codec for chained registration
      */
     public RakNetSimpleMultiChannelCodec addHandler(OverrideHandler handler) {
-        synchronized (handlers) {
-            handlers.add(handler);
+        synchronized (handlersLock) {
+            OverrideHandler[] updated = Arrays.copyOf(handlers, handlers.length + 1);
+            updated[updated.length - 1] = handler;
+            handlers = updated;
         }
         return this;
     }
@@ -96,8 +100,13 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
      * @param handler previously registered classifier to remove
      */
     public void removeHandler(OverrideHandler handler) {
-        synchronized (handlers) {
-            handlers.remove(handler);
+        synchronized (handlersLock) {
+            int index = Arrays.asList(handlers).indexOf(handler);
+            if (index < 0) return;
+            OverrideHandler[] updated = new OverrideHandler[handlers.length - 1];
+            System.arraycopy(handlers, 0, updated, 0, index);
+            System.arraycopy(handlers, index + 1, updated, index, updated.length - index);
+            handlers = updated;
         }
     }
 
@@ -109,10 +118,8 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
      * @return the first matching classifier, or null when none is installed
      */
     public <T> T getHandler(Class<T> clazz) {
-        synchronized (handlers) {
-            for (OverrideHandler handler : handlers) {
-                if (clazz.isInstance(handler)) return clazz.cast(handler);
-            }
+        for (OverrideHandler handler : handlers) {
+            if (clazz.isInstance(handler)) return clazz.cast(handler);
         }
         return null;
     }
@@ -125,11 +132,11 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
     /**
      * Whether Minecraft writes must wait for the multichannel negotiation marker.
      */
-    private boolean queuePendingWrites = false;
+    private boolean queuePendingWrites;
     /**
      * Owned encoded frames and their completion promises awaiting negotiation completion.
      */
-    private final Queue<PendingWrite> pendingWrites = new LinkedList<>();
+    private final Queue<PendingWrite> pendingWrites = new ArrayDeque<>();
 
     /**
      * Fails outstanding negotiation-delayed writes and releases their retained frames.
@@ -312,9 +319,7 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
      * @return true when at least one override handler is registered
      */
     protected boolean isMultichannelAvailable() {
-        synchronized (handlers) {
-            return !handlers.isEmpty();
-        }
+        return handlers.length != 0;
     }
 
     /**
@@ -325,11 +330,9 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
      * @return ordering channel, -1 for reliable unordered, -2 for unreliable, or Integer.MIN_VALUE to discard
      */
     protected int getChannelOverride(ByteBuf buf, boolean suppressWarning) {
-        synchronized (handlers) {
-            for (OverrideHandler handler : handlers) {
-                final int override = handler.getChannelOverride(buf, suppressWarning);
-                if (override != 0) return override;
-            }
+        for (OverrideHandler handler : handlers) {
+            final int override = handler.getChannelOverride(buf, suppressWarning);
+            if (override != 0) return override;
         }
         return 0;
     }
@@ -385,6 +388,7 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
     /**
      * Classifies a Minecraft packet without changing the payload reader index.
      */
+    @FunctionalInterface
     public interface OverrideHandler {
         /**
          * Selects a delivery policy while allowing later classifiers to handle the default channel.
