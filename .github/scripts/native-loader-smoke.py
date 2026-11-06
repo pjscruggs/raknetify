@@ -241,6 +241,7 @@ def client(args, lock, metadata, join=False):
               'natives_directory': folder / 'natives', 'launcher_name': 'TransportTests', 'launcher_version': '1'}
     arguments = launcher_arguments(metadata['arguments']['jvm'] + profile['arguments']['jvm'], values)
     command = [args.java, '-Xmx1G', '-Dstdout.encoding=UTF-8', '-Dstderr.encoding=UTF-8',
+               '-Draknetify.test.worldChanges=' + str(getattr(args, 'world_changes', False)).lower(),
                '-Draknetify.test.join=' + str(join).lower(), *authentication_arguments(args), *arguments,
                profile['mainClass'], *profile['arguments']['game'], '--gameDir', str(folder),
                '--assetsDir', str(asset_directory), '--assetIndex', metadata['assetIndex']['id'],
@@ -277,7 +278,8 @@ def check_failures(log):
     """Reject transformation and ownership failures even if the game continued to a successful probe."""
     text = log.read_text(encoding='utf-8')
     for failure in ('Critical injection failure', 'Mixin apply failed', 'LEAK:', 'InvalidMixinException',
-                    'Error loading class: net/fabricmc', 'Error loading class: org/quiltmc'):
+                    'Error loading class: net/fabricmc', 'Error loading class: org/quiltmc',
+                    'DecoderException', 'EncoderException', 'BlockingOperationException'):
         assert failure not in text, (log, failure)
 
 
