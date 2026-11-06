@@ -62,6 +62,9 @@ def configure_server(args, native):
         assert not any(folder.iterdir()), 'Refusing to reuse an unowned server directory'
         marker.write_text(json.dumps({'platform': args.platform}), encoding='utf-8')
     native.configure_server(folder)
+    sibling('udp-proxy-fixture').configure(folder, args.proxy_protocol)
+    if args.platform == 'paper':
+        configure_paper_proxy(folder, args.proxy_protocol)
     properties = folder / 'server.properties'
     properties.write_text(properties.read_text().replace('online-mode=false', 'online-mode=true')
                           + 'white-list=true\nenforce-whitelist=true\nenforce-secure-profile=false\n', encoding='utf-8')
@@ -69,6 +72,18 @@ def configure_server(args, native):
     plugins.mkdir(exist_ok=True)
     shutil.copy2(args.jar, plugins / 'raknetify2.jar')
     return folder
+
+
+def configure_paper_proxy(folder, enabled):
+    """Exercise Paper's native required-header setting alongside the separate UDP decoder."""
+    path = folder / 'config/paper-global.yml'
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = path.read_text(encoding='utf-8') if path.exists() else '_version: 31\nproxies:\n  proxy-protocol: false\n'
+    import re
+    text, count = re.subn(r'(?m)^  proxy-protocol: (?:true|false)$',
+                         '  proxy-protocol: ' + str(enabled).lower(), text)
+    assert count == 1, 'Paper proxy configuration schema changed'
+    path.write_text(text, encoding='utf-8')
 
 
 def await_transport(process, events):
@@ -89,10 +104,14 @@ def await_transport(process, events):
 def rejected_logins(args, authority):
     """Require encrypted session rejection and plaintext nonce rejection, with only the valid nonce reaching authentication."""
     classpath = os.pathsep.join((str(args.probe_dir / 'classes'), str(args.probe_dir / 'lib/*')))
-    for mode in ('rejected-session', 'rejected-nonce'):
+    modes = ('rejected-session', 'rejected-throttle', 'rejected-nonce') if args.proxy_protocol else ('rejected-session', 'rejected-nonce')
+    for mode in modes:
         subprocess.run([args.java, '-cp', classpath,
-                        'com.ishland.raknetify.common.connection.RaknetEncryptionProbe', '28990', '777', '8', mode],
+                        'com.ishland.raknetify.common.connection.RaknetEncryptionProbe', str(args.client_port), '777', '8', mode],
                        check=True, timeout=40)
+        if args.proxy_protocol and mode != 'rejected-session':
+            # Preserve Bukkit's default four-second IP throttle while testing separate authentication failures.
+            time.sleep(4.1)
     assert len(authority.rejected) == 1, 'A failed nonce reached account verification'
     assert not authority.accepted, 'Rejection probes admitted a player'
 
@@ -103,7 +122,7 @@ def join_server(args, authority, native, server):
     lock = json.loads((repository / 'native-loaders.json').read_text(encoding='utf-8'))['neoforge']
     settings = SimpleNamespace(loader='neoforge', java=args.java, work_dir=args.work_dir / 'client-runtime',
                                assets_dir=args.assets_dir, fixture=args.client_fixture, jar=args.client_jar,
-                               discovery_url=authority.url, world_changes=True)
+                               discovery_url=authority.url, world_changes=True, client_port=args.client_port)
     settings.work_dir.mkdir(exist_ok=True)
     log = settings.work_dir / 'client.log'
     log.write_text('', encoding='utf-8')
@@ -158,12 +177,14 @@ def exercise(args, lock, native, authority, server_jar):
     try:
         await_transport(process, events)
         expected = {'name': args.platform.capitalize() + ' ' + lock['minecraft'], 'protocol_version': lock['protocol']}
-        smoke.check_tcp_when_ready(28990, expected)
-        smoke.check_udp(28990)
-        smoke.check_connected_udp(28990, expected, args.java, args.probe_dir)
-        rejected_logins(args, authority)
-        if args.side == 'both':
-            join_server(args, authority, native, process)
+        smoke.check_tcp_when_ready(28990, expected, args.proxy_protocol and args.platform == 'paper')
+        with sibling('udp-proxy-fixture').transport(args.proxy_protocol, 28990, repeated=True) as port:
+            args.client_port = port
+            smoke.check_udp(port)
+            smoke.check_connected_udp(port, expected, args.java, args.probe_dir)
+            rejected_logins(args, authority)
+            if args.side == 'both':
+                join_server(args, authority, native, process)
     finally:
         smoke.stop_server(process, reader)
     assert process.returncode == 0, process.returncode
@@ -172,6 +193,8 @@ def exercise(args, lock, native, authority, server_jar):
     assert 'EncryptionProbe joined the game' not in text, 'Rejected identity reached gameplay'
     if args.side == 'both':
         assert 'Raknetify transport fixture joined' in text, 'Native server did not receive the real client chat'
+        if args.proxy_protocol:
+            assert 'TransportProbe[/192.0.2.50:' in text, 'Forwarded client IP was lost'
     print('PASS', args.platform, lock['minecraft'], 'packaged plugin, authentication controls and clean shutdown')
 
 
@@ -187,6 +210,7 @@ def main():
     parser.add_argument('--assets-dir', type=Path)
     parser.add_argument('--java', default='java')
     parser.add_argument('--side', choices=['server', 'both'], default='both')
+    parser.add_argument('--proxy-protocol', action='store_true')
     args = parser.parse_args()
     args.work_dir = args.work_dir.resolve()
     args.probe_dir = args.probe_dir.resolve()

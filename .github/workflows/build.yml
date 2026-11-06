@@ -105,7 +105,7 @@ jobs:
       max-parallel: 8
       matrix:
         os: [ubuntu-24.04]
-        suite: [server, proxy, disconnect, polymer, polymer-krypton, packetfixer-krypton, packetfixer-polymer-krypton, ordering, transfers, transfer-clients, fastipping]
+        suite: [server, proxy, bungee, proxy-protocol, disconnect, polymer, polymer-krypton, packetfixer-krypton, packetfixer-polymer-krypton, ordering, transfers, transfer-clients, fastipping]
         include:
           - os: ubuntu-24.04
             suite: krypton
@@ -137,6 +137,8 @@ jobs:
             suite: ordering
           - os: windows-2022
             suite: proxy
+          - os: windows-2022
+            suite: bungee
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: actions/download-artifact@v8.0.2
@@ -176,6 +178,29 @@ jobs:
           --jar velocity/build/libs/*-all.jar
           --probe-dir common/build/transport-probe
           --work-dir "$RUNNER_TEMP/raknetify-smoke/fastmotd"
+      - name: Required PROXY v2 across Fabric versions
+        if: matrix.suite == 'proxy-protocol'
+        run: >-
+          python .github/scripts/server-smoke.py --discard-runtime --proxy-protocol
+          --jar fabric-universal/build/libs/*.jar
+          --work-dir "$RUNNER_TEMP/raknetify-smoke/proxy-protocol"
+          --java-17 "${{ steps.java17.outputs.path }}/bin/java"
+          --java-21 "${{ steps.java21.outputs.path }}/bin/java"
+          --versions 1.18 1.21.11 26.1 26.3 26.4-snapshot-7
+      - name: BungeeCord direct and required PROXY v2
+        if: matrix.suite == 'bungee'
+        run: >-
+          python .github/scripts/bungee-smoke.py
+          --jar bungee/build/libs/*-all.jar
+          --probe-dir common/build/transport-probe
+          --work-dir "$RUNNER_TEMP/raknetify-smoke/bungee"
+      - name: Velocity required PROXY v2 and FastMOTD admission
+        if: matrix.suite == 'proxy'
+        run: >-
+          python .github/scripts/proxy-smoke.py --proxy-protocol
+          --jar velocity/build/libs/*-all.jar
+          --probe-dir common/build/transport-probe
+          --work-dir "$RUNNER_TEMP/raknetify-smoke/forwarded-fastmotd"
       - name: Disconnect reasons under packet loss
         if: matrix.suite == 'disconnect'
         run: >-
@@ -347,12 +372,19 @@ jobs:
           else
             "${command[@]}" --side server
           fi
+          mkdir -p "$RUNNER_TEMP/native-$LOADER/direct"
+          cp "$RUNNER_TEMP/native-$LOADER/"*.log "$RUNNER_TEMP/native-$LOADER/direct/"
+          if [ "$RUNNER_OS" = Linux ]; then
+            SDL_VIDEO_FORCE_EGL=1 xvfb-run -a -s '-screen 0 1280x720x24' "${command[@]}" --proxy-protocol
+          else
+            "${command[@]}" --side server --proxy-protocol
+          fi
       - name: Preserve native runtime evidence
         if: always()
         uses: actions/upload-artifact@v7.0.2
         with:
           name: Native-${{ matrix.loader }}-${{ matrix.os }}-logs
-          path: ${{ runner.temp }}/native-${{ matrix.loader }}/*.log
+          path: ${{ runner.temp }}/native-${{ matrix.loader }}/**/*.log
           if-no-files-found: error
 
   spigot:
@@ -399,6 +431,13 @@ jobs:
             SDL_VIDEO_FORCE_EGL=1 xvfb-run -a -s '-screen 0 1280x720x24' "${command[@]}"
           else
             "${command[@]}" --side server
+          fi
+          mkdir -p "$RUNNER_TEMP/plugin-$PLATFORM/direct"
+          cp "$RUNNER_TEMP/plugin-$PLATFORM/"*.log "$RUNNER_TEMP/plugin-$PLATFORM/direct/"
+          if [ "$RUNNER_OS" = Linux ]; then
+            SDL_VIDEO_FORCE_EGL=1 xvfb-run -a -s '-screen 0 1280x720x24' "${command[@]}" --proxy-protocol
+          else
+            "${command[@]}" --side server --proxy-protocol
           fi
       - name: Preserve plugin runtime evidence
         if: always()

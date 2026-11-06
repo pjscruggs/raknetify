@@ -110,6 +110,7 @@ def server(args, lock, metadata):
     folder = install(args, lock, 'server')
     expected = server_metadata(folder, metadata)
     configure_server(folder)
+    sibling('udp-proxy-fixture').configure(folder, args.proxy_protocol)
     group = 'minecraftforge' if args.loader == 'forge' else 'neoforged'
     filename = 'win_args.txt' if sys.platform == 'win32' else 'unix_args.txt'
     arguments = folder / 'libraries/net' / group / args.loader / lock['version'] / filename
@@ -125,15 +126,22 @@ def server(args, lock, metadata):
     try:
         smoke.await_ready(process, events)
         smoke.check_tcp_when_ready(28990, expected)
-        smoke.check_udp(28990)
-        smoke.check_connected_udp(28990, expected, args.java, args.probe_dir)
-        if args.side == 'both':
-            client(args, lock, metadata, join=True)
-            shutil.copy2(args.work_dir / 'client.log', args.work_dir / 'native-client.log')
+        with sibling('udp-proxy-fixture').transport(args.proxy_protocol, 28990) as port:
+            smoke.check_udp(port)
+            smoke.check_connected_udp(port, expected, args.java, args.probe_dir)
+            if args.side == 'both':
+                args.client_port = port
+                client(args, lock, metadata, join=True)
+                shutil.copy2(args.work_dir / 'client.log', args.work_dir / 'native-client.log')
+            if args.proxy_protocol:
+                sibling('udp-proxy-fixture').check_ip_ban(process, folder, args.java, args.probe_dir,
+                                                        port, expected['protocol_version'])
     finally:
         smoke.stop_server(process, reader)
     assert process.returncode == 0, process.returncode
     check_failures(log)
+    if args.proxy_protocol and args.side == 'both':
+        assert 'TransportProbe[/192.0.2.50:' in log.read_text(encoding='utf-8'), 'Forwarded client IP was lost'
     print('PASS', args.loader, lock['minecraft'], 'packaged server TCP, RakNet and clean shutdown', flush=True)
 
 
@@ -144,13 +152,16 @@ def fabric_server(args, lock, metadata):
                                encryption_legacy=None, encryption_modern=None)
     folder = smoke.prepare_server(settings, lock['minecraft'], {}, {}, {})
     configure_server(folder)
+    sibling('udp-proxy-fixture').configure(folder, args.proxy_protocol)
     log = args.work_dir / 'fabric-server.log'
     events = queue.Queue()
     process, reader = smoke.start_server(folder, log, events, args.java)
     try:
         smoke.await_ready(process, events)
-        client(args, lock, metadata, join=True)
-        shutil.copy2(args.work_dir / 'client.log', args.work_dir / 'fabric-client.log')
+        with sibling('udp-proxy-fixture').transport(args.proxy_protocol, 28990) as port:
+            args.client_port = port
+            client(args, lock, metadata, join=True)
+            shutil.copy2(args.work_dir / 'client.log', args.work_dir / 'fabric-client.log')
     finally:
         smoke.stop_server(process, reader)
     assert process.returncode == 0, process.returncode
@@ -241,6 +252,7 @@ def client(args, lock, metadata, join=False):
               'natives_directory': folder / 'natives', 'launcher_name': 'TransportTests', 'launcher_version': '1'}
     arguments = launcher_arguments(metadata['arguments']['jvm'] + profile['arguments']['jvm'], values)
     command = [args.java, '-Xmx1G', '-Dstdout.encoding=UTF-8', '-Dstderr.encoding=UTF-8',
+               '-Draknetify.test.port=' + str(getattr(args, 'client_port', 28990)),
                '-Draknetify.test.worldChanges=' + str(getattr(args, 'world_changes', False)).lower(),
                '-Draknetify.test.join=' + str(join).lower(), *authentication_arguments(args), *arguments,
                profile['mainClass'], *profile['arguments']['game'], '--gameDir', str(folder),
@@ -295,6 +307,7 @@ def main():
     parser.add_argument('--assets-dir', type=Path)
     parser.add_argument('--java', default='java')
     parser.add_argument('--side', choices=['client', 'server', 'both'], default='both')
+    parser.add_argument('--proxy-protocol', action='store_true')
     args = parser.parse_args()
     args.work_dir = args.work_dir.resolve()
     if args.assets_dir:

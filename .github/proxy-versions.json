@@ -1,4 +1,8 @@
 {
+  "bungee": {
+    "url": "https://hub.spigotmc.org/jenkins/job/BungeeCord/2111/artifact/bootstrap/target/BungeeCord.jar",
+    "sha512": "370b282d98469b11f6a6c87460bb59e3025193c550ef7cbccf859fabedc188f5f4d0e2cde60b472db2367efe24dc4e1aed90cdf4346bcab26ceedbba940d6ba4"
+  },
   "velocity": {
     "url": "https://fill-data.papermc.io/v1/objects/af292ea5c9c330fc3b367e48c7d1d448b1b3216f597798bfbef662d002b1343b/velocity-3.4.0-SNAPSHOT-540.jar",
     "sha512": "26438f87670e823a05b2a55e70f2d3b386873682dfa4294f777d63096066f3e85bd6fe3bc2640a9ee568945b217622f9aef69e4e46cabb592d987d46e7e30ffe"

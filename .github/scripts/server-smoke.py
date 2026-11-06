@@ -8,6 +8,7 @@ Every child server is stopped before the next transport or version uses the port
 """
 
 import argparse
+import importlib.util
 import hashlib
 import io
 import json
@@ -53,11 +54,13 @@ def read_varint(stream):
     raise ValueError('VarInt exceeds five bytes')
 
 
-def check_tcp(port, metadata):
+def check_tcp(port, metadata, proxy_protocol=False):
     """Request local TCP status and verify the advertised Minecraft name and protocol."""
     host = b'127.0.0.1'
     handshake = b'\x00' + varint(metadata['protocol_version']) + varint(len(host)) + host + struct.pack('>H', port) + b'\x01'
     with socket.create_connection(('127.0.0.1', port), timeout=10) as connection:
+        if proxy_protocol:
+            connection.sendall(b'PROXY TCP4 192.0.2.50 198.51.100.8 12345 25565\r\n')
         connection.sendall(varint(len(handshake)) + handshake + b'\x01\x00')
         stream = connection.makefile('rb')
         length = read_varint(stream)
@@ -178,11 +181,11 @@ def await_ready(process, events):
     raise TimeoutError('Server startup exceeded 180 seconds')
 
 
-def check_tcp_when_ready(port, metadata):
+def check_tcp_when_ready(port, metadata, proxy_protocol=False):
     """Retry transient socket readiness failures without hiding incorrect status responses."""
     for attempt in range(10):
         try:
-            check_tcp(port, metadata)
+            check_tcp(port, metadata, proxy_protocol)
             return
         except (EOFError, OSError):
             if attempt == 9:
@@ -242,7 +245,7 @@ def bundled_mappings(jar):
     return tables[0]
 
 
-def check_server(folder, version, native, java, probe_dir, polymer=False, krypton=False, encryption=False, packetfixer=False, port=25871):
+def check_server(folder, version, native, java, probe_dir, polymer=False, krypton=False, encryption=False, packetfixer=False, port=25871, proxy_protocol=False):
     """Run one transport configuration through startup, network probes, and clean shutdown.
 
     The supplied folder is an isolated smoke-test installation. Its properties and
@@ -255,6 +258,8 @@ def check_server(folder, version, native, java, probe_dir, polymer=False, krypto
         'view-distance=2\nsimulation-distance=2\nspawn-chunk-radius=0\n'
         'level-type=minecraft:flat\nmax-players=2\n'
         'use-native-transport=' + str(native).lower() + '\nlevel-name=world-' + str(native).lower() + '\n')
+    proxy = proxy_fixture()
+    proxy.configure(folder, proxy_protocol)
     log = folder / ('native.log' if native else 'nio.log')
     events = queue.Queue()
     process, reader = start_server(folder, log, events, java, encryption, packetfixer)
@@ -263,10 +268,13 @@ def check_server(folder, version, native, java, probe_dir, polymer=False, krypto
         metadata = server_metadata(folder, version)
         check_mappings(folder, metadata)
         check_tcp_when_ready(port, metadata)
-        check_udp(port)
-        check_connected_udp(port, metadata, java, probe_dir)
-        if encryption:
-            check_encryption(port, metadata, java, probe_dir, packetfixer)
+        with proxy.transport(proxy_protocol, port, repeated=not native) as frontend:
+            check_udp(frontend)
+            check_connected_udp(frontend, metadata, java, probe_dir)
+            if encryption:
+                check_encryption(frontend, metadata, java, probe_dir, packetfixer)
+            if proxy_protocol:
+                proxy.check_ip_ban(process, folder, java, probe_dir, frontend, metadata['protocol_version'])
         if polymer:
             check_polymer_http(port)
         java_path = Path(shutil.which(java) or java).resolve()
@@ -283,6 +291,14 @@ def check_server(folder, version, native, java, probe_dir, polymer=False, krypto
         report_success(version, transport, log, polymer, krypton, encryption, packetfixer)
     finally:
         stop_server(process, reader)
+
+
+def proxy_fixture():
+    """Load the loopback forwarding fixture without importing its helpers into production code."""
+    spec = importlib.util.spec_from_file_location('udp_proxy_fixture', Path(__file__).with_name('udp-proxy-fixture.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def report_success(version, transport, log, polymer, krypton, encryption, packetfixer):
@@ -334,6 +350,7 @@ def arguments():
     parser.add_argument('--shards', type=int, default=1)
     parser.add_argument('--port', type=int, default=25871)
     parser.add_argument('--discard-runtime', action='store_true')
+    parser.add_argument('--proxy-protocol', action='store_true')
     parser.add_argument('--encryption-legacy', type=Path)
     parser.add_argument('--encryption-modern', type=Path)
     return parser.parse_args()
@@ -404,7 +421,7 @@ def main():
         folder = prepare_server(args, version, polymer, krypton, packetfixer)
         java = select_java(args, version)
         for native in (True, False):
-            check_server(folder, version, native, java, args.probe_dir, bool(polymer), bool(krypton), bool(encryption_fixture(args, version)), bool(packetfixer), args.port)
+            check_server(folder, version, native, java, args.probe_dir, bool(polymer), bool(krypton), bool(encryption_fixture(args, version)), bool(packetfixer), args.port, args.proxy_protocol)
         if args.discard_runtime:
             discard_runtime(folder)
 

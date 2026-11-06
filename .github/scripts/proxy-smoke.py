@@ -33,7 +33,7 @@ def download(item, target):
     assert hashlib.sha512(target.read_bytes()).hexdigest() == item['sha512'], target
 
 
-def configure(folder, direct, maintenance, port):
+def configure(folder, direct, maintenance, port, proxy_protocol=False):
     """Use one fixed MOTD and no allowed maintenance clients so every response is predictable."""
     (folder / 'forwarding.secret').write_text('isolated-loopback-fixture\n', encoding='utf-8')
     (folder / 'velocity.toml').write_text(
@@ -43,7 +43,8 @@ def configure(folder, direct, maintenance, port):
         '[servers]\nbackend = "127.0.0.1:1"\ntry = ["backend"]\n'
         '[forced-hosts]\n"lobby.example.com" = ["backend"]\n'
         '"factions.example.com" = ["backend"]\n"minigames.example.com" = ["backend"]\n'
-        '[advanced]\nlogin-ratelimit = 0\n[query]\nenabled = false\n', encoding='utf-8')
+        '[advanced]\nlogin-ratelimit = 0\nhaproxy-protocol = ' + str(proxy_protocol).lower()
+        + '\n[query]\nenabled = false\n', encoding='utf-8')
     config = folder / 'plugins/fastmotd'
     config.mkdir(parents=True, exist_ok=True)
     (config / 'config.yml').write_text(
@@ -98,11 +99,13 @@ def receive(stream, smoke):
     return data
 
 
-def tcp(port, protocol, maintenance, smoke):
+def tcp(port, protocol, maintenance, smoke, proxy_protocol=False):
     """Use unmodified TCP as the MOTD reference and also verify its normal ping response."""
     host = b'127.0.0.1'
     handshake = b'\0' + smoke.varint(protocol) + smoke.varint(len(host)) + host + struct.pack('>H', port) + b'\1'
     with socket.create_connection(('127.0.0.1', port), timeout=10) as connection:
+        if proxy_protocol:
+            connection.sendall(b'PROXY TCP4 192.0.2.50 198.51.100.8 12345 25565\r\n')
         connection.sendall(smoke.varint(len(handshake)) + handshake + b'\1\0')
         stream = connection.makefile('rb')
         packet = io.BytesIO(receive(stream, smoke))
@@ -122,7 +125,7 @@ def udp(args, protocol, mode):
     classpath = os.pathsep.join(str(args.probe_dir / part) for part in ('classes', 'lib/*'))
     process = subprocess.run(
         [args.java, '-Dstdout.encoding=UTF-8', '-Dstderr.encoding=UTF-8', '-cp', classpath,
-         'com.ishland.raknetify.common.connection.RaknetProxyProbe', str(args.port), str(protocol), mode],
+         'com.ishland.raknetify.common.connection.RaknetProxyProbe', str(args.udp_port), str(protocol), mode],
         text=True, encoding='utf-8', stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=40)
     output = process.stdout
     (args.work_dir / ('probe-' + str(protocol) + '-' + mode + '.log')).write_text(output, encoding='utf-8')
@@ -147,7 +150,8 @@ def displayed(status):
 
 def check_case(args, direct, maintenance, smoke):
     """Verify one FastMOTD write mode while preserving maintenance admission enforcement."""
-    configure(args.work_dir, direct, maintenance, args.port)
+    configure(args.work_dir, direct, maintenance, args.port, args.proxy_protocol)
+    smoke.proxy_fixture().configure(args.work_dir, args.proxy_protocol)
     log = args.work_dir / ('proxy-' + str(direct) + '-' + str(maintenance) + '.log')
     with log.open('w', encoding='utf-8') as output:
         process = subprocess.Popen([args.java, '-Xmx512M', '-XX:ActiveProcessorCount=2', '-jar', 'velocity.jar'],
@@ -155,18 +159,26 @@ def check_case(args, direct, maintenance, smoke):
                                    stderr=subprocess.STDOUT, text=True, encoding='utf-8')
         try:
             ready(process, log)
-            for protocol in (763, 769):
-                expected = tcp(args.port, protocol, maintenance, smoke)
-                actual = udp(args, protocol, 'status')
-                assert displayed(actual) == displayed(expected), (expected, actual)
-                text = 'Transport maintenance fixture' if maintenance else 'Transport status fixture'
-                assert text in json.dumps(actual['description']), actual
-                if maintenance:
-                    udp(args, protocol, 'reject')
-                print(json.dumps({'directWrite': direct, 'maintenance': maintenance, 'protocol': protocol,
-                                  'statusParity': True, 'pong': True, 'rejection': maintenance}), flush=True)
+            with smoke.proxy_fixture().transport(args.proxy_protocol, args.port, repeated=direct) as port:
+                args.udp_port = port
+                check_protocols(args, direct, maintenance, smoke)
         finally:
             stop(process)
+
+
+def check_protocols(args, direct, maintenance, smoke):
+    """Compare both protocol versions through the selected UDP path with TCP's native proxy handling."""
+    for protocol in (763, 769):
+        expected = tcp(args.port, protocol, maintenance, smoke, args.proxy_protocol)
+        actual = udp(args, protocol, 'status')
+        assert displayed(actual) == displayed(expected), (expected, actual)
+        text = 'Transport maintenance fixture' if maintenance else 'Transport status fixture'
+        assert text in json.dumps(actual['description']), actual
+        if maintenance:
+            udp(args, protocol, 'reject')
+        print(json.dumps({'directWrite': direct, 'maintenance': maintenance, 'protocol': protocol,
+                          'statusParity': True, 'pong': True, 'rejection': maintenance,
+                          'proxyProtocol': args.proxy_protocol}), flush=True)
 
 
 def arguments():
@@ -178,6 +190,7 @@ def arguments():
     parser.add_argument('--lock', type=Path, default=Path(__file__).parents[1] / 'proxy-versions.json')
     parser.add_argument('--java', default='java')
     parser.add_argument('--port', type=int, default=25891)
+    parser.add_argument('--proxy-protocol', action='store_true')
     args = parser.parse_args()
     args.probe_dir = args.probe_dir.resolve()
     args.work_dir = args.work_dir.resolve()
