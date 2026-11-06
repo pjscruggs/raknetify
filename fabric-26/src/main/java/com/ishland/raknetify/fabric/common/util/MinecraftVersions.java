@@ -24,10 +24,7 @@
 
 package com.ishland.raknetify.fabric.common.util;
 
-import net.fabricmc.loader.api.FabricLoader;
-import net.fabricmc.loader.api.Version;
-import net.fabricmc.loader.api.VersionParsingException;
-import net.fabricmc.loader.api.metadata.version.VersionPredicate;
+import com.ishland.raknetify.minecraft.ModPlatform;
 
 /**
  * Resolves modern Minecraft API boundaries once so incompatible class references remain guarded.
@@ -35,24 +32,24 @@ import net.fabricmc.loader.api.metadata.version.VersionPredicate;
 public final class MinecraftVersions {
 
     /**
-     * Minecraft version reported by Fabric Loader for the running instance.
+     * Minecraft version reported by the active loader without initializing game classes.
      */
-    private static final Version CURRENT = FabricLoader.getInstance().getModContainer("minecraft")
-            .orElseThrow().getMetadata().getVersion();
+    private static final String CURRENT = ModPlatform.get().minecraftVersion();
 
     /**
      * Whether packet references introduced in Minecraft 26.2 may be resolved.
      */
-    public static final boolean AT_LEAST_26_2 = matches(">=26.2");
+    public static final boolean AT_LEAST_26_2 = atLeast(26, 2);
     /**
      * Whether packet references introduced in Minecraft 26.3 may be resolved.
      */
-    public static final boolean AT_LEAST_26_3 = matches(">=26.3");
+    public static final boolean AT_LEAST_26_3 = atLeast(26, 3);
     // Keep this exact snapshot predicate aligned with the Minecraft dependency in fabric.mod.json.
     /**
      * Whether the runtime matches the specifically supported 26.4 snapshot API.
      */
-    public static final boolean IS_26_4_SNAPSHOT = matches("26.4-alpha.7");
+    public static final boolean IS_26_4_SNAPSHOT = CURRENT.equals("26.4-alpha.7")
+            || CURRENT.equals("26.4-snapshot-7");
 
     /**
      * Prevents construction of the immutable runtime-version flags.
@@ -61,17 +58,17 @@ public final class MinecraftVersions {
     }
 
     /**
-     * Evaluates a Fabric version predicate against the running Minecraft version.
+     * Compares the numeric release family shared by the supported modern loader versions.
      *
-     * @param predicate Fabric version expression defining an API boundary
-     * @return whether the running version satisfies the expression
-     * @throws ExceptionInInitializerError if an internal predicate is malformed
+     * @param major earliest supported release year
+     * @param minor earliest supported release within that year
+     * @return whether the current runtime reaches this API boundary
+     * @throws NumberFormatException if the loader supplies a nonnumeric release family
      */
-    private static boolean matches(String predicate) {
-        try {
-            return VersionPredicate.parse(predicate).test(CURRENT);
-        } catch (VersionParsingException exception) {
-            throw new ExceptionInInitializerError(exception);
-        }
+    private static boolean atLeast(int major, int minor) {
+        String[] components = CURRENT.split("[.\\-+]");
+        int currentMajor = Integer.parseInt(components[0]);
+        int currentMinor = Integer.parseInt(components[1]);
+        return currentMajor > major || currentMajor == major && currentMinor >= minor;
     }
 }

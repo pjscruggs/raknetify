@@ -8,6 +8,9 @@ base {
 
 group = project.maven_group + ".fabric"
 
+sourceSets.main.java.srcDir 'src/loader/java'
+sourceSets.main.resources.srcDir 'src/loader/resources'
+
 configurations {
     shadowInclude
 }

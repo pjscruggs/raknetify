@@ -26,7 +26,7 @@ package com.ishland.raknetify.fabric.mixin;
 
 import com.llamalad7.mixinextras.MixinExtrasBootstrap;
 import com.ishland.raknetify.fabric.common.util.MinecraftVersions;
-import net.fabricmc.loader.api.FabricLoader;
+import com.ishland.raknetify.minecraft.ModPlatform;
 import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
@@ -70,7 +70,7 @@ public class RaknetifyFabricMixinPlugin implements IMixinConfigPlugin {
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
         return switch (mixinClassName.substring("com.ishland.raknetify.fabric.mixin.".length())) {
-            case "compat.packetfixer.MixinSplitterHandler" -> FabricLoader.getInstance().isModLoaded("packetfixer");
+            case "compat.packetfixer.MixinSplitterHandler" -> ModPlatform.get().isModLoaded("packetfixer");
             case "access.IDebugHudEntries", "compat.krypton.MixinServerLoginNetworkHandler" -> !MinecraftVersions.IS_26_4_SNAPSHOT;
             case "client.hud.MixinDebugHudEntries26_4", "common.encryption.MixinClientConnection26_4",
                     "compat.krypton.MixinServerLoginNetworkHandler26_4" -> MinecraftVersions.IS_26_4_SNAPSHOT;

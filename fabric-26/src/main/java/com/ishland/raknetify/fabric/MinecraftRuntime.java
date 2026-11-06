@@ -25,6 +25,7 @@
 package com.ishland.raknetify.fabric;
 
 import com.google.gson.Gson;
+import com.ishland.raknetify.minecraft.ModPlatform;
 import com.google.gson.GsonBuilder;
 import com.ishland.raknetify.common.data.ProtocolMultiChannelMappings;
 import com.ishland.raknetify.fabric.common.client.DebugHudUtil1_21_9;
@@ -42,10 +43,6 @@ import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectArrayMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
-import net.fabricmc.api.EnvType;
-import net.fabricmc.api.ModInitializer;
-import net.fabricmc.loader.api.FabricLoader;
-import net.fabricmc.loader.api.entrypoint.PreLaunchEntrypoint;
 import net.minecraft.SharedConstants;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.protocol.Packet;
@@ -79,9 +76,9 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Initializes Fabric transport support and optionally generates proxy packet-ID routing tables.
+ * Initializes Minecraft transport support and optionally generates proxy packet-ID routing tables.
  */
-public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
+public final class MinecraftRuntime {
 
     /**
      * Whether startup should merge this protocol's generated routes into channelMappings.json.
@@ -92,28 +89,24 @@ public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
      */
     private static final boolean EXIT_AFTER_SAVE_CHANNEL_MAPPINGS = Boolean.getBoolean("raknetify.saveChannelMappings.exit");
 
-    /**
-     * Leaves prelaunch unchanged because transport setup waits for Minecraft initialization.
-     */
-    @Override
-    public void onPreLaunch() {
+    /** Prevents construction of the shared Minecraft startup utility. */
+    private MinecraftRuntime() {
     }
 
     /**
      * Initializes routing, client diagnostics, and the configured Netty leak-detection level.
      * Development launches also audit mixin targets before normal connection setup.
      */
-    @Override
-    public void onInitialize() {
+    public static void initialize() {
 
-        if (FabricLoader.getInstance().isDevelopmentEnvironment())
+        if (ModPlatform.get().isDevelopmentEnvironment())
             auditMixins();
 
-        com.ishland.raknetify.fabric.common.util.PacketChannelEntrypoints.initialize();
-        com.ishland.raknetify.common.connection.TransferSupport.initialize(FabricLoader.getInstance().getConfigDir());
+        ModPlatform.get().initializePacketOrdering();
+        com.ishland.raknetify.common.connection.TransferSupport.initialize(ModPlatform.get().configDirectory());
         handleMappings();
 
-        if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT && !MinecraftVersions.IS_26_4_SNAPSHOT) {
+        if (ModPlatform.get().isClient() && !MinecraftVersions.IS_26_4_SNAPSHOT) {
             DebugHudUtil1_21_9.init();
         }
 

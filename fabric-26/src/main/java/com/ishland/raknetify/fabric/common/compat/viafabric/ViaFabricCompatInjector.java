@@ -30,7 +30,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelPipeline;
 import io.netty.handler.codec.MessageToMessageDecoder;
 import io.netty.handler.codec.MessageToMessageEncoder;
-import net.fabricmc.loader.api.FabricLoader;
+import com.ishland.raknetify.minecraft.ModPlatform;
 
 import java.lang.reflect.Constructor;
 
@@ -48,7 +48,7 @@ public class ViaFabricCompatInjector {
      */
     public static void inject(Channel channel, boolean isClientSide) {
         Preconditions.checkNotNull(channel);
-        if (FabricLoader.getInstance().isModLoaded("viafabric")) {
+        if (ModPlatform.get().isModLoaded("viafabric")) {
             try {
                 final Class<?> userConnectionImplClass = Class.forName("com.viaversion.viaversion.connection.UserConnectionImpl");
                 final Constructor<?> userConnectionImplConstructor = userConnectionImplClass.getConstructor(Channel.class, boolean.class);
