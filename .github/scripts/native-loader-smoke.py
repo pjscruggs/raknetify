@@ -32,7 +32,8 @@ def download(path, url, digest, algorithm='sha1'):
     if not path.exists():
         temporary = path.with_name(path.name + '.part')
         subprocess.run(['curl', '--fail', '--location', '--silent', '--show-error', '--retry', '3', '--retry-all-errors',
-                        '--output', str(temporary), url], check=True, timeout=180)
+                        '--connect-timeout', '10', '--max-time', '60',
+                        '--output', str(temporary), url], check=True, timeout=300)
         assert hashlib.new(algorithm, temporary.read_bytes()).hexdigest() == digest, url
         temporary.replace(path)
     assert hashlib.new(algorithm, path.read_bytes()).hexdigest() == digest, path
