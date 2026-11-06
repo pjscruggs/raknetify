@@ -74,6 +74,7 @@ final class SpigotConnection {
         SpigotPacketHandler packets = new SpigotPacketHandler(cipher, guard, classifier);
         pipeline.addBefore(MultiChannelingStreamingCompression.NAME, "raknetify-spigot-transport", guard);
         pipeline.addBefore("packet_handler", "raknetify-spigot-packets", packets);
+        pipeline.addBefore("packet_handler", "raknetify-spigot-disconnect", new SpigotDisconnectHandler());
         pipeline.get(RakNetSimpleMultiChannelCodec.class).addHandler(packets::classify);
     }
 
