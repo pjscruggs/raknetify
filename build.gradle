@@ -1,4 +1,21 @@
 /** Configures shared dependencies, publication settings, and verification for every mod and proxy module. */
+buildscript {
+	repositories { mavenCentral() }
+	dependencies {
+		// Patch plugin dependencies independently of libraries supplied by Minecraft at runtime.
+		classpath platform('com.fasterxml.jackson:jackson-bom:2.22.3')
+		classpath platform('org.apache.logging.log4j:log4j-bom:2.25.5')
+		constraints {
+			classpath('com.google.guava:guava:33.7.2-jre') {
+				because 'CVE-2026-102554 fixes unbounded allocation during deserialization.'
+			}
+			classpath('org.codehaus.plexus:plexus-utils:4.0.3') {
+				because 'CVE-2025-67030 fixes archive extraction outside the destination.'
+			}
+		}
+	}
+}
+
 plugins {
 	id 'org.cyclonedx.bom' version '3.5.1'
 	id 'fabric-loom' version '1.17.21' apply false
@@ -7,7 +24,7 @@ plugins {
 	id 'net.neoforged.moddev' version '2.0.148' apply false
 	id 'net.minecraftforge.gradle' version '7.0.17' apply false
 	id 'dev.yumi.gradle.licenser' version '4.0.0' apply false
-	id 'com.modrinth.minotaur' version '2.+' apply false
+	id 'com.modrinth.minotaur' version '2.10.0' apply false
 	id 'io.github.themrmilchmann.curseforge-publish' version '0.8.0' apply false
 }
 
