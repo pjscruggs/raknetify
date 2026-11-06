@@ -4,11 +4,15 @@ plugins {
     id 'groovy'
     id 'checkstyle'
     id 'codenarc'
+    id 'pmd'
 }
 
 repositories { mavenCentral() }
 
+configurations { formatter }
+
 dependencies {
+    formatter('com.google.googlejavaformat:google-java-format:2.0.0:all-deps') { transitive = false }
     implementation 'com.puppycrawl.tools:checkstyle:14.4.0'
     implementation 'org.codenarc:CodeNarc:4.0.0'
     implementation 'org.apache.groovy:groovy:5.0.3'
@@ -62,6 +66,24 @@ tasks.register('checkGroovy', CodeNarc) {
 
 test { useJUnitPlatform() }
 
+pmd {
+    toolVersion = '7.29.0'
+    ruleSets = []
+    ruleSetFiles = files('pmd.xml')
+    ignoreFailures = false
+    consoleOutput = true
+}
+
+tasks.withType(Pmd).configureEach {
+    classpath = (classpath ?: files()) + files(new File(System.getProperty('java.home'), 'lib/jrt-fs.jar'))
+}
+
+tasks.register('checkJavaPractices', Pmd) {
+    source files(ownedSources.findAll { it.name.endsWith('.java') })
+    classpath = files(new File(System.getProperty('java.home'), 'lib/jrt-fs.jar'))
+    reports { xml.required = true; html.required = true }
+}
+
 /** Python command can be overridden when the interpreter has a platform-specific name. */
 def pythonCommand = providers.gradleProperty('qualityPython').getOrElse(
         System.getProperty('os.name').toLowerCase().contains('windows') ? 'python' : 'python3')
@@ -76,4 +98,21 @@ tasks.register('testPythonPolicy', Exec) {
     commandLine pythonCommand, '-m', 'unittest', 'discover', '-s', 'quality', '-p', 'test_*.py'
 }
 
-tasks.named('check') { dependsOn 'checkJava', 'checkGroovy', 'checkPython', 'testPythonPolicy' }
+/** Uses a JVM argument file so formatting the complete source tree also fits Windows command limits. */
+['checkJavaFormat', 'formatJava'].each { taskName ->
+    tasks.register(taskName, Exec) {
+        workingDir projectDir.parentFile
+        doFirst {
+            def argumentFile = layout.buildDirectory.file("formatter/${taskName}.args").get().asFile
+            argumentFile.parentFile.mkdirs()
+            def options = ['-jar', configurations.formatter.singleFile.absolutePath, '--style=aosp']
+            options.addAll(taskName == 'formatJava' ? ['--replace'] : ['--dry-run', '--set-exit-if-changed'])
+            options.addAll(ownedSources.findAll { it.name.endsWith('.java') }.collect { it.absolutePath })
+            argumentFile.setText(options.collect { '"' + it.replace('\\', '/').replace('"', '\\"') + '"' }.join('\n'), 'UTF-8')
+            commandLine javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }
+                    .get().executablePath.asFile.absolutePath, "@${argumentFile.absolutePath}"
+        }
+    }
+}
+
+tasks.named('check') { dependsOn 'checkJava', 'checkJavaPractices', 'checkJavaFormat', 'checkGroovy', 'checkPython', 'testPythonPolicy' }
