@@ -29,6 +29,7 @@ import com.ishland.raknetify.test.EncryptionExchange;
 import net.minecraft.network.ClientConnection;
 import net.minecraft.network.packet.c2s.login.LoginKeyC2SPacket;
 import net.minecraft.server.network.ServerLoginNetworkHandler;
+
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -36,7 +37,9 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Stops the disposable login after real key negotiation and before external account authentication. */
+/**
+ * Stops the disposable login after real key negotiation and before external account authentication.
+ */
 @Mixin(value = ServerLoginNetworkHandler.class, priority = 2000)
 public class EncryptionLoginMixin {
 
@@ -44,17 +47,24 @@ public class EncryptionLoginMixin {
     @Shadow @Final public ClientConnection connection;
 
     /**
-     * Replaces the rest of this test login with a bounded encrypted challenge exchange.
-     * Higher mixin priority places this callback after the compatibility hook at the same invocation.
+     * Replaces the rest of this test login with a bounded encrypted challenge exchange. Higher
+     * mixin priority places this callback after the compatibility hook at the same invocation.
      *
      * @param packet native RSA key response already validated by Minecraft
      * @param callback cancellation prevents account lookup and player admission
      * @throws ReflectiveOperationException if the native connection has no accessible Netty channel
      */
-    @Inject(method = "onKey", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/network/ClientConnection;setupEncryption(Ljavax/crypto/Cipher;Ljavax/crypto/Cipher;)V",
-            shift = At.Shift.AFTER), cancellable = true)
-    private void afterEncryption(LoginKeyC2SPacket packet, CallbackInfo callback) throws ReflectiveOperationException {
+    @Inject(
+            method = "onKey",
+            at =
+                    @At(
+                            value = "INVOKE",
+                            target =
+                                    "Lnet/minecraft/network/ClientConnection;setupEncryption(Ljavax/crypto/Cipher;Ljavax/crypto/Cipher;)V",
+                            shift = At.Shift.AFTER),
+            cancellable = true)
+    private void afterEncryption(final LoginKeyC2SPacket packet, final CallbackInfo callback)
+            throws ReflectiveOperationException {
         EncryptionExchange.install(EncryptionExchange.channel(this.connection));
         callback.cancel();
     }

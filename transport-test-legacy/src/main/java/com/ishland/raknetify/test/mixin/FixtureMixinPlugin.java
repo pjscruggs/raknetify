@@ -27,62 +27,94 @@ package com.ishland.raknetify.test.mixin;
 import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
+
 import java.util.List;
 import java.util.Set;
 
-/** Selects one isolated login witness so encryption and transfer fixtures cannot intercept each other's phase. */
+/**
+ * Selects one isolated login witness so encryption and transfer fixtures cannot intercept each
+ * other's phase.
+ */
 public final class FixtureMixinPlugin implements IMixinConfigPlugin {
 
     /**
      * Requires no startup work beyond the runner's explicit system property.
+     *
      * @param mixinPackage configured fixture mixin package, unused
      */
-    @Override public void onLoad(String mixinPackage) { }
+    @Override
+    public void onLoad(final String mixinPackage) {}
 
     /**
      * Retains the configuration's generated reference map for native names.
+     *
      * @return null to keep the configured reference map
      */
-    @Override public String getRefMapperConfig() { return null; }
+    @Override
+    public String getRefMapperConfig() {
+        return null;
+    }
 
     /**
-     * Enables only the requested fixture and leaves transfer hooks absent from encryption runs on older versions.
+     * Enables only the requested fixture and leaves transfer hooks absent from encryption runs on
+     * older versions.
+     *
      * @param targetClassName native target, unused because the fixture name determines its role
      * @param mixinClassName exact candidate fixture name
      * @return whether this run selected the candidate's login phase
      */
-    @Override public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-        return mixinClassName.endsWith(".TransferLoginMixin") == Boolean.getBoolean("raknetify.test.transfers");
+    @Override
+    public boolean shouldApplyMixin(final String targetClassName, final String mixinClassName) {
+        return mixinClassName.endsWith(".TransferLoginMixin")
+                == Boolean.getBoolean("raknetify.test.transfers");
     }
 
     /**
      * Leaves target ownership to the two configured fixtures.
+     *
      * @param myTargets fixture targets, unchanged
      * @param otherTargets other configurations' targets, unchanged
      */
-    @Override public void acceptTargets(Set<String> myTargets, Set<String> otherTargets) { }
+    @Override
+    public void acceptTargets(final Set<String> myTargets, final Set<String> otherTargets) {}
 
     /**
      * Adds no dynamic fixture classes.
+     *
      * @return null to use the JSON mixin list
      */
-    @Override public List<String> getMixins() { return null; }
+    @Override
+    public List<String> getMixins() {
+        return null;
+    }
 
     /**
      * Leaves bytecode changes to the selected fixture injections.
+     *
      * @param targetClassName native class name
      * @param targetClass native class node, unchanged
      * @param mixinClassName selected fixture name
      * @param mixinInfo mixin metadata, unchanged
      */
-    @Override public void preApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) { }
+    @Override
+    public void preApply(
+            final String targetClassName,
+            final ClassNode targetClass,
+            final String mixinClassName,
+            final IMixinInfo mixinInfo) {}
 
     /**
      * Performs no additional mutation after the fixture is applied.
+     *
      * @param targetClassName native class name
      * @param targetClass transformed class node, unchanged
      * @param mixinClassName selected fixture name
      * @param mixinInfo mixin metadata, unchanged
      */
-    @Override public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) { }
+    @Override
+    public void postApply(
+            final String targetClassName,
+            final ClassNode targetClass,
+            final String mixinClassName,
+            final IMixinInfo mixinInfo) {}
 }

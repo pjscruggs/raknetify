@@ -26,12 +26,15 @@ package com.ishland.raknetify.test.mixin;
 
 import com.ishland.raknetify.common.connection.TransferSupport;
 import com.ishland.raknetify.test.EncryptionExchange;
+
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFutureListener;
+
 import net.minecraft.network.ClientConnection;
 import net.minecraft.network.packet.s2c.login.LoginDisconnectS2CPacket;
 import net.minecraft.server.network.ServerLoginNetworkHandler;
 import net.minecraft.text.Text;
+
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -40,33 +43,45 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Stops a loopback fixture login only after production capability negotiation releases vanilla verification. */
+/**
+ * Stops a loopback fixture login only after production capability negotiation releases vanilla
+ * verification.
+ */
 @Mixin(value = ServerLoginNetworkHandler.class, priority = 1200)
 public abstract class TransferLoginMixin {
 
     /** Native connection receives the real query response through Minecraft's packet decoder. */
     @Shadow @Final private ClientConnection connection;
+
     /** Prevents a second probe response while the first asynchronous disconnect flushes. */
     @Unique private boolean raknetify$probeFinished;
 
     /**
-     * Reports the negotiated policy result without admitting a player or replacing any production login code.
+     * Reports the negotiated policy result without admitting a player or replacing any production
+     * login code.
+     *
      * @param callback always cancels final admission in this explicitly enabled isolated fixture
-     * @throws ReflectiveOperationException if the native connection no longer exposes its Netty channel
+     * @throws ReflectiveOperationException if the native connection no longer exposes its Netty
+     *     channel
      * @throws IllegalStateException if a runner attempts to use this fixture outside loopback
      */
     @Inject(method = "tickVerify", at = @At("HEAD"), cancellable = true)
-    private void stopAfterNegotiation(CallbackInfo callback) throws ReflectiveOperationException {
+    private void stopAfterNegotiation(final CallbackInfo callback)
+            throws ReflectiveOperationException {
         callback.cancel();
-        if (this.raknetify$probeFinished) return;
+        if (this.raknetify$probeFinished) {
+            return;
+        }
         this.raknetify$probeFinished = true;
         Channel channel = EncryptionExchange.channel(this.connection);
-        if (!(channel.remoteAddress() instanceof java.net.InetSocketAddress remote) || !remote.getAddress().isLoopbackAddress()) {
+        if (!(channel.remoteAddress() instanceof java.net.InetSocketAddress remote)
+                || !remote.getAddress().isLoopbackAddress()) {
             throw new IllegalStateException("Transfer login fixture requires loopback");
         }
         boolean capable = TransferSupport.select(channel, "fixture.test", 25565) != null;
         String result = "transfer-probe:capable=" + capable;
-        channel.writeAndFlush(new LoginDisconnectS2CPacket(Text.literal(result))).addListener(ChannelFutureListener.CLOSE);
+        channel.writeAndFlush(new LoginDisconnectS2CPacket(Text.literal(result)))
+                .addListener(ChannelFutureListener.CLOSE);
         System.out.println("PASS native login " + result);
     }
 }
