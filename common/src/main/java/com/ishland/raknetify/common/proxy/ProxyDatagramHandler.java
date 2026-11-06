@@ -64,6 +64,10 @@ final class ProxyDatagramHandler extends SimpleChannelInboundHandler<DatagramPac
         int offset = header == null ? 0 : header.length();
         if (packet.content().readableBytes() <= offset) return;
         if (sessions.resolve(packet.sender(), header) == null) return;
+        if (packet.content().getUnsignedByte(packet.content().readerIndex() + offset) == 0xff
+                && packet.content().readableBytes() - offset <= 4095) {
+            sessions.voiceActivity(packet.sender());
+        }
         context.fireChannelRead(new DatagramPacket(packet.content().retainedSlice(
                 packet.content().readerIndex() + offset, packet.content().readableBytes() - offset),
                 packet.recipient(), packet.sender()));

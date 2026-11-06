@@ -25,6 +25,7 @@
 package com.ishland.raknetify.common.proxy;
 
 import io.netty.channel.Channel;
+import com.ishland.raknetify.common.voice.VoiceTransport;
 import io.netty.channel.socket.DatagramChannel;
 import io.netty.util.AttributeKey;
 import network.ycc.raknet.server.channel.RakNetChildChannel;
@@ -68,6 +69,7 @@ public final class ProxyProtocol {
      * @return direct listener or a listener that requires validated proxy identities
      */
     static RakNetServerChannel create(Supplier<? extends DatagramChannel> sockets, ProxyProtocolConfig config) {
+        sockets = VoiceTransport.decorate(sockets);
         if (!config.enabled()) return new RakNetServerChannel(sockets);
         return new ProxiedServer(sockets, config, new ProxySessions(System::nanoTime));
     }

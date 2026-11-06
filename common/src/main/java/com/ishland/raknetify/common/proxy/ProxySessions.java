@@ -85,6 +85,16 @@ final class ProxySessions {
     }
 
     /**
+     * Keeps connectionless voice routing alive while its validated proxy continues sending datagrams.
+     * Voice has no RakNet child to pin a binding, so inactive voice routes retain the bounded idle timeout.
+     * @param physical trusted proxy endpoint already resolved for this datagram
+     */
+    synchronized void voiceActivity(InetSocketAddress physical) {
+        Session session = sessions.get(physical);
+        if (session != null) session.created = clock.getAsLong();
+    }
+
+    /**
      * Releases only the closing channel's binding, never a later connection reusing the same proxy port.
      * @param physical physical endpoint of the closing connection
      * @param session exact identity object claimed by that connection
@@ -99,8 +109,8 @@ final class ProxySessions {
         final InetSocketAddress source;
         /** Original public destination used to reject inconsistent repeated headers. */
         private final InetSocketAddress destination;
-        /** Initial header arrival, deliberately not refreshed by unfinished handshake traffic. */
-        private final long created;
+        /** Initial header arrival or last voice datagram, never refreshed by unfinished RakNet handshakes. */
+        private long created;
         /** Active channels retain their binding until close rather than expiring during idle gameplay. */
         private boolean active;
 

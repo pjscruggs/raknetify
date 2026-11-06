@@ -194,6 +194,22 @@ class ProxyProtocolTest {
         assertNotNull(sessions.resolve(PROXY, header));
     }
 
+    /** Voice traffic refreshes its bounded idle lease without changing unfinished RakNet handshake expiry. */
+    @Test
+    void voiceIdleLeaseDoesNotPinAbandonedRoutes() {
+        AtomicLong clock = new AtomicLong();
+        var sessions = new ProxySessions(clock::get);
+        var header = new ProxyProtocolHeader(CLIENT, LOCAL, 28);
+        assertNotNull(sessions.resolve(PROXY, header));
+        for (int i = 0; i < 4; i++) {
+            clock.addAndGet(TimeUnit.SECONDS.toNanos(20));
+            assertNotNull(sessions.resolve(PROXY, null));
+            sessions.voiceActivity(PROXY);
+        }
+        clock.addAndGet(TimeUnit.SECONDS.toNanos(31));
+        assertNull(sessions.resolve(PROXY, null));
+    }
+
     /**
      * Builds a standards-shaped UDP header with a public destination distinct from the backend bind.
      * @param client synthetic client address
