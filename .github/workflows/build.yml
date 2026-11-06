@@ -301,7 +301,7 @@ jobs:
           java-version: 25
       - name: Install Linux client display dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 libegl-mesa0 mesa-vulkan-drivers libasound2t64 libxkbcommon0
+        run: sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 libegl1 libegl-mesa0 mesa-vulkan-drivers libasound2t64 libxkbcommon0
       - name: Test packaged native loaders
         env:
           LOADER: ${{ matrix.loader }}
