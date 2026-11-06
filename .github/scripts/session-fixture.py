@@ -25,6 +25,7 @@ def discovery(origin):
     services = {name: {'endpoints': {endpoint: {'uri': origin + '/' + endpoint} for endpoint in endpoints}}
                 for name, endpoints in groups.items()}
     services['profiles']['endpoints']['getTexture'] = {'validUris': [origin + '/texture/{textureId}']}
+    services['session']['endpoints']['getProfileById'] = {'uri': origin + '/profile/{profileId}'}
     return {'environment': 'transport-test', 'product': 'minecraft', 'discovery': services}
 
 
@@ -115,6 +116,8 @@ class SessionHandler(BaseHTTPRequestHandler):
             self.reply(200, {'profilePropertyKeys': [], 'playerCertificateKeys': []})
         elif request.path == '/verify':
             self.reply(*fixture.verify(parse_qs(request.query)))
+        elif request.path == '/profile/' + PLAYER_ID:
+            self.reply(200, {'id': PLAYER_ID, 'name': 'TransportProbe', 'properties': [], 'profileActions': []})
         else:
             self.reply(404)
 

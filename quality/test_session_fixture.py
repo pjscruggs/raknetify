@@ -74,6 +74,16 @@ class SessionFixtureTest(unittest.TestCase):
                     urls = endpoint.get('validUris', [endpoint.get('uri')])
                     self.assertTrue(all(url.startswith(authority.origin + '/') for url in urls))
 
+    def test_profile_lookup_returns_only_the_synthetic_identity(self):
+        """Provide the native server's profile lookup without fabricating responses for unrelated accounts."""
+        fixture = load_fixture()
+        with fixture.SessionAuthority() as authority:
+            status, body = self.request(authority.origin, '/profile/' + fixture.PLAYER_ID + '?unsigned=false')
+            self.assertEqual(200, status)
+            self.assertEqual('TransportProbe', json.loads(body)['name'])
+            self.assertEqual(404, self.request(authority.origin, '/profile/' + '1' * 32)[0])
+            self.assertEqual([], authority.accepted)
+
 
 if __name__ == '__main__':
     unittest.main()
