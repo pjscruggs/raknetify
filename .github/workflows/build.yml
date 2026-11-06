@@ -123,11 +123,20 @@ jobs:
           --krypton-lock .github/krypton-versions.json
           --encryption-legacy transport-test-legacy/build/libs/*.jar
           --encryption-modern transport-test-modern/build/libs/*.jar
-      - name: capture server smoke logs
+      - name: Fast IP Ping client addresses
+        run: >-
+          python3 .github/scripts/client-address-check.py
+          --jar fabric-universal/build/libs/*.jar
+          --fixture transport-test-client/build/libs/*.jar
+          --lock .github/fastipping-versions.json
+          --work-dir "$RUNNER_TEMP/raknetify-smoke/fastipping"
+          --java-17 "${{ steps.java17.outputs.path }}/bin/java"
+          --java-21 "${{ steps.java21.outputs.path }}/bin/java"
+      - name: capture network smoke logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Linux-server-smoke-logs
+          name: Linux-network-smoke-logs
           path: ${{ runner.temp }}/raknetify-smoke/**/*.log
       - name: prepare downloads
         run: |

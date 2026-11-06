@@ -1,0 +1,228 @@
+{
+  "1.18": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/BIyi3Eqm/fast-ip-ping-v1.0.8-mc1.18.2-fabric.jar",
+      "filename": "fast-ip-ping-v1.0.8-mc1.18.2-fabric.jar",
+      "sha512": "5976de15ad5a5a837e9087890c34f43e30502579fffb14f11c4b91e90c0064627f4552497d349de7872764c25b71f1db591237da2122ae34359cb9d4fa48fc16",
+      "note": "Version 1.0.12 requires Mojang LogUtils, which is absent before Minecraft 1.18.2."
+    }
+  ],
+  "1.18.1": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/BIyi3Eqm/fast-ip-ping-v1.0.8-mc1.18.2-fabric.jar",
+      "filename": "fast-ip-ping-v1.0.8-mc1.18.2-fabric.jar",
+      "sha512": "5976de15ad5a5a837e9087890c34f43e30502579fffb14f11c4b91e90c0064627f4552497d349de7872764c25b71f1db591237da2122ae34359cb9d4fa48fc16",
+      "note": "Version 1.0.12 requires Mojang LogUtils, which is absent before Minecraft 1.18.2."
+    }
+  ],
+  "1.18.2": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/UrssEF66/fast-ip-ping-v1.0.12-mc1.18.2-fabric.jar",
+      "filename": "fast-ip-ping-v1.0.12-mc1.18.2-fabric.jar",
+      "sha512": "f74f0b3f407d0153ddc477ca15a88f90ddac4c00b86c01b5f4cf1898cc3e36feca02b33384673caec9f8ca36ce127f415619d71c7b8c6f3eda79887f2994b69b"
+    }
+  ],
+  "1.19": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/SFwu7xRM/fast-ip-ping-v1.0.12-mc1.19.4-fabric.jar",
+      "filename": "fast-ip-ping-v1.0.12-mc1.19.4-fabric.jar",
+      "sha512": "364018a7958b2cde43f058505ed7abbee508501c58f793b5da7fcbc1e137c0828c973aba2e798904ac28b762ab92ccd9fdf2a64100d8452b464966aa5b4c8b2a"
+    }
+  ],
+  "1.19.1": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/SFwu7xRM/fast-ip-ping-v1.0.12-mc1.19.4-fabric.jar",
+      "filename": "fast-ip-ping-v1.0.12-mc1.19.4-fabric.jar",
+      "sha512": "364018a7958b2cde43f058505ed7abbee508501c58f793b5da7fcbc1e137c0828c973aba2e798904ac28b762ab92ccd9fdf2a64100d8452b464966aa5b4c8b2a"
+    }
+  ],
+  "1.19.2": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/SFwu7xRM/fast-ip-ping-v1.0.12-mc1.19.4-fabric.jar",
+      "filename": "fast-ip-ping-v1.0.12-mc1.19.4-fabric.jar",
+      "sha512": "364018a7958b2cde43f058505ed7abbee508501c58f793b5da7fcbc1e137c0828c973aba2e798904ac28b762ab92ccd9fdf2a64100d8452b464966aa5b4c8b2a"
+    }
+  ],
+  "1.19.3": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/SFwu7xRM/fast-ip-ping-v1.0.12-mc1.19.4-fabric.jar",
+      "filename": "fast-ip-ping-v1.0.12-mc1.19.4-fabric.jar",
+      "sha512": "364018a7958b2cde43f058505ed7abbee508501c58f793b5da7fcbc1e137c0828c973aba2e798904ac28b762ab92ccd9fdf2a64100d8452b464966aa5b4c8b2a"
+    }
+  ],
+  "1.19.4": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/SFwu7xRM/fast-ip-ping-v1.0.12-mc1.19.4-fabric.jar",
+      "filename": "fast-ip-ping-v1.0.12-mc1.19.4-fabric.jar",
+      "sha512": "364018a7958b2cde43f058505ed7abbee508501c58f793b5da7fcbc1e137c0828c973aba2e798904ac28b762ab92ccd9fdf2a64100d8452b464966aa5b4c8b2a"
+    }
+  ],
+  "1.20": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/orESoHrJ/fast-ip-ping-v1.0.8-mc1.20.4-fabric.jar",
+      "filename": "fast-ip-ping-v1.0.8-mc1.20.4-fabric.jar",
+      "sha512": "679fad0008e7f62d93f017215d93213dde373b3f758f25172c745d4401dcdcbf22265eb68dec32027f01a5e68582646907c689690d9435d68910b187513a7801"
+    }
+  ],
+  "1.20.1": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/orESoHrJ/fast-ip-ping-v1.0.8-mc1.20.4-fabric.jar",
+      "filename": "fast-ip-ping-v1.0.8-mc1.20.4-fabric.jar",
+      "sha512": "679fad0008e7f62d93f017215d93213dde373b3f758f25172c745d4401dcdcbf22265eb68dec32027f01a5e68582646907c689690d9435d68910b187513a7801"
+    }
+  ],
+  "1.20.2": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/orESoHrJ/fast-ip-ping-v1.0.8-mc1.20.4-fabric.jar",
+      "filename": "fast-ip-ping-v1.0.8-mc1.20.4-fabric.jar",
+      "sha512": "679fad0008e7f62d93f017215d93213dde373b3f758f25172c745d4401dcdcbf22265eb68dec32027f01a5e68582646907c689690d9435d68910b187513a7801"
+    }
+  ],
+  "1.20.3": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/8ni8DQZt/fast-ip-ping-v1.0.12-mc1.20.4-fabric.jar",
+      "filename": "fast-ip-ping-v1.0.12-mc1.20.4-fabric.jar",
+      "sha512": "39b908cf2e5da094f5fa210274e64d8af0a329f5a623e1b11425911a966513bf2a8889c6cda0255724622bde75339835ed1db5439dca3ab3524a9a1c78a806f7"
+    }
+  ],
+  "1.20.4": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/8ni8DQZt/fast-ip-ping-v1.0.12-mc1.20.4-fabric.jar",
+      "filename": "fast-ip-ping-v1.0.12-mc1.20.4-fabric.jar",
+      "sha512": "39b908cf2e5da094f5fa210274e64d8af0a329f5a623e1b11425911a966513bf2a8889c6cda0255724622bde75339835ed1db5439dca3ab3524a9a1c78a806f7"
+    }
+  ],
+  "1.20.5": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/OjSOrMm7/fast-ip-ping-v1.0.12-mc1.20.6-fabric.jar",
+      "filename": "fast-ip-ping-v1.0.12-mc1.20.6-fabric.jar",
+      "sha512": "6e798c94ab965fcc7f4929166efb72f5e4bbf93e45ee8c7256abc264d76cdc277d3b288d3b294ecaef1366286a1c62f9cf979829cd844f15f62514c220340ad3"
+    }
+  ],
+  "1.20.6": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/OjSOrMm7/fast-ip-ping-v1.0.12-mc1.20.6-fabric.jar",
+      "filename": "fast-ip-ping-v1.0.12-mc1.20.6-fabric.jar",
+      "sha512": "6e798c94ab965fcc7f4929166efb72f5e4bbf93e45ee8c7256abc264d76cdc277d3b288d3b294ecaef1366286a1c62f9cf979829cd844f15f62514c220340ad3"
+    }
+  ],
+  "1.21": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/CiB6psvm/fast-ip-ping-v1.0.12-mc1.21.1-fabric.jar",
+      "filename": "fast-ip-ping-v1.0.12-mc1.21.1-fabric.jar",
+      "sha512": "05eaa8269bf71ae62c05ace92dde1e42105c96dadb0962d24c7399d3e4e001e28fbc5b2a3441384af1c9fd2a9e43c1b110c3c1942d5c7ae8434e6c38ff222e02"
+    }
+  ],
+  "1.21.1": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/CiB6psvm/fast-ip-ping-v1.0.12-mc1.21.1-fabric.jar",
+      "filename": "fast-ip-ping-v1.0.12-mc1.21.1-fabric.jar",
+      "sha512": "05eaa8269bf71ae62c05ace92dde1e42105c96dadb0962d24c7399d3e4e001e28fbc5b2a3441384af1c9fd2a9e43c1b110c3c1942d5c7ae8434e6c38ff222e02"
+    }
+  ],
+  "1.21.2": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/E3RW5iiN/fast-ip-ping-v1.0.12-mc1.21.3-fabric.jar",
+      "filename": "fast-ip-ping-v1.0.12-mc1.21.3-fabric.jar",
+      "sha512": "46b6fa0bd8f272688429f8cf6bf5eef777cb5f27321aaaca491be8d6e5a283ee73e2764eab7d31acb4652a84182fbfb099cd6b301dcc6d13520387ebf058a4ad"
+    }
+  ],
+  "1.21.3": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/E3RW5iiN/fast-ip-ping-v1.0.12-mc1.21.3-fabric.jar",
+      "filename": "fast-ip-ping-v1.0.12-mc1.21.3-fabric.jar",
+      "sha512": "46b6fa0bd8f272688429f8cf6bf5eef777cb5f27321aaaca491be8d6e5a283ee73e2764eab7d31acb4652a84182fbfb099cd6b301dcc6d13520387ebf058a4ad"
+    }
+  ],
+  "1.21.4": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/YgGZAMGc/fast-ip-ping-v1.0.12-mc1.21.4-fabric.jar",
+      "filename": "fast-ip-ping-v1.0.12-mc1.21.4-fabric.jar",
+      "sha512": "85e208b5cc37f7e618b61c5653a7d7471d940f512e8fe99f464e079f3bd82e4b0af1f3446832e846df1546c773ccd1eb51eeb635c183164afb6db092cd0d10e7"
+    }
+  ],
+  "1.21.5": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/FwUge1r0/fast-ip-ping-v1.0.12-mc1.21.5-fabric.jar",
+      "filename": "fast-ip-ping-v1.0.12-mc1.21.5-fabric.jar",
+      "sha512": "25789eb98e32e4825e60ec4065fa64288f5fd9225cbafc5550c9bedd5e866b841f5ce8cb76a3788dd50a84b9736f48b488489331c88d04b8c66888f3106ab3d3"
+    }
+  ],
+  "1.21.6": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/Ts8N1mNU/fast-ip-ping-v1.0.12-mc1.21.8-fabric.jar",
+      "filename": "fast-ip-ping-v1.0.12-mc1.21.8-fabric.jar",
+      "sha512": "a463cc5ccbd891f3ea8770ba1ad76a69139fb71754b9c75c715411f12b5752515ebeee424edc5710e130157e25fecd55d15ff0560ce1112a1c567944e024bf97"
+    }
+  ],
+  "1.21.7": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/Ts8N1mNU/fast-ip-ping-v1.0.12-mc1.21.8-fabric.jar",
+      "filename": "fast-ip-ping-v1.0.12-mc1.21.8-fabric.jar",
+      "sha512": "a463cc5ccbd891f3ea8770ba1ad76a69139fb71754b9c75c715411f12b5752515ebeee424edc5710e130157e25fecd55d15ff0560ce1112a1c567944e024bf97"
+    }
+  ],
+  "1.21.8": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/Ts8N1mNU/fast-ip-ping-v1.0.12-mc1.21.8-fabric.jar",
+      "filename": "fast-ip-ping-v1.0.12-mc1.21.8-fabric.jar",
+      "sha512": "a463cc5ccbd891f3ea8770ba1ad76a69139fb71754b9c75c715411f12b5752515ebeee424edc5710e130157e25fecd55d15ff0560ce1112a1c567944e024bf97"
+    }
+  ],
+  "1.21.9": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/WHdVDthO/fast-ip-ping-v1.0.12-mc1.21.10-fabric.jar",
+      "filename": "fast-ip-ping-v1.0.12-mc1.21.10-fabric.jar",
+      "sha512": "5b35d3eda2ea6da9c180436725d3975ef65c4b741a996a49a4da91a727e26b98060452bf5f44a253134fcd5edbb7338962408027d1c0929dcb5b4828ec5ffca4"
+    }
+  ],
+  "1.21.10": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/WHdVDthO/fast-ip-ping-v1.0.12-mc1.21.10-fabric.jar",
+      "filename": "fast-ip-ping-v1.0.12-mc1.21.10-fabric.jar",
+      "sha512": "5b35d3eda2ea6da9c180436725d3975ef65c4b741a996a49a4da91a727e26b98060452bf5f44a253134fcd5edbb7338962408027d1c0929dcb5b4828ec5ffca4"
+    }
+  ],
+  "1.21.11": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/d92wadxK/fast-ip-ping-v1.0.12-mc1.21.11-fabric.jar",
+      "filename": "fast-ip-ping-v1.0.12-mc1.21.11-fabric.jar",
+      "sha512": "965b6d26c426550951e071679b58f09fed9b8ff68e6d38b3b867477c080009d1f2bbbe909ae47457a55377ae1b8f12e860650b2fd22728eb603e309a38126a0c"
+    }
+  ],
+  "26.1": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/DVeo5EO0/fast-ip-ping-v1.0.12-mc26.1.2.jar",
+      "filename": "fast-ip-ping-v1.0.12-mc26.1.2.jar",
+      "sha512": "6c7275e069ecbd13ff8d9f6fea75dafa15de028990031496f4d9d4dae5c1de660daa31f201a08ed1e813d35b65427dd2a729b4f10a2d40774a84893f46afcf33"
+    }
+  ],
+  "26.1.1": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/DVeo5EO0/fast-ip-ping-v1.0.12-mc26.1.2.jar",
+      "filename": "fast-ip-ping-v1.0.12-mc26.1.2.jar",
+      "sha512": "6c7275e069ecbd13ff8d9f6fea75dafa15de028990031496f4d9d4dae5c1de660daa31f201a08ed1e813d35b65427dd2a729b4f10a2d40774a84893f46afcf33"
+    }
+  ],
+  "26.1.2": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/DVeo5EO0/fast-ip-ping-v1.0.12-mc26.1.2.jar",
+      "filename": "fast-ip-ping-v1.0.12-mc26.1.2.jar",
+      "sha512": "6c7275e069ecbd13ff8d9f6fea75dafa15de028990031496f4d9d4dae5c1de660daa31f201a08ed1e813d35b65427dd2a729b4f10a2d40774a84893f46afcf33"
+    }
+  ],
+  "26.2": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/uA3MAgMy/fast-ip-ping-v1.0.12-mc26.2.jar",
+      "filename": "fast-ip-ping-v1.0.12-mc26.2.jar",
+      "sha512": "7d1aef1ff9c688bdb2859e25e7da634f61d511366c1c4d38ac6ca57fa46fa37792bde12cb47a35880ad9f5d232b67551fe74baab506c1a46b3ae164e2c3921e4"
+    }
+  ],
+  "26.3": [
+    {
+      "url": "https://cdn.modrinth.com/data/9mtu0sUO/versions/N6hOHbOO/fast-ip-ping-v1.0.12-mc26.3.jar",
+      "filename": "fast-ip-ping-v1.0.12-mc26.3.jar",
+      "sha512": "b81e57aff8e161d75a1ca84576db89c7a0d874da50eb7f8ca17c3391bf75be2243db3d56a76294abdf84bca81eb78bb2613c380f4ab70f0f2c7119f08703b813"
+    }
+  ]
+}
