@@ -26,8 +26,13 @@ package com.ishland.raknetify.fabric.mixin.common.encryption;
 
 import com.ishland.raknetify.common.connection.MultiChannelingStreamingCompression;
 import com.ishland.raknetify.common.connection.MultiChannellingEncryption;
+
 import io.netty.channel.Channel;
+
+import net.minecraft.network.Connection;
+
 import network.ycc.raknet.RakNet;
+
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -35,44 +40,35 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import javax.crypto.Cipher;
-import net.minecraft.network.Connection;
 
-/**
- * Replaces Minecraft byte-stream ciphers with independent RakNet frame-payload encryption.
- */
+/** Replaces Minecraft byte-stream ciphers with independent RakNet frame-payload encryption. */
 @Mixin(Connection.class)
 public class MixinClientConnection {
 
-    /**
-     * Minecraft connection pipeline receiving the frame encryption handler.
-     */
-    @Shadow
-    private Channel channel;
+    /** Minecraft connection pipeline receiving the frame encryption handler. */
+    @Shadow private Channel channel;
 
     /**
-     * Installs frame encryption on RakNet connections and cancels vanilla stream-cipher installation.
-     * Existing cipher handlers are removed before replacement so repeated setup does not duplicate them.
+     * Installs frame encryption on RakNet connections and cancels vanilla stream-cipher
+     * installation. Existing cipher handlers are removed before replacement so repeated setup does
+     * not duplicate them.
      *
      * @param decryptionCipher initialized cipher for inbound frame payloads
      * @param encryptionCipher initialized cipher for outbound frame payloads
      * @param ci cancellable callback that suppresses vanilla setup only for RakNet
      */
     @Inject(method = "setEncryptionKey", at = @At("HEAD"), cancellable = true)
-    public void beforeSetupEncryption(Cipher decryptionCipher, Cipher encryptionCipher, CallbackInfo ci) {
+    public void beforeSetupEncryption(
+            final Cipher decryptionCipher, final Cipher encryptionCipher, final CallbackInfo ci) {
         if (this.channel.config() instanceof RakNet.Config) {
             ci.cancel();
-            try {
-                this.channel.pipeline().remove("decrypt");
-                this.channel.pipeline().remove("encrypt");
-            } catch (Throwable ignored) {
-            }
-            try {
-                this.channel.pipeline().remove(MultiChannellingEncryption.NAME);
-            } catch (Throwable ignored) {
-            }
-            this.channel.pipeline().addBefore(MultiChannelingStreamingCompression.NAME, MultiChannellingEncryption.NAME,
-                    new MultiChannellingEncryption(decryptionCipher, encryptionCipher));
+            MultiChannellingEncryption.removePreviousHandlers(this.channel.pipeline());
+            this.channel
+                    .pipeline()
+                    .addBefore(
+                            MultiChannelingStreamingCompression.NAME,
+                            MultiChannellingEncryption.NAME,
+                            new MultiChannellingEncryption(decryptionCipher, encryptionCipher));
         }
     }
-
 }

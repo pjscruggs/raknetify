@@ -27,19 +27,24 @@ package com.ishland.raknetify.common.connection;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ChannelPromise;
+
 import network.ycc.raknet.frame.FrameData;
+
+import java.security.GeneralSecurityException;
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Objects;
 
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.IvParameterSpec;
-import java.security.GeneralSecurityException;
-import java.util.Objects;
 
 /**
- * Encrypts or decrypts individual RakNet frame payloads while preserving routing metadata.
- * Each direction may be enabled independently during login. Nonframe messages and disabled
- * directions pass through without transformation.
+ * Encrypts or decrypts individual RakNet frame payloads while preserving routing metadata. Each
+ * direction may be enabled independently during login. Nonframe messages and disabled directions
+ * pass through without transformation.
  */
 public class MultiChannellingEncryption extends ChannelDuplexHandler {
 
@@ -48,13 +53,31 @@ public class MultiChannellingEncryption extends ChannelDuplexHandler {
      */
     public static final String NAME = "raknetify-multichannel-encryption";
 
+    /** Stream and frame handlers replaced independently when encryption is installed again. */
+    private static final List<String> PREVIOUS_HANDLERS = List.of("decrypt", "encrypt", NAME);
+
     /**
-     * Inbound payload transformer, or null while decryption is not enabled.
+     * Removes each previous cipher independently, including when only one stream direction exists.
+     *
+     * @param pipeline connection pipeline about to receive frame encryption
      */
+    public static void removePreviousHandlers(final ChannelPipeline pipeline) {
+        for (String name : PREVIOUS_HANDLERS) {
+            if (pipeline.context(name) == null) {
+                continue;
+            }
+            try {
+                pipeline.remove(name);
+            } catch (NoSuchElementException removed) {
+                // A concurrent cleanup already removed this optional handler after the lookup.
+            }
+        }
+    }
+
+    /** Inbound payload transformer, or null while decryption is not enabled. */
     private final PacketEncryptionManager decryption;
-    /**
-     * Outbound payload transformer, or null while encryption is not enabled.
-     */
+
+    /** Outbound payload transformer, or null while encryption is not enabled. */
     private final PacketEncryptionManager encryption;
 
     /**
@@ -63,7 +86,7 @@ public class MultiChannellingEncryption extends ChannelDuplexHandler {
      * @param key negotiated session key also used as the initial cipher IV
      * @throws GeneralSecurityException if the cipher is unavailable or rejects the key
      */
-    public MultiChannellingEncryption(SecretKey key) throws GeneralSecurityException {
+    public MultiChannellingEncryption(final SecretKey key) throws GeneralSecurityException {
         Cipher decryption = Cipher.getInstance("AES/CFB8/NoPadding");
         decryption.init(Cipher.DECRYPT_MODE, key, new IvParameterSpec(key.getEncoded()));
         this.decryption = new PacketEncryptionManager(decryption);
@@ -78,19 +101,21 @@ public class MultiChannellingEncryption extends ChannelDuplexHandler {
      * @param decryption initialized inbound cipher owned by this handler
      * @param encryption initialized outbound cipher owned by this handler
      */
-    public MultiChannellingEncryption(Cipher decryption, Cipher encryption) {
+    public MultiChannellingEncryption(final Cipher decryption, final Cipher encryption) {
         this.decryption = new PacketEncryptionManager(Objects.requireNonNull(decryption));
         this.encryption = new PacketEncryptionManager(Objects.requireNonNull(encryption));
     }
 
-    // A null manager passes that direction through while the handshake enables the other direction independently.
+    // A null manager passes that direction through while the handshake enables the other direction
+    // independently.
     /**
      * Creates a handler whose disabled direction passes frames through unchanged.
      *
      * @param decryption inbound transformer, or null to leave incoming frames unchanged
      * @param encryption outbound transformer, or null to leave outgoing frames unchanged
      */
-    private MultiChannellingEncryption(PacketEncryptionManager decryption, PacketEncryptionManager encryption) {
+    private MultiChannellingEncryption(
+            final PacketEncryptionManager decryption, final PacketEncryptionManager encryption) {
         this.decryption = decryption;
         this.encryption = encryption;
     }
@@ -101,8 +126,9 @@ public class MultiChannellingEncryption extends ChannelDuplexHandler {
      * @param cipher initialized inbound cipher owned by the new handler
      * @return handler that transforms incoming frame payloads only
      */
-    public static MultiChannellingEncryption inbound(Cipher cipher) {
-        return new MultiChannellingEncryption(new PacketEncryptionManager(Objects.requireNonNull(cipher)), null);
+    public static MultiChannellingEncryption inbound(final Cipher cipher) {
+        return new MultiChannellingEncryption(
+                new PacketEncryptionManager(Objects.requireNonNull(cipher)), null);
     }
 
     /**
@@ -111,13 +137,14 @@ public class MultiChannellingEncryption extends ChannelDuplexHandler {
      * @param cipher initialized outbound cipher owned by the new handler
      * @return handler that transforms outgoing frame payloads only
      */
-    public static MultiChannellingEncryption outbound(Cipher cipher) {
-        return new MultiChannellingEncryption(null, new PacketEncryptionManager(Objects.requireNonNull(cipher)));
+    public static MultiChannellingEncryption outbound(final Cipher cipher) {
+        return new MultiChannellingEncryption(
+                null, new PacketEncryptionManager(Objects.requireNonNull(cipher)));
     }
 
     /**
-     * Encrypts an outgoing frame payload and transfers its routing policy and promise to the replacement.
-     * The input frame and temporary buffers are released on success and failure.
+     * Encrypts an outgoing frame payload and transfers its routing policy and promise to the
+     * replacement. The input frame and temporary buffers are released on success and failure.
      *
      * @param ctx outbound context allocating and forwarding the replacement frame
      * @param msg outgoing frame or unrelated pipeline message
@@ -125,7 +152,9 @@ public class MultiChannellingEncryption extends ChannelDuplexHandler {
      * @throws Exception if encryption or superclass forwarding fails
      */
     @Override
-    public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+    public void write(
+            final ChannelHandlerContext ctx, final Object msg, final ChannelPromise promise)
+            throws Exception {
         if (encryption != null && msg instanceof FrameData data) {
             data.touch();
             final ByteBuf buf = data.createData().skipBytes(1);
@@ -135,7 +164,7 @@ public class MultiChannellingEncryption extends ChannelDuplexHandler {
                 res = ctx.alloc().buffer(data.getDataSize());
                 encryption.doWork(buf, res);
                 resFrame = FrameData.create(ctx.alloc(), data.getPacketId(), res);
-//                res = null;
+                //                res = null;
                 resFrame.setOrderChannel(data.getOrderChannel());
                 resFrame.setReliability(data.getReliability());
                 ctx.write(resFrame, promise);
@@ -144,8 +173,12 @@ public class MultiChannellingEncryption extends ChannelDuplexHandler {
             } finally {
                 buf.release();
                 data.release();
-                if (res != null) res.release();
-                if (resFrame != null) resFrame.release();
+                if (res != null) {
+                    res.release();
+                }
+                if (resFrame != null) {
+                    resFrame.release();
+                }
             }
         }
         super.write(ctx, msg, promise);
@@ -160,7 +193,7 @@ public class MultiChannellingEncryption extends ChannelDuplexHandler {
      * @throws Exception if decryption or superclass forwarding fails
      */
     @Override
-    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+    public void channelRead(final ChannelHandlerContext ctx, final Object msg) throws Exception {
         if (decryption != null && msg instanceof FrameData data) {
             data.touch();
             final ByteBuf buf = data.createData().skipBytes(1);
@@ -178,8 +211,12 @@ public class MultiChannellingEncryption extends ChannelDuplexHandler {
             } finally {
                 buf.release();
                 data.release();
-                if (res != null) res.release();
-                if (resFrame != null) resFrame.release();
+                if (res != null) {
+                    res.release();
+                }
+                if (resFrame != null) {
+                    resFrame.release();
+                }
             }
         }
         super.channelRead(ctx, msg);
