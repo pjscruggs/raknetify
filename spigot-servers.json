@@ -1,0 +1,19 @@
+{
+  "minecraft": "26.3",
+  "protocol": 777,
+  "paper": {
+    "build": 243,
+    "url": "https://fill-data.papermc.io/v1/objects/650805b63174770b557d83bbfcdd16ec39531124b7b850589bad59bc4b6a0af8/paper-26.3-243.jar",
+    "sha256": "650805b63174770b557d83bbfcdd16ec39531124b7b850589bad59bc4b6a0af8"
+  },
+  "spigot": {
+    "buildTools": "https://hub.spigotmc.org/jenkins/job/BuildTools/201/artifact/target/BuildTools.jar",
+    "sha256": "81ed06f5ce5fb705b558bf9b3cc2c5c53cdd9742406c5338c452faa13a1e1c24",
+    "refs": {
+      "Bukkit": "29025a7ed5789807e11158a2263316b13ed50c3b",
+      "CraftBukkit": "e89124d3e8e9585e75ceb7f9a4daba133788e5bd",
+      "Spigot": "bed90fca391bc35f0dbbcdc7ce5d7bb28e533681",
+      "BuildData": "39e62795554dcf6b62e922bc061705b3dc228f88"
+    }
+  }
+}
