@@ -95,7 +95,7 @@ public final class NativeConnectionTest {
      */
     private static void connect(Minecraft minecraft) {
         connecting = true;
-        String destination = "raknet;127.0.0.1:28990";
+        String destination = "raknet;127.0.0.1:" + Integer.getInteger("raknetify.test.port", 28990);
         ConnectScreen.startConnecting(new TitleScreen(), minecraft, ServerAddress.parseString(destination),
                 new ServerData("Transport fixture", destination, ServerData.Type.OTHER), false, null);
     }

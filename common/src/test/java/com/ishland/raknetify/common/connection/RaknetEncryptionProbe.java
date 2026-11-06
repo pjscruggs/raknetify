@@ -88,14 +88,15 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
     /**
      * Connects only to loopback and fails if the encrypted exchange does not complete within thirty seconds.
      *
-     * @param args local port, native protocol, optional payload size, and optional echo, rejected-session, or rejected-nonce mode
+     * @param args local port, native protocol, optional payload size, and optional echo or authentication rejection mode
      * @throws Exception if transport, RSA, AES, or challenge validation fails
      * @throws IllegalArgumentException if the requested verification mode is unknown
+     * @throws IllegalStateException if the owned probe channel cannot close within five seconds
      */
     public static void main(String[] args) throws Exception {
         int port = Integer.parseInt(args[0]);
         String mode = args.length > 3 ? args[3] : "echo";
-        if (!java.util.Set.of("echo", "rejected-session", "rejected-nonce").contains(mode)) {
+        if (!java.util.Set.of("echo", "rejected-session", "rejected-nonce", "rejected-throttle").contains(mode)) {
             throw new IllegalArgumentException("Unknown encryption verification mode");
         }
         RaknetEncryptionProbe probe = new RaknetEncryptionProbe(Integer.parseInt(args[1]),
@@ -106,14 +107,19 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
             channel = new Bootstrap().group(group).channel(RakNetClient.THREADED_CHANNEL)
                     .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5000)
                     .handler(probe.initializer()).connect("127.0.0.1", port).sync().channel();
-            channel.writeAndFlush(RaknetStatusProbe.handshake(port, probe.protocol, 2)).sync();
-            channel.writeAndFlush(probe.hello()).sync();
+            channel.writeAndFlush(RaknetStatusProbe.handshake(port, probe.protocol, 2));
+            if (!mode.equals("rejected-throttle")) channel.writeAndFlush(probe.hello());
             probe.result.get(30, TimeUnit.SECONDS);
             System.out.println(mode.equals("echo") ? "PASS native RSA and bidirectional RakNet encryption"
                     : "PASS native authentication " + mode);
         } finally {
-            if (channel != null) channel.close().sync();
-            group.shutdownGracefully(0, 5, TimeUnit.SECONDS).sync();
+            try {
+                if (channel != null && !channel.close().await(5, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Encryption probe channel did not close within five seconds");
+                }
+            } finally {
+                group.shutdownGracefully(0, 5, TimeUnit.SECONDS).sync();
+            }
         }
     }
 
@@ -165,7 +171,8 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
     @Override
     protected void channelRead0(ChannelHandlerContext context, Object message) throws Exception {
         if (message instanceof ByteBuf buffer) {
-            if (answered && !mode.equals("echo")) checkRejection(buffer);
+            if (mode.equals("rejected-throttle")) checkThrottle(buffer);
+            else if (answered && !mode.equals("echo")) checkRejection(buffer);
             else answerKey(context, buffer);
         }
         if (message instanceof FrameData frame && frame.getPacketId() == 0xF8) checkReply(frame);
@@ -215,6 +222,18 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
             throw new IllegalArgumentException("Expected a native login rejection");
         }
         result.complete(null);
+    }
+
+    /**
+     * Requires the native reconnect throttle to reject the forwarded identity before key exchange.
+     * @param packet first login response without transport framing
+     * @throws IllegalArgumentException if the native reason is absent or another login packet was returned
+     */
+    private void checkThrottle(ByteBuf packet) {
+        if (!packet.toString(StandardCharsets.UTF_8).contains("Connection throttled")) {
+            throw new IllegalArgumentException("Expected native connection throttle rejection");
+        }
+        checkRejection(packet);
     }
 
     /**
