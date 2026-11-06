@@ -28,9 +28,23 @@ import io.netty.buffer.ByteBufUtil;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 /** Verifies complete login-start wire layouts at each native protocol boundary used by admission probes. */
 class LoginProbeTest {
+    /** Optional login negotiation must retain its transaction ID while ordinary disconnects remain untouched. */
+    @Test
+    void declinesOnlyOptionalQueries() {
+        ByteBuf response = RaknetProxyProbe.declineQuery(new byte[]{4, (byte) 0xac, 2, 0});
+        try {
+            assertEquals("02ac0200", ByteBufUtil.hexDump(response));
+        } finally {
+            response.release();
+        }
+        assertNull(RaknetProxyProbe.declineQuery(new byte[]{0, 2, 123, 125}));
+        assertNull(RaknetProxyProbe.declineQuery(new byte[]{1}));
+    }
+
     /** Checks that older servers receive neither unknown UUID bytes nor omitted profile-key presence flags. */
     @Test
     void nativeLoginLayouts() {

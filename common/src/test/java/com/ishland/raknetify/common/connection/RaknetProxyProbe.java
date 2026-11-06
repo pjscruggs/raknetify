@@ -103,11 +103,49 @@ public final class RaknetProxyProbe {
      */
     private static void bannedLogin(Channel channel, LinkedBlockingQueue<byte[]> packets, int protocol) throws Exception {
         channel.writeAndFlush(loginHello(protocol)).sync();
-        String reason = textPacket(next(packets));
+        String reason = textPacket(loginResponse(channel, packets));
         if (!reason.contains("Transport rejection fixture") || !reason.contains("END_OF_REASON")) {
             throw new IllegalArgumentException("Missing or truncated native ban reason: " + reason);
         }
         System.out.println("BAN_REASON_OK");
+    }
+
+    /**
+     * Declines optional mod login queries exactly as a client without those mods would before native admission.
+     * @param channel connected application channel
+     * @param packets bounded response queue
+     * @return first non-query packet, still required to contain the exact native ban reason
+     * @throws Exception if delivery fails or the server exceeds the bounded query count
+     * @throws IllegalStateException if more than sixteen optional login queries precede admission
+     */
+    private static byte[] loginResponse(Channel channel, LinkedBlockingQueue<byte[]> packets) throws Exception {
+        for (int count = 0; count < 16; count++) {
+            byte[] response = next(packets);
+            ByteBuf answer = declineQuery(response);
+            if (answer == null) return response;
+            channel.writeAndFlush(answer).sync();
+        }
+        throw new IllegalStateException("Too many optional login queries");
+    }
+
+    /**
+     * Preserves the server's transaction ID while explicitly reporting an unsupported optional payload.
+     * @param response complete login-state packet
+     * @return owned query reply or null for a packet that must be validated by the caller
+     */
+    static ByteBuf declineQuery(byte[] response) {
+        ByteBuf input = Unpooled.wrappedBuffer(response);
+        try {
+            if (RaknetStatusProbe.readVarint(input) != 4) return null;
+            int transaction = RaknetStatusProbe.readVarint(input);
+            ByteBuf answer = Unpooled.buffer();
+            answer.writeByte(2);
+            RaknetStatusProbe.writeVarint(answer, transaction);
+            answer.writeBoolean(false);
+            return answer;
+        } finally {
+            input.release();
+        }
     }
 
     /**
