@@ -26,21 +26,19 @@ package com.ishland.raknetify.bungee.init;
 
 import com.google.common.collect.ForwardingSet;
 import com.ishland.raknetify.bungee.RaknetifyBungeePlugin;
+
 import io.netty.channel.Channel;
+
 import net.md_5.bungee.BungeeCord;
 import net.md_5.bungee.api.ProxyServer;
 
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Observes BungeeCord listener-set changes to create and close companion RakNet listeners.
- */
+/** Observes BungeeCord listener-set changes to create and close companion RakNet listeners. */
 public class InjectedSet extends ForwardingSet<Channel> {
 
-    /**
-     * Original proxy listener set whose ordinary set behavior is preserved.
-     */
+    /** Original proxy listener set whose ordinary set behavior is preserved. */
     private final Set<Channel> delegate;
 
     /**
@@ -48,7 +46,7 @@ public class InjectedSet extends ForwardingSet<Channel> {
      *
      * @param delegate live BungeeCord listener set
      */
-    public InjectedSet(Set<Channel> delegate) {
+    public InjectedSet(final Set<Channel> delegate) {
         this.delegate = delegate;
     }
 
@@ -59,18 +57,21 @@ public class InjectedSet extends ForwardingSet<Channel> {
      * @return whether the backing set gained a new element
      */
     @Override
-    public boolean add(Channel element) {
-        ProxyServer.getInstance().getScheduler().schedule(
-                RaknetifyBungeePlugin.INSTANCE,
-                () -> BungeeRaknetifyServer.injectChannel((BungeeCord) ProxyServer.getInstance(), element, false),
-                100, TimeUnit.MILLISECONDS);
+    public boolean add(final Channel element) {
+        ProxyServer.getInstance()
+                .getScheduler()
+                .schedule(
+                        RaknetifyBungeePlugin.INSTANCE,
+                        () ->
+                                BungeeRaknetifyServer.injectChannel(
+                                        (BungeeCord) ProxyServer.getInstance(), element, false),
+                        100,
+                        TimeUnit.MILLISECONDS);
 
         return super.add(element);
     }
 
-    /**
-     * Closes companion UDP listeners before clearing the proxy's listener set.
-     */
+    /** Closes companion UDP listeners before clearing the proxy's listener set. */
     @Override
     public void clear() {
         BungeeRaknetifyServer.stopAll();

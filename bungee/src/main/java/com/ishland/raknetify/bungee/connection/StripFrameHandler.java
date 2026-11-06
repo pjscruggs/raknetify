@@ -29,33 +29,25 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
+
 import net.md_5.bungee.protocol.DefinedPacket;
 
-/**
- * Removes BungeeCord's stream-length prefix because RakNet already preserves packet boundaries.
- */
+/** Removes BungeeCord's stream-length prefix because RakNet already preserves packet boundaries. */
 @ChannelHandler.Sharable
 public class StripFrameHandler extends ChannelOutboundHandlerAdapter {
 
-    /**
-     * Pipeline name for the outbound Minecraft stream-prefix removal handler.
-     */
+    /** Pipeline name for the outbound Minecraft stream-prefix removal handler. */
     public static final String NAME = "raknetify-bungee-strip-frame";
 
-    /**
-     * Shared stateless prefix-removal handler used by all BungeeCord RakNet connections.
-     */
+    /** Shared stateless prefix-removal handler used by all BungeeCord RakNet connections. */
     public static final StripFrameHandler INSTANCE = new StripFrameHandler();
 
-    /**
-     * Creates the single stateless handler instance.
-     */
-    private StripFrameHandler() {
-    }
+    /** Creates the single stateless handler instance. */
+    private StripFrameHandler() {}
 
     /**
-     * Consumes the leading VarInt length and transfers the remaining payload slice downstream.
-     * The slice shares the input reference, so this handler does not release it separately.
+     * Consumes the leading VarInt length and transfers the remaining payload slice downstream. The
+     * slice shares the input reference, so this handler does not release it separately.
      *
      * @param ctx outbound context receiving the unprefixed payload
      * @param msg encoded Minecraft buffer or unrelated pipeline message
@@ -63,7 +55,9 @@ public class StripFrameHandler extends ChannelOutboundHandlerAdapter {
      * @throws Exception if superclass forwarding of an unrelated message fails
      */
     @Override
-    public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+    public void write(
+            final ChannelHandlerContext ctx, final Object msg, final ChannelPromise promise)
+            throws Exception {
         if (msg instanceof ByteBuf buf) {
             DefinedPacket.readVarInt(buf);
             ctx.write(buf.slice(), promise);
@@ -71,5 +65,4 @@ public class StripFrameHandler extends ChannelOutboundHandlerAdapter {
         }
         super.write(ctx, msg, promise);
     }
-
 }

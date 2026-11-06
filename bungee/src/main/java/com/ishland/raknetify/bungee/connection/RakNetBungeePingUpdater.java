@@ -24,44 +24,35 @@
 
 package com.ishland.raknetify.bungee.connection;
 
-import com.google.common.base.Preconditions;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.util.concurrent.ScheduledFuture;
+
 import net.md_5.bungee.UserConnection;
-import net.md_5.bungee.api.connection.ProxiedPlayer;
+
 import network.ycc.raknet.RakNet;
-import network.ycc.raknet.packet.Ping;
 
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Publishes RakNet RTT plus its standard deviation as the proxy-visible player ping.
- */
+/** Publishes RakNet RTT plus its standard deviation as the proxy-visible player ping. */
 public class RakNetBungeePingUpdater extends ChannelDuplexHandler {
 
-    /**
-     * Pipeline name for the transport-based player ping updater.
-     */
+    /** Pipeline name for the transport-based player ping updater. */
     public static final String NAME = "raknetify-bungee-ping-updater";
 
-    /**
-     * Player whose proxy-visible ping follows this connection's transport measurements.
-     */
+    /** Player whose proxy-visible ping follows this connection's transport measurements. */
     private final UserConnection player;
 
-    /**
-     * Once-per-second event-loop task, or null before installation and after removal.
-     */
-    ScheduledFuture<?> updateTask = null;
+    /** Once-per-second event-loop task, or null before installation and after removal. */
+    ScheduledFuture<?> updateTask;
 
     /**
      * Associates transport ping samples with an authenticated proxy player.
      *
      * @param player player record whose ping is updated while this handler is installed
      */
-    public RakNetBungeePingUpdater(UserConnection player) {
+    public RakNetBungeePingUpdater(final UserConnection player) {
         this.player = Objects.requireNonNull(player);
     }
 
@@ -70,12 +61,22 @@ public class RakNetBungeePingUpdater extends ChannelDuplexHandler {
      *
      * @param ctx installed context whose channel supplies transport measurements and scheduling
      */
-    public void handlerAdded(ChannelHandlerContext ctx) {
+    public void handlerAdded(final ChannelHandlerContext ctx) {
         if (ctx.channel().config() instanceof RakNet.Config config) {
-            updateTask = ctx.channel().eventLoop().scheduleAtFixedRate(
-                    () -> player.setPing((int) ((config.getRTTNanos() + config.getRTTStdDevNanos()) / 1_000_000)),
-                    0, 1000, TimeUnit.MILLISECONDS
-            );
+            updateTask =
+                    ctx.channel()
+                            .eventLoop()
+                            .scheduleAtFixedRate(
+                                    () ->
+                                            player.setPing(
+                                                    (int)
+                                                            ((config.getRTTNanos()
+                                                                            + config
+                                                                                    .getRTTStdDevNanos())
+                                                                    / 1_000_000)),
+                                    0,
+                                    1000,
+                                    TimeUnit.MILLISECONDS);
         }
     }
 
@@ -84,11 +85,10 @@ public class RakNetBungeePingUpdater extends ChannelDuplexHandler {
      *
      * @param ctx removed handler context, unused because the task is already retained
      */
-    public void handlerRemoved(ChannelHandlerContext ctx) {
+    public void handlerRemoved(final ChannelHandlerContext ctx) {
         if (updateTask != null) {
             updateTask.cancel(false);
             updateTask = null;
         }
     }
-
 }

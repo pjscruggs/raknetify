@@ -27,6 +27,7 @@ package com.ishland.raknetify.bungee;
 import com.ishland.raknetify.bungee.connection.RakNetBungeeConnectionUtil;
 import com.ishland.raknetify.bungee.init.BungeeRaknetifyServer;
 import com.ishland.raknetify.common.data.ProtocolMultiChannelMappings;
+
 import net.md_5.bungee.api.event.PostLoginEvent;
 import net.md_5.bungee.api.event.ServerConnectedEvent;
 import net.md_5.bungee.api.plugin.Listener;
@@ -35,18 +36,13 @@ import net.md_5.bungee.event.EventHandler;
 
 import java.util.logging.Logger;
 
-/**
- * Connects the BungeeCord plugin lifecycle to UDP listeners and player connection hooks.
- */
+/** Connects the BungeeCord plugin lifecycle to UDP listeners and player connection hooks. */
 public class RaknetifyBungeePlugin extends Plugin implements Listener {
 
-    /**
-     * Proxy-provided plugin logger initialized during enable.
-     */
+    /** Proxy-provided plugin logger initialized during enable. */
     public static Logger LOGGER;
-    /**
-     * Enabled plugin instance used to own scheduled tasks and event registrations.
-     */
+
+    /** Enabled plugin instance used to own scheduled tasks and event registrations. */
     public static RaknetifyBungeePlugin INSTANCE;
 
     /**
@@ -66,9 +62,7 @@ public class RaknetifyBungeePlugin extends Plugin implements Listener {
         this.getProxy().getPluginManager().registerListener(this, this);
     }
 
-    /**
-     * Closes the plugin's UDP listeners when BungeeCord disables the plugin.
-     */
+    /** Closes the plugin's UDP listeners when BungeeCord disables the plugin. */
     @Override
     public void onDisable() {
         super.onDisable();
@@ -82,7 +76,7 @@ public class RaknetifyBungeePlugin extends Plugin implements Listener {
      * @param evt completed proxy login event
      */
     @EventHandler
-    public void onPostLogin(PostLoginEvent evt) {
+    public void onPostLogin(final PostLoginEvent evt) {
         RakNetBungeeConnectionUtil.onPlayerLogin(evt);
     }
 
@@ -92,8 +86,7 @@ public class RaknetifyBungeePlugin extends Plugin implements Listener {
      * @param evt event identifying the player and new backend connection
      */
     @EventHandler
-    public void handleServerSwitch(ServerConnectedEvent evt) {
+    public void handleServerSwitch(final ServerConnectedEvent evt) {
         RakNetBungeeConnectionUtil.handleServerSwitch(evt);
     }
-
 }
