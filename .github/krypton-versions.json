@@ -1,0 +1,226 @@
+{
+  "1.18": [
+    {
+      "filename": "krypton-0.1.5.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/0.1.5/krypton-0.1.5.jar",
+      "sha512": "92e78ad9cb9d338001bda4b0c8cc1a75f833951badc7bc7d16cca194ed74f1808227bdceba4f5b20170d16a5086c5d6c193e4446047d0531ad05f0a2c7f3ad71"
+    }
+  ],
+  "1.18.1": [
+    {
+      "filename": "krypton-0.1.9.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/0.1.9/krypton-0.1.9.jar",
+      "sha512": "32ab71412b8ca0c43f90d654fbe8e037997e69a1b056883fd5640e465320a4d077120d0c546a67ec9e90834bf2b3b3d0ddb35dc3d17822d93e1cb927a18db56a"
+    }
+  ],
+  "1.18.2": [
+    {
+      "filename": "krypton-0.1.9.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/0.1.9/krypton-0.1.9.jar",
+      "sha512": "32ab71412b8ca0c43f90d654fbe8e037997e69a1b056883fd5640e465320a4d077120d0c546a67ec9e90834bf2b3b3d0ddb35dc3d17822d93e1cb927a18db56a"
+    }
+  ],
+  "1.19": [
+    {
+      "filename": "krypton-0.2.0.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/0.2.0/krypton-0.2.0.jar",
+      "sha512": "699100296a536caf90926ce0e07d6cbb2fe773f4ec5455d30dd650d5a01fdfb1a4c5ae50ae42b792e0d05f56f9f0a8fc359fc4879b6e7a99007fe29b38cca3fe"
+    }
+  ],
+  "1.19.1": [
+    {
+      "filename": "krypton-0.2.1.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/0.2.1/krypton-0.2.1.jar",
+      "sha512": "4dec2caf697fd5152f38b8ec774e32f83c2148c9f9ac06afb129fa434f24384751628e7ab700f783aec54a1cf50e650f32c6391fc8d4585f5789bc55e5e91d91"
+    }
+  ],
+  "1.19.2": [
+    {
+      "filename": "krypton-0.2.1.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/0.2.1/krypton-0.2.1.jar",
+      "sha512": "4dec2caf697fd5152f38b8ec774e32f83c2148c9f9ac06afb129fa434f24384751628e7ab700f783aec54a1cf50e650f32c6391fc8d4585f5789bc55e5e91d91"
+    }
+  ],
+  "1.19.3": [
+    {
+      "filename": "krypton-0.2.1.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/0.2.1/krypton-0.2.1.jar",
+      "sha512": "4dec2caf697fd5152f38b8ec774e32f83c2148c9f9ac06afb129fa434f24384751628e7ab700f783aec54a1cf50e650f32c6391fc8d4585f5789bc55e5e91d91"
+    }
+  ],
+  "1.19.4": [
+    {
+      "filename": "krypton-0.2.2.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/Tncui9tU/krypton-0.2.2.jar",
+      "sha512": "556087c57bae6a06a9249b261d432939f9bdead8f22324f7ec38f6a30e3f7cc9da758c7178d470d6e05e9b4b5caed703547c5891e6a89b0d842c274e709667da"
+    }
+  ],
+  "1.20": [
+    {
+      "filename": "krypton-0.2.3.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/jiDwS0W1/krypton-0.2.3.jar",
+      "sha512": "92b73a70737cfc1daebca211bd1525de7684b554be392714ee29cbd558f2a27a8bdda22accbe9176d6e531d74f9bf77798c28c3e8559c970f607422b6038bc9e"
+    }
+  ],
+  "1.20.1": [
+    {
+      "filename": "krypton-0.2.3.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/jiDwS0W1/krypton-0.2.3.jar",
+      "sha512": "92b73a70737cfc1daebca211bd1525de7684b554be392714ee29cbd558f2a27a8bdda22accbe9176d6e531d74f9bf77798c28c3e8559c970f607422b6038bc9e"
+    }
+  ],
+  "1.20.2": [
+    {
+      "filename": "krypton-0.2.6.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/bRcuOnao/krypton-0.2.6.jar",
+      "sha512": "a3e4eadcd8074a0a68a1378c90824b58199bedbab2f7eaa3961db9b10b99215805dde4eb73be5ec3118f38fbb0beaa8a1b6f9de6966a741d32dbf181a44ae11b"
+    }
+  ],
+  "1.20.3": [
+    {
+      "filename": "krypton-0.2.6.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/bRcuOnao/krypton-0.2.6.jar",
+      "sha512": "a3e4eadcd8074a0a68a1378c90824b58199bedbab2f7eaa3961db9b10b99215805dde4eb73be5ec3118f38fbb0beaa8a1b6f9de6966a741d32dbf181a44ae11b"
+    }
+  ],
+  "1.20.4": [
+    {
+      "filename": "krypton-0.2.6.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/bRcuOnao/krypton-0.2.6.jar",
+      "sha512": "a3e4eadcd8074a0a68a1378c90824b58199bedbab2f7eaa3961db9b10b99215805dde4eb73be5ec3118f38fbb0beaa8a1b6f9de6966a741d32dbf181a44ae11b"
+    }
+  ],
+  "1.20.5": [
+    {
+      "filename": "krypton-0.2.7.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/PYi5mm1G/krypton-0.2.7.jar",
+      "sha512": "c25c2213db3aa4b646b583c826c8f7bcb7e4e256da0106e213048baadad605ebd2472b9f1b7739bcbb2b5f9968d53d2ef6445f4288225ca5096ef190b8059740"
+    }
+  ],
+  "1.20.6": [
+    {
+      "filename": "krypton-0.2.7.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/PYi5mm1G/krypton-0.2.7.jar",
+      "sha512": "c25c2213db3aa4b646b583c826c8f7bcb7e4e256da0106e213048baadad605ebd2472b9f1b7739bcbb2b5f9968d53d2ef6445f4288225ca5096ef190b8059740"
+    }
+  ],
+  "1.21": [
+    {
+      "filename": "krypton-0.2.8.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/Acz3ttTp/krypton-0.2.8.jar",
+      "sha512": "5f8cf96c79bfd4d893f1d70da582e62026bed36af49a7fa7b1e00fb6efb28d9ad6a1eec147020496b4fe38693d33fe6bfcd1eebbd93475612ee44290c2483784"
+    }
+  ],
+  "1.21.1": [
+    {
+      "filename": "krypton-0.2.8.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/Acz3ttTp/krypton-0.2.8.jar",
+      "sha512": "5f8cf96c79bfd4d893f1d70da582e62026bed36af49a7fa7b1e00fb6efb28d9ad6a1eec147020496b4fe38693d33fe6bfcd1eebbd93475612ee44290c2483784"
+    }
+  ],
+  "1.21.2": [
+    {
+      "filename": "krypton-0.2.8.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/Acz3ttTp/krypton-0.2.8.jar",
+      "sha512": "5f8cf96c79bfd4d893f1d70da582e62026bed36af49a7fa7b1e00fb6efb28d9ad6a1eec147020496b4fe38693d33fe6bfcd1eebbd93475612ee44290c2483784"
+    }
+  ],
+  "1.21.3": [
+    {
+      "filename": "krypton-0.2.8.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/Acz3ttTp/krypton-0.2.8.jar",
+      "sha512": "5f8cf96c79bfd4d893f1d70da582e62026bed36af49a7fa7b1e00fb6efb28d9ad6a1eec147020496b4fe38693d33fe6bfcd1eebbd93475612ee44290c2483784"
+    }
+  ],
+  "1.21.4": [
+    {
+      "filename": "krypton-0.2.8.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/Acz3ttTp/krypton-0.2.8.jar",
+      "sha512": "5f8cf96c79bfd4d893f1d70da582e62026bed36af49a7fa7b1e00fb6efb28d9ad6a1eec147020496b4fe38693d33fe6bfcd1eebbd93475612ee44290c2483784"
+    }
+  ],
+  "1.21.5": [
+    {
+      "filename": "krypton-0.2.9.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/neW85eWt/krypton-0.2.9.jar",
+      "sha512": "2e2304b1b17ecf95783aee92e26e54c9bfad325c7dfcd14deebf9891266eb2933db00ff77885caa083faa96f09c551eb56f93cf73b357789cb31edad4939ffeb"
+    }
+  ],
+  "1.21.6": [
+    {
+      "filename": "krypton-0.2.9.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/neW85eWt/krypton-0.2.9.jar",
+      "sha512": "2e2304b1b17ecf95783aee92e26e54c9bfad325c7dfcd14deebf9891266eb2933db00ff77885caa083faa96f09c551eb56f93cf73b357789cb31edad4939ffeb"
+    }
+  ],
+  "1.21.7": [
+    {
+      "filename": "krypton-0.2.9.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/neW85eWt/krypton-0.2.9.jar",
+      "sha512": "2e2304b1b17ecf95783aee92e26e54c9bfad325c7dfcd14deebf9891266eb2933db00ff77885caa083faa96f09c551eb56f93cf73b357789cb31edad4939ffeb"
+    }
+  ],
+  "1.21.8": [
+    {
+      "filename": "krypton-0.2.9.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/neW85eWt/krypton-0.2.9.jar",
+      "sha512": "2e2304b1b17ecf95783aee92e26e54c9bfad325c7dfcd14deebf9891266eb2933db00ff77885caa083faa96f09c551eb56f93cf73b357789cb31edad4939ffeb"
+    }
+  ],
+  "1.21.9": [
+    {
+      "filename": "krypton-0.2.10.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/O9LmWYR7/krypton-0.2.10.jar",
+      "sha512": "4dcd7228d1890ddfc78c99ff284b45f9cf40aae77ef6359308e26d06fa0d938365255696af4cc12d524c46c4886cdcd19268c165a2bf0a2835202fe857da5cab"
+    }
+  ],
+  "1.21.10": [
+    {
+      "filename": "krypton-0.2.10.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/O9LmWYR7/krypton-0.2.10.jar",
+      "sha512": "4dcd7228d1890ddfc78c99ff284b45f9cf40aae77ef6359308e26d06fa0d938365255696af4cc12d524c46c4886cdcd19268c165a2bf0a2835202fe857da5cab"
+    }
+  ],
+  "1.21.11": [
+    {
+      "filename": "krypton-0.2.10.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/O9LmWYR7/krypton-0.2.10.jar",
+      "sha512": "4dcd7228d1890ddfc78c99ff284b45f9cf40aae77ef6359308e26d06fa0d938365255696af4cc12d524c46c4886cdcd19268c165a2bf0a2835202fe857da5cab"
+    }
+  ],
+  "26.1": [
+    {
+      "filename": "krypton-0.3.0.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/kYAGItyj/krypton-0.3.0.jar",
+      "sha512": "14233210283a76f3cf435a3b8ddbcbd65a858d2b1a10b88ff643c0a01486dfd2bf1843bd3456cd4fb86cbb3b06f2dea0c4e663b1976a48e96de16d3b5a707ec9"
+    }
+  ],
+  "26.1.1": [
+    {
+      "filename": "krypton-0.3.0.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/kYAGItyj/krypton-0.3.0.jar",
+      "sha512": "14233210283a76f3cf435a3b8ddbcbd65a858d2b1a10b88ff643c0a01486dfd2bf1843bd3456cd4fb86cbb3b06f2dea0c4e663b1976a48e96de16d3b5a707ec9"
+    }
+  ],
+  "26.1.2": [
+    {
+      "filename": "krypton-0.3.0.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/kYAGItyj/krypton-0.3.0.jar",
+      "sha512": "14233210283a76f3cf435a3b8ddbcbd65a858d2b1a10b88ff643c0a01486dfd2bf1843bd3456cd4fb86cbb3b06f2dea0c4e663b1976a48e96de16d3b5a707ec9"
+    }
+  ],
+  "26.2": [
+    {
+      "filename": "krypton-0.3.1.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/5WeL0Nkz/krypton-0.3.1.jar",
+      "sha512": "b8d9af34cd0050493afb8a6232cb8f785daa9d8887b7045f6e6a53c6bb9b5ffc4318fd9b0347a940eacfeba4773f10cb80ae0be1e79ce4c1888f96eda21e564e"
+    }
+  ],
+  "26.3": [
+    {
+      "filename": "krypton-0.3.2.jar",
+      "url": "https://cdn.modrinth.com/data/fQEb0iXm/versions/UugdIYJw/krypton-0.3.2.jar",
+      "sha512": "d1d57ebd41395b75b01f130cd9503eb8d208212424a399ff9f367f50be8fbc1c6472442b33c686e777c3148f6a609520e8fb732c755157c358cb207fd4d1123a"
+    }
+  ]
+}

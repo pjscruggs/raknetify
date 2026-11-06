@@ -68,6 +68,27 @@ jobs:
           --java-21 "${{ steps.java21.outputs.path }}/bin/java"
           --versions 1.21.11 26.3
           --polymer-lock .github/polymer-versions.json
+      - name: Krypton version compatibility
+        run: >-
+          python3 .github/scripts/server-smoke.py
+          --jar fabric-universal/build/libs/*.jar
+          --work-dir "$RUNNER_TEMP/raknetify-smoke/krypton"
+          --java-17 "${{ steps.java17.outputs.path }}/bin/java"
+          --java-21 "${{ steps.java21.outputs.path }}/bin/java"
+          --krypton-lock .github/krypton-versions.json
+          --encryption-legacy transport-test-legacy/build/libs/*.jar
+          --encryption-modern transport-test-modern/build/libs/*.jar
+      - name: Polymer and Krypton together
+        run: >-
+          python3 .github/scripts/server-smoke.py
+          --jar fabric-universal/build/libs/*.jar
+          --work-dir "$RUNNER_TEMP/raknetify-smoke/polymer-krypton"
+          --java-21 "${{ steps.java21.outputs.path }}/bin/java"
+          --versions 1.21.11 26.3
+          --polymer-lock .github/polymer-versions.json
+          --krypton-lock .github/krypton-versions.json
+          --encryption-legacy transport-test-legacy/build/libs/*.jar
+          --encryption-modern transport-test-modern/build/libs/*.jar
       - name: capture server smoke logs
         if: always()
         uses: actions/upload-artifact@v4

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "raknetify_encryption_test",
+  "version": "1.0.0",
+  "name": "Raknetify encryption test fixture",
+  "environment": "server",
+  "mixins": [
+    "encryption-test.mixins.json"
+  ],
+  "depends": {
+    "raknetify": "*",
+    "minecraft": ">=26.1",
+    "java": ">=25"
+  }
+}

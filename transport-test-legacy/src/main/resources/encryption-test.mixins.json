@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "com.ishland.raknetify.test.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "mixins": [
+    "EncryptionLoginMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "refmap": "transport-test-legacy-refmap.json"
+}

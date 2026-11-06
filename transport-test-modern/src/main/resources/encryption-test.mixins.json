@@ -1,0 +1,11 @@
+{
+  "required": true,
+  "package": "com.ishland.raknetify.test.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "mixins": [
+    "EncryptionLoginMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -63,7 +63,7 @@ public final class RaknetStatusProbe {
             channel = new Bootstrap().group(group).channel(RakNetClient.THREADED_CHANNEL)
                     .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5000)
                     .handler(initializer(response)).connect("127.0.0.1", port).sync().channel();
-            channel.writeAndFlush(handshake(port, protocol)).sync();
+            channel.writeAndFlush(handshake(port, protocol, 1)).sync();
             channel.writeAndFlush(Unpooled.buffer(1).writeByte(0)).sync();
             System.out.println(response.get(10, TimeUnit.SECONDS));
         } finally {
@@ -121,15 +121,16 @@ public final class RaknetStatusProbe {
      *
      * @param port loopback server port
      * @param protocol native Minecraft protocol number
+     * @param intention status or login connection state
      * @return owned buffer transferred to the channel by the caller
      */
-    private static ByteBuf handshake(int port, int protocol) {
+    static ByteBuf handshake(int port, int protocol, int intention) {
         ByteBuf buffer = Unpooled.buffer();
         writeVarint(buffer, 0);
         writeVarint(buffer, protocol);
         byte[] host = "127.0.0.1".getBytes(StandardCharsets.UTF_8);
         writeVarint(buffer, host.length);
-        buffer.writeBytes(host).writeShort(port).writeByte(1);
+        buffer.writeBytes(host).writeShort(port).writeByte(intention);
         return buffer;
     }
 
@@ -139,7 +140,7 @@ public final class RaknetStatusProbe {
      * @param buffer destination packet buffer
      * @param value protocol integer to encode
      */
-    private static void writeVarint(ByteBuf buffer, int value) {
+    static void writeVarint(ByteBuf buffer, int value) {
         while ((value & ~0x7F) != 0) {
             buffer.writeByte((value & 0x7F) | 0x80);
             value >>>= 7;
@@ -154,7 +155,7 @@ public final class RaknetStatusProbe {
      * @return decoded integer
      * @throws IllegalArgumentException if the integer exceeds five bytes
      */
-    private static int readVarint(ByteBuf buffer) {
+    static int readVarint(ByteBuf buffer) {
         int value = 0;
         for (int shift = 0; shift < 35; shift += 7) {
             int part = buffer.readUnsignedByte();
