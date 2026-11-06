@@ -70,7 +70,7 @@ final class SignedChatTest {
             {"class_2797", "ServerboundChatPacket"},
             {"class_7640", "ServerboundChatAckPacket"}
     };
-    /** Namespace choice only; the installed game supplies all signing and validation behavior. */
+    /** Selects class names while the installed game supplies all signing and validation behavior. */
     private static final boolean MODERN = FabricLoader.getInstance().getModContainer("minecraft").orElseThrow()
             .getMetadata().getVersion().getFriendlyString().startsWith("26.");
 
@@ -169,7 +169,7 @@ final class SignedChatTest {
         }
     }
 
-    /** Owns a synthetic profile key and native signing chain; it never claims that the key was certified by Mojang. */
+    /** Owns a synthetic profile key and native signing chain. The test key has no Mojang certification. */
     private static final class Chain {
         /** Stable sender identity included in every native signature. */
         private final UUID sender = new UUID(1, 2);
