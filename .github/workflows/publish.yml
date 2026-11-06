@@ -42,8 +42,8 @@ jobs:
       revision: ${{ steps.plan.outputs.revision }}
       matrix: ${{ steps.plan.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-python@v7.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
       - name: Require a successful trusted build
@@ -64,15 +64,15 @@ jobs:
       max-parallel: 2
       matrix: ${{ fromJSON(needs.verify.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.verify.outputs.revision }}
           path: tested-source
-      - uses: actions/setup-python@v7.1.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
-      - uses: actions/download-artifact@v8.0.2
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: Artifacts
           path: release-input
@@ -84,7 +84,7 @@ jobs:
         env:
           RELEASE_NOTES: ${{ inputs.changelog }}
         run: python -c 'import os,pathlib; pathlib.Path("release-notes.txt").write_text(os.environ["RELEASE_NOTES"], encoding="utf-8")'
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: zulu
           java-version: 25
