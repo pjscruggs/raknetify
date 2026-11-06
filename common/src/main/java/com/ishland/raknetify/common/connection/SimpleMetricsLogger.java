@@ -41,68 +41,40 @@ public class SimpleMetricsLogger implements RakNet.MetricsLogger {
     /**
      * Received RakNet packet count, accumulated by the connection's single transport writer.
      */
-    private volatile long packetsIn = 0L;
-    /**
-     * Received RakNet frame count, accumulated by the connection's single transport writer.
-     */
-    private volatile long framesIn = 0L;
-    /**
-     * Transport-reported frame error count, accumulated by the connection's single transport writer.
-     */
-    private volatile long framesError = 0L;
+    private volatile long packetsIn;
     /**
      * Received transport byte count, accumulated by the connection's single transport writer.
      */
-    private volatile long bytesIn = 0L;
+    private volatile long bytesIn;
     /**
      * Sent RakNet packet count, accumulated by the connection's single transport writer.
      */
-    private volatile long packetsOut = 0L;
-    /**
-     * Sent RakNet frame count, accumulated by the connection's single transport writer.
-     */
-    private volatile long framesOut = 0L;
+    private volatile long packetsOut;
     /**
      * Sent transport byte count, accumulated by the connection's single transport writer.
      */
-    private volatile long bytesOut = 0L;
+    private volatile long bytesOut;
     /**
      * Retransmitted transport byte count, accumulated by the connection's single transport writer.
      */
-    private volatile long bytesRecalled = 0L;
-    /**
-     * Acknowledged transport byte count, accumulated by the connection's single transport writer.
-     */
-    private volatile long bytesACKd = 0L;
-    /**
-     * Negatively acknowledged transport byte count, accumulated by the connection's single transport writer.
-     */
-    private volatile long bytesNACKd = 0L;
-    /**
-     * Sent acknowledgement count, accumulated by the connection's single transport writer.
-     */
-    private volatile long acksSent = 0L;
-    /**
-     * Sent negative-acknowledgement count, accumulated by the connection's single transport writer.
-     */
-    private volatile long nacksSent = 0L;
+    private volatile long bytesRecalled;
 
     /**
      * Latest transport round-trip-time estimate, in nanoseconds.
      */
-    private volatile long measureRTTns = 0L;
+    private volatile long measureRTTns;
     /**
      * Latest standard deviation of the transport RTT estimate, in nanoseconds.
      */
-    private volatile long measureRTTnsStdDev = 0L;
+    private volatile long measureRTTnsStdDev;
     /**
      * Latest additional burst allowance above the configured baseline pending-frame-set count.
      */
-    private volatile long measureBurstTokens = 0L;
+    private volatile long measureBurstTokens;
     /**
      * Latest transport queue size in bytes, published for diagnostic readers.
      */
-    private volatile int currentQueuedBytes = 0;
+    private volatile int currentQueuedBytes;
 
     /**
      * Accumulates the received raknet packet count reported by the transport.
@@ -112,26 +84,6 @@ public class SimpleMetricsLogger implements RakNet.MetricsLogger {
     @Override
     public void packetsIn(int delta) {
         packetsIn += delta;
-    }
-
-    /**
-     * Accumulates the received raknet frame count reported by the transport.
-     *
-     * @param delta additional count reported by this transport callback
-     */
-    @Override
-    public void framesIn(int delta) {
-        framesIn += delta;
-    }
-
-    /**
-     * Accumulates the transport-reported frame error count reported by the transport.
-     *
-     * @param delta additional count reported by this transport callback
-     */
-    @Override
-    public void frameError(int delta) {
-        framesError += delta;
     }
 
     /**
@@ -155,16 +107,6 @@ public class SimpleMetricsLogger implements RakNet.MetricsLogger {
     }
 
     /**
-     * Accumulates the sent raknet frame count reported by the transport.
-     *
-     * @param delta additional count reported by this transport callback
-     */
-    @Override
-    public void framesOut(int delta) {
-        framesOut += delta;
-    }
-
-    /**
      * Accumulates the sent transport byte count reported by the transport.
      * Also refreshes derived rates when the sampling interval has elapsed.
      *
@@ -184,46 +126,6 @@ public class SimpleMetricsLogger implements RakNet.MetricsLogger {
     @Override
     public void bytesRecalled(int delta) {
         bytesRecalled += delta;
-    }
-
-    /**
-     * Accumulates the acknowledged transport byte count reported by the transport.
-     *
-     * @param delta additional count reported by this transport callback
-     */
-    @Override
-    public void bytesACKd(int delta) {
-        bytesACKd += delta;
-    }
-
-    /**
-     * Accumulates the negatively acknowledged transport byte count reported by the transport.
-     *
-     * @param delta additional count reported by this transport callback
-     */
-    @Override
-    public void bytesNACKd(int delta) {
-        bytesNACKd += delta;
-    }
-
-    /**
-     * Accumulates the sent acknowledgement count reported by the transport.
-     *
-     * @param delta additional count reported by this transport callback
-     */
-    @Override
-    public void acksSent(int delta) {
-        acksSent += delta;
-    }
-
-    /**
-     * Accumulates the sent negative-acknowledgement count reported by the transport.
-     *
-     * @param delta additional count reported by this transport callback
-     */
-    @Override
-    public void nacksSent(int delta) {
-        nacksSent += delta;
     }
 
     /**
@@ -294,15 +196,15 @@ public class SimpleMetricsLogger implements RakNet.MetricsLogger {
     /**
      * Combined inbound and outbound byte total at the previous retransmission sample.
      */
-    private long lastBytesTotal = 0L;
+    private long lastBytesTotal;
     /**
      * Retransmitted-byte total at the previous retransmission sample.
      */
-    private long lastBytesRecalled = 0L;
+    private long lastBytesRecalled;
     /**
      * Published rolling retransmitted-byte fraction, not a direct packet-loss measurement.
      */
-    private volatile double measureErrorRate = 0.0D;
+    private volatile double measureErrorRate;
 
     /**
      * Updates the retransmitted-byte fraction only for intervals containing traffic.
@@ -334,35 +236,35 @@ public class SimpleMetricsLogger implements RakNet.MetricsLogger {
     /**
      * Incoming packet total at the previous rate sample.
      */
-    private long lastPacketsIn = 0L;
+    private long lastPacketsIn;
     /**
      * Outgoing packet total at the previous rate sample.
      */
-    private long lastPacketsOut = 0L;
+    private long lastPacketsOut;
     /**
      * Incoming byte total at the previous rate sample.
      */
-    private long lastBytesIn = 0L;
+    private long lastBytesIn;
     /**
      * Outgoing byte total at the previous rate sample.
      */
-    private long lastBytesOut = 0L;
+    private long lastBytesOut;
     /**
      * Published rolling mean incoming packet rate, truncated to whole packets per second.
      */
-    private volatile int measureRX = 0;
+    private volatile int measureRX;
     /**
      * Published rolling mean outgoing packet rate, truncated to whole packets per second.
      */
-    private volatile int measureTX = 0;
+    private volatile int measureTX;
     /**
      * Published incoming byte rate for the latest sampling interval, in bytes per second.
      */
-    private volatile long measureBytesInRate = 0;
+    private volatile long measureBytesInRate;
     /**
      * Published outgoing byte rate for the latest sampling interval, in bytes per second.
      */
-    private volatile long measureBytesOutRate = 0;
+    private volatile long measureBytesOutRate;
     /**
      * Incoming byte rate formatted with binary units and a per-second suffix.
      */
