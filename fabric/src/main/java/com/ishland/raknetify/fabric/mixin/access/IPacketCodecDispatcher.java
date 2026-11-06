@@ -25,7 +25,9 @@
 package com.ishland.raknetify.fabric.mixin.access;
 
 import io.netty.buffer.ByteBuf;
+
 import net.minecraft.network.handler.PacketCodecDispatcher;
+
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
@@ -38,6 +40,7 @@ import java.util.List;
  * @param <V> packet value decoded or encoded by the dispatcher
  * @param <T> packet-type key used to select a codec
  */
+@FunctionalInterface
 @Mixin(PacketCodecDispatcher.class)
 public interface IPacketCodecDispatcher<B extends ByteBuf, V, T> {
 
@@ -48,5 +51,4 @@ public interface IPacketCodecDispatcher<B extends ByteBuf, V, T> {
      */
     @Accessor
     List<PacketCodecDispatcher.PacketType<B, V, T>> getPacketTypes();
-
 }

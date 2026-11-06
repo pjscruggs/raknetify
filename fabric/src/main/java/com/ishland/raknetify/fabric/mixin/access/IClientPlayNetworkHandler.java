@@ -25,14 +25,12 @@
 package com.ishland.raknetify.fabric.mixin.access;
 
 import net.minecraft.client.network.ClientPlayNetworkHandler;
-import net.minecraft.network.ClientConnection;
+
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.gen.Accessor;
 
 /**
- * Retains the client play-listener accessor mixin target while connection lookup uses runtime field discovery.
+ * Retains the client play-listener accessor mixin target while connection lookup uses runtime field
+ * discovery.
  */
 @Mixin(ClientPlayNetworkHandler.class)
-public interface IClientPlayNetworkHandler {
-
-}
+public interface IClientPlayNetworkHandler {}

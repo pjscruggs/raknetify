@@ -24,8 +24,8 @@
 
 package com.ishland.raknetify.fabric.mixin.access;
 
-import net.minecraft.network.NetworkPhase;
 import net.minecraft.network.NetworkSide;
+
 import org.spongepowered.asm.mixin.Dynamic;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
@@ -33,9 +33,8 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 
 import java.util.Map;
 
-/**
- * Exposes legacy protocol handlers before Minecraft moved registration into packet codecs.
- */
+/** Exposes legacy protocol handlers before Minecraft moved registration into packet codecs. */
+@FunctionalInterface
 @Pseudo
 @Mixin(targets = "net/minecraft/class_2539")
 public interface INetworkState1_20_4 {
@@ -48,5 +47,4 @@ public interface INetworkState1_20_4 {
     @Dynamic
     @Accessor(value = "field_20595", remap = false)
     Map<NetworkSide, ?> getPacketHandlers();
-
 }

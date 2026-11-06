@@ -25,11 +25,9 @@
 package com.ishland.raknetify.fabric.mixin.access;
 
 import net.minecraft.network.handler.PacketCodecDispatcher;
+
 import org.spongepowered.asm.mixin.Mixin;
 
-/**
- * Retains the codec-entry mixin target used by the legacy codec inspection integration.
- */
+/** Retains the codec-entry mixin target used by the legacy codec inspection integration. */
 @Mixin(PacketCodecDispatcher.PacketType.class)
-public interface IPacketCodecDispatcherPacketType {
-}
+public interface IPacketCodecDispatcherPacketType {}

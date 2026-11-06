@@ -27,12 +27,11 @@ package com.ishland.raknetify.fabric.mixin.access;
 import net.minecraft.client.gui.hud.debug.DebugHudEntries;
 import net.minecraft.client.gui.hud.debug.DebugHudEntry;
 import net.minecraft.util.Identifier;
+
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Invoker;
 
-/**
- * Exposes the debug HUD registry's private registration method on versions that provide it.
- */
+/** Exposes the debug HUD registry's private registration method on versions that provide it. */
 @Mixin(DebugHudEntries.class)
 public interface IDebugHudEntries {
 
@@ -45,8 +44,7 @@ public interface IDebugHudEntries {
      * @throws AbstractMethodError if called before Mixin replaces this stub
      */
     @Invoker
-    static Identifier invokeRegister(Identifier id, DebugHudEntry entry) {
+    static Identifier invokeRegister(final Identifier id, final DebugHudEntry entry) {
         throw new AbstractMethodError();
     }
-
 }
