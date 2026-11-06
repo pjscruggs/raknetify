@@ -171,7 +171,7 @@ class SpigotListenersTest {
         NativeFacade(final ChannelFuture listener) throws Exception {
             connection = new ListenerFacade(listener);
             KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
-            generator.initialize(1024);
+            generator.initialize(2048);
             key = generator.generateKeyPair();
         }
 

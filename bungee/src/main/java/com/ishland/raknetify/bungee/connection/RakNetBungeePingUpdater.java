@@ -61,6 +61,7 @@ public class RakNetBungeePingUpdater extends ChannelDuplexHandler {
      *
      * @param ctx installed context whose channel supplies transport measurements and scheduling
      */
+    @Override
     public void handlerAdded(final ChannelHandlerContext ctx) {
         if (ctx.channel().config() instanceof RakNet.Config config) {
             updateTask =
@@ -85,6 +86,7 @@ public class RakNetBungeePingUpdater extends ChannelDuplexHandler {
      *
      * @param ctx removed handler context, unused because the task is already retained
      */
+    @Override
     public void handlerRemoved(final ChannelHandlerContext ctx) {
         if (updateTask != null) {
             updateTask.cancel(false);

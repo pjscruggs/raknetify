@@ -240,11 +240,11 @@ public class SynchronizationLayer extends ChannelDuplexHandler {
                                     .get(this.reliabilityHandler);
 
             int originalChannelsLength = this.frameOrderOutNextOrderIndex.length;
-            //noinspection deprecation
             this.channelsLength =
                     (int)
                             (originalChannelsLength
-                                    - this.channelToIgnore.stream()
+                                    - this.channelToIgnore
+                                            .intStream()
                                             .filter(value -> value < originalChannelsLength)
                                             .count());
 

@@ -95,6 +95,7 @@ public class ClientHungerManager extends HungerManager {
      * @param food food-level increment intentionally ignored
      * @param saturationModifier saturation increment factor intentionally ignored
      */
+    @Override
     public void add(final int food, final float saturationModifier) {
         // nop
     }
@@ -104,6 +105,7 @@ public class ClientHungerManager extends HungerManager {
      *
      * @param foodComponent food properties whose local hunger increment is intentionally suppressed
      */
+    @Override
     public void eat(final FoodComponent foodComponent) {
         // nop
     }
