@@ -25,10 +25,12 @@
 package com.ishland.raknetify.common.connection;
 
 import com.ishland.raknetify.common.Constants;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.util.concurrent.ScheduledFuture;
+
 import network.ycc.raknet.RakNet;
 import network.ycc.raknet.frame.FrameData;
 import network.ycc.raknet.packet.FramedPacket;
@@ -36,9 +38,9 @@ import network.ycc.raknet.packet.FramedPacket;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Exchanges diagnostic snapshots with the peer over unreliable RakNet frames.
- * Snapshots carry the sender's timestamp so reordered older reports do not replace newer data.
- * These values describe the remote endpoint and do not control local transport behavior.
+ * Exchanges diagnostic snapshots with the peer over unreliable RakNet frames. Snapshots carry the
+ * sender's timestamp so reordered older reports do not replace newer data. These values describe
+ * the remote endpoint and do not control local transport behavior.
  */
 public class MetricsSynchronizationHandler extends ChannelDuplexHandler {
 
@@ -51,29 +53,24 @@ public class MetricsSynchronizationHandler extends ChannelDuplexHandler {
     // int: tx
     // int: rx
 
-    /**
-     * Wire-layout version accepted by this metrics exchange implementation.
-     */
+    /** Wire-layout version accepted by this metrics exchange implementation. */
     private static final byte VERSION = 0x00;
 
-    /**
-     * Periodic event-loop task publishing a local snapshot every 200 milliseconds.
-     */
+    /** Periodic event-loop task publishing a local snapshot every 200 milliseconds. */
     private ScheduledFuture<?> future;
-    /**
-     * Installed pipeline context used by the scheduled sender.
-     */
-    private ChannelHandlerContext ctx;
 
     /**
-     * Retains the context and schedules peer-statistics updates on its event loop.
+     * Captures the context and schedules peer-statistics updates on its event loop.
      *
      * @param ctx installed handler context for allocation, scheduling, and writes
      */
     @Override
-    public void handlerAdded(ChannelHandlerContext ctx) {
-        this.ctx = ctx;
-        this.future = ctx.channel().eventLoop().scheduleAtFixedRate(this::sendSyncPacket, 200, 200, TimeUnit.MILLISECONDS);
+    public void handlerAdded(final ChannelHandlerContext ctx) {
+        this.future =
+                ctx.channel()
+                        .eventLoop()
+                        .scheduleAtFixedRate(
+                                () -> sendSyncPacket(ctx), 200, 200, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -82,94 +79,105 @@ public class MetricsSynchronizationHandler extends ChannelDuplexHandler {
      * @param ctx removed context, unused because the scheduled task is already retained
      */
     @Override
-    public void handlerRemoved(ChannelHandlerContext ctx) {
-        if (future != null) future.cancel(false);
-    }
-
-    /**
-     * Sends the latest local queue, burst, retransmission, and packet-rate measurements.
-     * The temporary payload is released after an unreliable frame takes ownership of its data.
-     */
-    private void sendSyncPacket() {
-        if (this.ctx.channel().config() instanceof RakNet.Config config && config.getMetrics() instanceof SimpleMetricsLogger logger){
-            ByteBuf buffer = null;
-           try {
-               buffer = this.ctx.alloc().buffer(1 + 8 + 4 + 4 + 8 + 4 + 4);
-               buffer.writeByte(VERSION);
-               buffer.writeLong(System.currentTimeMillis());
-               buffer.writeInt(logger.getCurrentQueuedBytes());
-               buffer.writeInt((int) (logger.getMeasureBurstTokens() + config.getDefaultPendingFrameSets()));
-               buffer.writeDouble(logger.getMeasureErrorRate());
-               buffer.writeInt(logger.getMeasureTX());
-               buffer.writeInt(logger.getMeasureRX());
-               final FrameData frameData = FrameData.create(this.ctx.alloc(), Constants.RAKNET_METRICS_SYNC_PACKET_ID, buffer);
-               frameData.setReliability(FramedPacket.Reliability.UNRELIABLE);
-               this.ctx.write(frameData);
-           } finally {
-               if (buffer != null) buffer.release();
-           }
+    public void handlerRemoved(final ChannelHandlerContext ctx) {
+        if (future != null) {
+            future.cancel(false);
         }
     }
 
     /**
-     * Whether a snapshot with the supported wire-layout version has ever been received.
+     * Sends the latest local queue, burst, retransmission, and packet-rate measurements. The
+     * temporary payload is released after an unreliable frame takes ownership of its data.
+     *
+     * @param ctx installed context captured by this handler's event-loop task
      */
-    private boolean isRemoteSupported = false;
-    /**
-     * Sender wall-clock timestamp, in milliseconds, of the newest accepted snapshot.
-     */
-    private long lastRecv = 0L;
-    /**
-     * Last reported number of bytes queued at the remote endpoint.
-     */
-    private int queuedBytes;
-    /**
-     * Peer's last reported pending-frame-set capacity, including its baseline allowance.
-     */
-    private int burst;
-    /**
-     * Peer's rolling retransmitted-byte fraction relative to its total inbound and outbound bytes.
-     */
-    private double errorRate;
-    /**
-     * Peer's last reported outgoing packet rate, in packets per second.
-     */
-    private int tx;
-    /**
-     * Peer's last reported incoming packet rate, in packets per second.
-     */
-    private int rx;
+    private void sendSyncPacket(final ChannelHandlerContext ctx) {
+        if (ctx.channel().config() instanceof RakNet.Config config
+                && config.getMetrics() instanceof SimpleMetricsLogger logger) {
+            ByteBuf buffer = null;
+            try {
+                buffer = ctx.alloc().buffer(1 + 8 + 4 + 4 + 8 + 4 + 4);
+                buffer.writeByte(VERSION);
+                buffer.writeLong(System.currentTimeMillis());
+                buffer.writeInt(logger.getCurrentQueuedBytes());
+                buffer.writeInt(
+                        (int)
+                                (logger.getMeasureBurstTokens()
+                                        + config.getDefaultPendingFrameSets()));
+                buffer.writeDouble(logger.getMeasureErrorRate());
+                buffer.writeInt(logger.getMeasureTX());
+                buffer.writeInt(logger.getMeasureRX());
+                final FrameData frameData =
+                        FrameData.create(
+                                ctx.alloc(), Constants.RAKNET_METRICS_SYNC_PACKET_ID, buffer);
+                frameData.setReliability(FramedPacket.Reliability.UNRELIABLE);
+                ctx.write(frameData);
+            } finally {
+                if (buffer != null) {
+                    buffer.release();
+                }
+            }
+        }
+    }
+
+    /** Initial zero values distinguish an unsupported peer from an accepted all-zero snapshot. */
+    private static final RemoteMetrics EMPTY = new RemoteMetrics(0, 0, 0, 0, 0, 0);
 
     /**
-     * Consumes supported metric frames and rejects stale snapshots without forwarding them.
-     * Every consumed frame and its payload view are released even when parsing fails.
+     * Complete peer measurements published together for readers outside the transport event loop.
+     */
+    private volatile RemoteMetrics remote = EMPTY;
+
+    /**
+     * Keeps parsing failures and concurrent readers from observing partially replaced statistics.
+     *
+     * @param time sender timestamp used to reject older snapshots
+     * @param queuedBytes peer's queued transport bytes
+     * @param burst peer's pending-frame allowance
+     * @param errorRate peer's retransmitted-byte fraction
+     * @param tx peer's outgoing packets per second
+     * @param rx peer's incoming packets per second
+     */
+    private record RemoteMetrics(
+            long time, int queuedBytes, int burst, double errorRate, int tx, int rx) {}
+
+    /**
+     * Consumes supported metric frames and rejects stale snapshots without forwarding them. Every
+     * consumed frame and its payload view are released even when parsing fails.
      *
      * @param ctx inbound context receiving messages unrelated to metrics
      * @param msg incoming metric frame or other pipeline message
      * @throws Exception if superclass processing of an unrelated message fails
      */
     @Override
-    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-        if (msg instanceof FrameData frameData && frameData.getDataSize() > 0 && frameData.getPacketId() == Constants.RAKNET_METRICS_SYNC_PACKET_ID) {
+    public void channelRead(final ChannelHandlerContext ctx, final Object msg) throws Exception {
+        if (msg instanceof FrameData frameData
+                && frameData.getDataSize() > 0
+                && frameData.getPacketId() == Constants.RAKNET_METRICS_SYNC_PACKET_ID) {
             ByteBuf byteBuf = null;
             try {
                 byteBuf = frameData.createData().skipBytes(1);
                 final byte version = byteBuf.readByte();
-                if (version != VERSION) return;
+                if (version != VERSION) {
+                    return;
+                }
 
                 final long time = byteBuf.readLong();
-                if (time < this.lastRecv) return;
-                this.lastRecv = time;
-
-                this.isRemoteSupported = true;
-
-                this.queuedBytes = byteBuf.readInt();
-                this.burst = byteBuf.readInt();
-                this.errorRate = byteBuf.readDouble();
-                this.tx = byteBuf.readInt();
-                this.rx = byteBuf.readInt();
+                if (time < remote.time()) {
+                    return;
+                }
+                remote =
+                        new RemoteMetrics(
+                                time,
+                                byteBuf.readInt(),
+                                byteBuf.readInt(),
+                                byteBuf.readDouble(),
+                                byteBuf.readInt(),
+                                byteBuf.readInt());
             } finally {
-                if (byteBuf != null) byteBuf.release();
+                if (byteBuf != null) {
+                    byteBuf.release();
+                }
                 frameData.release();
             }
             return;
@@ -183,7 +191,7 @@ public class MetricsSynchronizationHandler extends ChannelDuplexHandler {
      * @return true after at least one supported snapshot has been accepted
      */
     public boolean isRemoteSupported() {
-        return this.isRemoteSupported;
+        return remote != EMPTY;
     }
 
     /**
@@ -192,7 +200,7 @@ public class MetricsSynchronizationHandler extends ChannelDuplexHandler {
      * @return remote queued bytes, or zero before the first snapshot
      */
     public int getQueuedBytes() {
-        return queuedBytes;
+        return remote.queuedBytes();
     }
 
     /**
@@ -201,7 +209,7 @@ public class MetricsSynchronizationHandler extends ChannelDuplexHandler {
      * @return remote burst tokens plus its baseline pending-frame-set allowance
      */
     public int getBurst() {
-        return burst;
+        return remote.burst();
     }
 
     /**
@@ -210,7 +218,7 @@ public class MetricsSynchronizationHandler extends ChannelDuplexHandler {
      * @return retransmitted-byte fraction, not a percentage or a measured packet-loss probability
      */
     public double getErrorRate() {
-        return errorRate;
+        return remote.errorRate();
     }
 
     /**
@@ -219,7 +227,7 @@ public class MetricsSynchronizationHandler extends ChannelDuplexHandler {
      * @return remote outgoing packets per second
      */
     public int getTX() {
-        return tx;
+        return remote.tx();
     }
 
     /**
@@ -228,6 +236,6 @@ public class MetricsSynchronizationHandler extends ChannelDuplexHandler {
      * @return remote incoming packets per second
      */
     public int getRX() {
-        return rx;
+        return remote.rx();
     }
 }

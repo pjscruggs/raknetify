@@ -25,12 +25,14 @@
 package com.ishland.raknetify.common.connection;
 
 import com.ishland.raknetify.common.Constants;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
-import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
+
 import network.ycc.raknet.frame.FrameData;
+
 import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
 
 import java.util.concurrent.ScheduledFuture;
@@ -40,78 +42,56 @@ import java.util.zip.Deflater;
 import java.util.zip.Inflater;
 
 /**
- * Maintains independent zlib streams for reliable ordered RakNet channels.
- * Stream dictionaries persist between packets and restart at explicit channel markers, so
- * unrelated ordering channels never depend on each other's compression history.
+ * Maintains independent zlib streams for reliable ordered RakNet channels. Stream dictionaries
+ * persist between packets and restart at explicit channel markers, so unrelated ordering channels
+ * never depend on each other's compression history.
  */
 public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
 
-    /**
-     * Pipeline name used to locate compression state and statistics.
-     */
+    /** Pipeline name used to locate compression state and statistics. */
     public static final String NAME = "raknetify-multichannel-streaming-compression";
 
-    /**
-     * Control payload advertising support for channel-specific streaming compression.
-     */
+    /** Control payload advertising support for channel-specific streaming compression. */
     public static final long SERVER_HANDSHAKE = 0x40000010;
-    /**
-     * Ordered control payload that starts a fresh dictionary for its channel.
-     */
+
+    /** Ordered control payload that starts a fresh dictionary for its channel. */
     public static final long CHANNEL_START = 0x40000012;
-    /**
-     * Inbound zlib dictionaries indexed by ordering channel, owned by the event loop.
-     */
+
+    /** Inbound zlib dictionaries indexed by ordering channel, owned by the event loop. */
     private final Inflater[] inflaters = new Inflater[8];
-    /**
-     * Outbound zlib dictionaries indexed by ordering channel, owned by the event loop.
-     */
+
+    /** Outbound zlib dictionaries indexed by ordering channel, owned by the event loop. */
     private final Deflater[] deflaters = new Deflater[8];
 
-    /**
-     * Reserved channel-exemption set, currently unused by dictionary restart handling.
-     */
-    private final IntOpenHashSet channelsToIgnoreWhenReinit = new IntOpenHashSet();
-
-    /**
-     * Reusable scratch space for draining inflated payload bytes without per-packet arrays.
-     */
+    /** Reusable scratch space for draining inflated payload bytes without per-packet arrays. */
     private final byte[] inflateBuffer = new byte[256 * 1024];
-    /**
-     * Reusable scratch space for draining compressed output without per-packet arrays.
-     */
+
+    /** Reusable scratch space for draining compressed output without per-packet arrays. */
     private final byte[] deflateBuffer = new byte[256 * 1024];
 
-    /**
-     * Frame identifier recognized before compression and restored after decompression.
-     */
+    /** Frame identifier recognized before compression and restored after decompression. */
     private final int rawPacketId;
-    /**
-     * Frame identifier marking payloads that require the channel's inflater.
-     */
+
+    /** Frame identifier marking payloads that require the channel's inflater. */
     private final int compressedPacketId;
 
-    /**
-     * Cumulative outgoing payload bytes before compression, excluding frame identifiers.
-     */
-    private volatile long outBytesRaw = 0L;
-    /**
-     * Cumulative outgoing payload bytes after compression, including small payloads passed through raw.
-     */
-    private volatile long outBytesCompressed = 0L;
-    /**
-     * Cumulative compressed payload bytes consumed by inbound inflaters.
-     */
-    private volatile long inBytesCompressed = 0L;
-    /**
-     * Cumulative payload bytes produced by inbound inflaters.
-     */
-    private volatile long inBytesRaw = 0L;
+    /** Cumulative outgoing payload bytes before compression, excluding frame identifiers. */
+    private volatile long outBytesRaw;
 
     /**
-     * Whether the peer has advertised compatible streaming compression.
+     * Cumulative outgoing payload bytes after compression, including small payloads passed through
+     * raw.
      */
-    private boolean active = false;
+    private volatile long outBytesCompressed;
+
+    /** Cumulative compressed payload bytes consumed by inbound inflaters. */
+    private volatile long inBytesCompressed;
+
+    /** Cumulative payload bytes produced by inbound inflaters. */
+    private volatile long inBytesRaw;
+
+    /** Whether the peer has advertised compatible streaming compression. */
+    private volatile boolean active;
 
     /**
      * Creates inactive per-channel compression state awaiting the peer handshake.
@@ -119,7 +99,8 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
      * @param rawPacketId frame identifier for uncompressed Minecraft payloads
      * @param compressedPacketId frame identifier for compressed Minecraft payloads
      */
-    public MultiChannelingStreamingCompression(int rawPacketId, int compressedPacketId) {
+    public MultiChannelingStreamingCompression(
+            final int rawPacketId, final int compressedPacketId) {
         this.rawPacketId = rawPacketId;
         this.compressedPacketId = compressedPacketId;
     }
@@ -129,11 +110,14 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
      *
      * @param ctx outbound context used to allocate and send the handshake frame
      */
-    private void doServerHandshake(ChannelHandlerContext ctx) {
+    private void doServerHandshake(final ChannelHandlerContext ctx) {
         final ByteBuf buf = ctx.alloc().buffer().writeLong(SERVER_HANDSHAKE);
         try {
-            final FrameData data = FrameData.create(ctx.alloc(), Constants.RAKNET_STREAMING_COMPRESSION_HANDSHAKE_PACKET_ID,
-                    buf);
+            final FrameData data =
+                    FrameData.create(
+                            ctx.alloc(),
+                            Constants.RAKNET_STREAMING_COMPRESSION_HANDSHAKE_PACKET_ID,
+                            buf);
             ctx.write(data);
         } finally {
             buf.release();
@@ -146,13 +130,18 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
      *
      * @param ctx outbound context preserving each marker's order relative to later payloads
      */
-    private void doChannelStart(ChannelHandlerContext ctx) {
-        if (!active) return;
+    private void doChannelStart(final ChannelHandlerContext ctx) {
+        if (!active) {
+            return;
+        }
         ByteBuf buf = ctx.alloc().buffer().writeLong(CHANNEL_START);
         try {
             for (int i = 0; i < 8; i++) {
-                final FrameData data = FrameData.create(ctx.alloc(), Constants.RAKNET_STREAMING_COMPRESSION_HANDSHAKE_PACKET_ID,
-                        buf);
+                final FrameData data =
+                        FrameData.create(
+                                ctx.alloc(),
+                                Constants.RAKNET_STREAMING_COMPRESSION_HANDSHAKE_PACKET_ID,
+                                buf);
                 data.setOrderChannel(i);
                 ctx.write(data);
                 initDeflater(i);
@@ -167,11 +156,19 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
      *
      * @param channel ordering-channel index whose outgoing stream is restarting
      */
-    private void initDeflater(int channel) {
-        if (!active) return;
-        if (deflaters[channel] != null) deflaters[channel].end();
+    private void initDeflater(final int channel) {
+        if (!active) {
+            return;
+        }
+        if (deflaters[channel] != null) {
+            deflaters[channel].end();
+        }
         deflaters[channel] = new Deflater();
-        if (Constants.DEBUG) System.out.println("Raknetify: Streaming compression deflater for ch%d is ready".formatted(channel));
+        if (Constants.DEBUG) {
+            System.out.println(
+                    "Raknetify: Streaming compression deflater for ch%d is ready"
+                            .formatted(channel));
+        }
     }
 
     /**
@@ -179,11 +176,19 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
      *
      * @param channel ordering-channel index whose incoming stream is restarting
      */
-    private void initInflater(int channel) {
-        if (!active) return;
-        if (inflaters[channel] != null) inflaters[channel].end();
+    private void initInflater(final int channel) {
+        if (!active) {
+            return;
+        }
+        if (inflaters[channel] != null) {
+            inflaters[channel].end();
+        }
         inflaters[channel] = new Inflater();
-        if (Constants.DEBUG) System.out.println("Raknetify: Streaming compression inflater for ch%d is ready".formatted(channel));
+        if (Constants.DEBUG) {
+            System.out.println(
+                    "Raknetify: Streaming compression inflater for ch%d is ready"
+                            .formatted(channel));
+        }
     }
 
     /**
@@ -193,27 +198,32 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
      * @throws Exception if activation forwarding fails
      */
     @Override
-    public void channelActive(ChannelHandlerContext ctx) throws Exception {
+    public void channelActive(final ChannelHandlerContext ctx) throws Exception {
         super.channelActive(ctx);
         doServerHandshake(ctx);
     }
 
     /**
-     * Consumes compression control frames and inflates eligible ordered payloads.
-     * Frames without a matching active dictionary continue through the pipeline unchanged.
+     * Consumes compression control frames and inflates eligible ordered payloads. Frames without a
+     * matching active dictionary continue through the pipeline unchanged.
      *
      * @param ctx inbound context receiving decompressed replacement frames
      * @param msg incoming frame or unrelated pipeline message
      * @throws Exception if decompression or superclass inbound processing fails
      */
     @Override
-    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+    public void channelRead(final ChannelHandlerContext ctx, final Object msg) throws Exception {
         if (msg instanceof FrameData compressedFrameData) {
             compressedFrameData.touch();
-            if (compressedFrameData.getPacketId() == Constants.RAKNET_STREAMING_COMPRESSION_HANDSHAKE_PACKET_ID) {
+            if (compressedFrameData.getPacketId()
+                    == Constants.RAKNET_STREAMING_COMPRESSION_HANDSHAKE_PACKET_ID) {
                 handleHandshake(ctx, compressedFrameData);
                 return;
-            } else if (compressedFrameData.getPacketId() == compressedPacketId && compressedFrameData.getReliability().isReliable && compressedFrameData.getReliability().isOrdered && !compressedFrameData.getReliability().isSequenced && inflaters[compressedFrameData.getOrderChannel()] != null) {
+            } else if (compressedFrameData.getPacketId() == compressedPacketId
+                    && compressedFrameData.getReliability().isReliable
+                    && compressedFrameData.getReliability().isOrdered
+                    && !compressedFrameData.getReliability().isSequenced
+                    && inflaters[compressedFrameData.getOrderChannel()] != null) {
                 inflateFrame(ctx, compressedFrameData);
                 return;
             }
@@ -222,8 +232,8 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
     }
 
     /**
-     * Compresses eligible ordered payloads and restarts dictionaries after synchronization requests.
-     * Payloads shorter than sixteen bytes retain their raw representation.
+     * Compresses eligible ordered payloads and restarts dictionaries after synchronization
+     * requests. Payloads shorter than sixteen bytes retain their raw representation.
      *
      * @param ctx outbound context receiving compressed or unchanged frames
      * @param msg outgoing frame, local synchronization request, or unrelated message
@@ -231,14 +241,20 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
      * @throws Exception if superclass outbound processing fails
      */
     @Override
-    public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+    public void write(
+            final ChannelHandlerContext ctx, final Object msg, final ChannelPromise promise)
+            throws Exception {
         if (msg == SynchronizationLayer.SYNC_REQUEST_OBJECT) {
             super.write(ctx, msg, promise);
             doChannelStart(ctx);
             return;
         } else if (msg instanceof FrameData rawFrameData) {
             rawFrameData.touch();
-            if (rawFrameData.getPacketId() == rawPacketId && rawFrameData.getReliability().isReliable && rawFrameData.getReliability().isOrdered && !rawFrameData.getReliability().isSequenced && deflaters[rawFrameData.getOrderChannel()] != null) {
+            if (rawFrameData.getPacketId() == rawPacketId
+                    && rawFrameData.getReliability().isReliable
+                    && rawFrameData.getReliability().isOrdered
+                    && !rawFrameData.getReliability().isSequenced
+                    && deflaters[rawFrameData.getOrderChannel()] != null) {
                 if (rawFrameData.getDataSize() < 16 + 1) {
                     outBytesRaw += rawFrameData.getDataSize() - 1;
                     outBytesCompressed += rawFrameData.getDataSize() - 1;
@@ -253,14 +269,14 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
         super.write(ctx, msg, promise);
     }
 
-
     /**
      * Consumes a compression control frame and starts the requested channel's stream.
      *
      * @param ctx pipeline context used to acknowledge the peer's handshake
      * @param compressedFrameData control frame whose reference is released on every exit
      */
-    private void handleHandshake(ChannelHandlerContext ctx, FrameData compressedFrameData) {
+    private void handleHandshake(
+            final ChannelHandlerContext ctx, final FrameData compressedFrameData) {
         final int orderChannel = compressedFrameData.getOrderChannel();
         ByteBuf payload = null;
         try {
@@ -278,7 +294,9 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
             }
         } finally {
             compressedFrameData.release();
-            if (payload != null) payload.release();
+            if (payload != null) {
+                payload.release();
+            }
         }
     }
 
@@ -289,7 +307,8 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
      * @param compressedFrameData owned compressed frame, released after decoding or failure
      * @throws DataFormatException if the peer's compressed stream is invalid
      */
-    private void inflateFrame(ChannelHandlerContext ctx, FrameData compressedFrameData) throws DataFormatException {
+    private void inflateFrame(final ChannelHandlerContext ctx, final FrameData compressedFrameData)
+            throws DataFormatException {
         final int orderChannel = compressedFrameData.getOrderChannel();
         final Inflater inflater = inflaters[orderChannel];
         final ByteBuf data = compressedFrameData.createData().skipBytes(1);
@@ -320,8 +339,12 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
         } finally {
             data.release();
             compressedFrameData.release();
-            if (out != null) out.release();
-            if (rawFrameData != null) rawFrameData.release();
+            if (out != null) {
+                out.release();
+            }
+            if (rawFrameData != null) {
+                rawFrameData.release();
+            }
         }
     }
 
@@ -332,7 +355,10 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
      * @param rawFrameData owned raw frame, released after encoding or failure
      * @param promise completion notification transferred to the replacement frame
      */
-    private void deflateFrame(ChannelHandlerContext ctx, FrameData rawFrameData, ChannelPromise promise) {
+    private void deflateFrame(
+            final ChannelHandlerContext ctx,
+            final FrameData rawFrameData,
+            final ChannelPromise promise) {
         final int orderChannel = rawFrameData.getOrderChannel();
         final Deflater deflater = deflaters[orderChannel];
         final ByteBuf data = rawFrameData.createData().skipBytes(1);
@@ -347,7 +373,13 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
             out = ctx.alloc().buffer();
             {
                 int deflatedBytes;
-                while ((deflatedBytes = deflater.deflate(deflateBuffer, 0, deflateBuffer.length, Deflater.SYNC_FLUSH)) != 0) {
+                while ((deflatedBytes =
+                                deflater.deflate(
+                                        deflateBuffer,
+                                        0,
+                                        deflateBuffer.length,
+                                        Deflater.SYNC_FLUSH))
+                        != 0) {
                     out.writeBytes(deflateBuffer, 0, deflatedBytes);
                 }
             }
@@ -363,8 +395,12 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
         } finally {
             data.release();
             rawFrameData.release();
-            if (out != null) out.release();
-            if (compressedFrameData != null) compressedFrameData.release();
+            if (out != null) {
+                out.release();
+            }
+            if (compressedFrameData != null) {
+                compressedFrameData.release();
+            }
         }
     }
 
@@ -413,9 +449,7 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
         return active;
     }
 
-    /**
-     * Once-per-second event-loop task that updates compression ratios.
-     */
+    /** Once-per-second event-loop task that updates compression ratios. */
     private ScheduledFuture<?> future;
 
     /**
@@ -423,8 +457,11 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
      *
      * @param ctx installed handler context supplying the scheduling event loop
      */
-    public void handlerAdded(ChannelHandlerContext ctx) {
-        this.future = ctx.channel().eventLoop().scheduleAtFixedRate(this::tickMetrics, 1000, 1000, TimeUnit.MILLISECONDS);
+    public void handlerAdded(final ChannelHandlerContext ctx) {
+        this.future =
+                ctx.channel()
+                        .eventLoop()
+                        .scheduleAtFixedRate(this::tickMetrics, 1000, 1000, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -433,45 +470,42 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
      * @param ctx removed handler context, unused because resources belong to this instance
      */
     @Override
-    public void handlerRemoved(ChannelHandlerContext ctx) {
-        if (future != null) future.cancel(false);
+    public void handlerRemoved(final ChannelHandlerContext ctx) {
+        if (future != null) {
+            future.cancel(false);
+        }
         for (int i = 0; i < 8; i++) {
-            if (inflaters[i] != null) inflaters[i].end();
-            if (deflaters[i] != null) deflaters[i].end();
+            if (inflaters[i] != null) {
+                inflaters[i].end();
+            }
+            if (deflaters[i] != null) {
+                deflaters[i].end();
+            }
         }
     }
 
-    /**
-     * Previous sample's compressed inbound byte total used to calculate an interval delta.
-     */
+    /** Previous sample's compressed inbound byte total used to calculate an interval delta. */
     private long lastInBytesCompressed;
-    /**
-     * Previous sample's decompressed inbound byte total used to calculate an interval delta.
-     */
+
+    /** Previous sample's decompressed inbound byte total used to calculate an interval delta. */
     private long lastInBytesRaw;
-    /**
-     * Previous sample's original outgoing byte total used to calculate an interval delta.
-     */
+
+    /** Previous sample's original outgoing byte total used to calculate an interval delta. */
     private long lastOutBytesRaw;
-    /**
-     * Previous sample's transmitted outgoing byte total used to calculate an interval delta.
-     */
+
+    /** Previous sample's transmitted outgoing byte total used to calculate an interval delta. */
     private long lastOutBytesCompressed;
-    /**
-     * Rolling sixteen-sample history of compressed-to-raw inbound byte ratios.
-     */
+
+    /** Rolling sixteen-sample history of compressed-to-raw inbound byte ratios. */
     private final DescriptiveStatistics inCompressionRatioStats = new DescriptiveStatistics(16);
-    /**
-     * Rolling sixteen-sample history of compressed-to-raw outbound byte ratios.
-     */
+
+    /** Rolling sixteen-sample history of compressed-to-raw outbound byte ratios. */
     private final DescriptiveStatistics outCompressionRatioStats = new DescriptiveStatistics(16);
-    /**
-     * Published mean inbound compressed-to-raw ratio, possibly NaN before a nonempty sample.
-     */
+
+    /** Published mean inbound compressed-to-raw ratio, possibly NaN before a nonempty sample. */
     private volatile double inCompressionRatio;
-    /**
-     * Published mean outbound compressed-to-raw ratio, possibly NaN before a nonempty sample.
-     */
+
+    /** Published mean outbound compressed-to-raw ratio, possibly NaN before a nonempty sample. */
     private volatile double outCompressionRatio;
 
     /**
@@ -500,8 +534,6 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
         this.lastInBytesRaw = this.inBytesRaw;
         this.lastOutBytesCompressed = this.outBytesCompressed;
         this.lastOutBytesRaw = this.outBytesRaw;
-
-
     }
 
     /**
