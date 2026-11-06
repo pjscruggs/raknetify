@@ -141,7 +141,9 @@ class ReliableFrameDeduplicatorTest {
         EmbeddedChannel channel = transport();
         try {
             for (int i = 0; i < 65536; i++) deliver(channel, i * 2, true);
-            assertThrows(TooLongFrameException.class, () -> channel.writeInbound(frame(131072)));
+            deliver(channel, 1, true);
+            deliver(channel, 131072, true);
+            assertThrows(TooLongFrameException.class, () -> channel.writeInbound(frame(131074)));
             assertFalse(channel.isOpen());
         } finally {
             channel.finishAndReleaseAll();

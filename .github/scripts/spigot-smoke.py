@@ -178,7 +178,8 @@ def exercise(args, lock, native, authority, server_jar):
         await_transport(process, events)
         expected = {'name': args.platform.capitalize() + ' ' + lock['minecraft'], 'protocol_version': lock['protocol']}
         smoke.check_tcp_when_ready(28990, expected, args.proxy_protocol and args.platform == 'paper')
-        with sibling('udp-proxy-fixture').transport(args.proxy_protocol, 28990, repeated=True) as port:
+        with sibling('udp-proxy-fixture').transport(args.proxy_protocol, 28990, repeated=True,
+                                                   duplicate=args.proxy_protocol) as port:
             args.client_port = port
             smoke.check_udp(port)
             smoke.check_connected_udp(port, expected, args.java, args.probe_dir)

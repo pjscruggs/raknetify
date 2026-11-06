@@ -53,11 +53,13 @@ def header(client, destination):
 class UdpProxy:
     """One selector thread gives every client a separate connected backend socket, as real UDP proxies do."""
 
-    def __init__(self, port, repeated=False, identity='192.0.2.50'):
+    def __init__(self, port, repeated=False, identity='192.0.2.50', duplicate=False):
         """Bind a disposable frontend and retain only bounded, loopback fixture resources."""
         self.target = ('127.0.0.1', port)
         self.repeated = repeated
         self.identity = identity
+        self.duplicate = duplicate
+        self.duplicates = 0
         self.selector = selectors.DefaultSelector()
         self.front = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.front.bind(('127.0.0.1', 0))
@@ -105,14 +107,24 @@ class UdpProxy:
                 raise
             return
         if key.data is not None:
-            self.front.sendto(data, key.data)
+            for _ in range(self.copies(data)):
+                self.front.sendto(data, key.data)
             return
+        copies = self.copies(data)
         first = sender not in self.clients
         channel = self.backend(sender)
         if first or self.repeated:
             destination = '198.51.100.8' if ':' not in self.identity else '2001:db8::8'
             data = header((self.identity, sender[1]), (destination, self.target[1])) + data
-        channel.send(data)
+        for _ in range(copies):
+            channel.send(data)
+
+    def copies(self, data):
+        """Duplicate framed RakNet datagrams in both directions while leaving discovery and ACK traffic unchanged."""
+        if self.duplicate and data and data[0] & 0xf0 == 0x80:
+            self.duplicates += 1
+            return 2
+        return 1
 
     def backend(self, sender):
         """Allocate at most 64 backend tuples and keep each alive for exactly this bounded test run."""
@@ -174,11 +186,15 @@ def await_ban(path, present):
 
 
 @contextmanager
-def transport(enabled, port, repeated=False):
+def transport(enabled, port, repeated=False, duplicate=False):
     """Select a real relay for proxy checks and verify direct access is rejected after backend readiness is proven."""
     if not enabled:
         yield port
         return
-    with UdpProxy(port, repeated) as frontend:
+    proxy = UdpProxy(port, repeated, duplicate=duplicate)
+    with proxy as frontend:
         yield frontend
         reject_direct(port)
+        if duplicate:
+            assert proxy.duplicates > 0, 'No framed traffic crossed the duplicate-injection relay'
+            print('PASS duplicated framed UDP datagrams', proxy.duplicates, flush=True)

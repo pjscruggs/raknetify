@@ -74,3 +74,21 @@ class UdpProxyFixtureTest(unittest.TestCase):
             backend.sendto(b'complete', peer)
             self.assertEqual(client.recv(65535), b'complete')
             return peer
+
+    def test_duplicate_injection_in_both_directions(self):
+        """Require actual duplicate wire copies with identical metadata and payload, not merely a fixture counter."""
+        fixture = load_fixture()
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as backend:
+            backend.bind(('127.0.0.1', 0))
+            backend.settimeout(3)
+            proxy = fixture.UdpProxy(backend.getsockname()[1], repeated=True, duplicate=True)
+            with proxy as frontend, socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as client:
+                client.settimeout(3)
+                client.sendto(b'\x80framed', ('127.0.0.1', frontend))
+                first, peer = backend.recvfrom(65535)
+                self.assertEqual(backend.recvfrom(65535), (first, peer))
+                self.assertEqual(first[28:], b'\x80framed')
+                backend.sendto(b'\x84return', peer)
+                self.assertEqual(client.recv(65535), b'\x84return')
+                self.assertEqual(client.recv(65535), b'\x84return')
+                self.assertEqual(proxy.duplicates, 2)
