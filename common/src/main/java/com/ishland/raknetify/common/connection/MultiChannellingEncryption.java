@@ -25,12 +25,17 @@
 package com.ishland.raknetify.common.connection;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ChannelPromise;
 
+import network.ycc.raknet.client.channel.RakNetClientChannel;
+import network.ycc.raknet.client.channel.RakNetClientThreadedChannel;
 import network.ycc.raknet.frame.FrameData;
+import network.ycc.raknet.server.channel.RakNetApplicationChannel;
+import network.ycc.raknet.server.channel.RakNetChildChannel;
 
 import java.security.GeneralSecurityException;
 import java.util.List;
@@ -39,7 +44,6 @@ import java.util.Objects;
 
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
-import javax.crypto.spec.IvParameterSpec;
 
 /**
  * Encrypts or decrypts individual RakNet frame payloads while preserving routing metadata. Each
@@ -54,7 +58,8 @@ public class MultiChannellingEncryption extends ChannelDuplexHandler {
     public static final String NAME = "raknetify-multichannel-encryption";
 
     /** Stream and frame handlers replaced independently when encryption is installed again. */
-    private static final List<String> PREVIOUS_HANDLERS = List.of("decrypt", "encrypt", NAME);
+    private static final List<String> PREVIOUS_HANDLERS =
+            List.of("decrypt", "encrypt", NAME, NAME + "-inbound", NAME + "-outbound");
 
     /**
      * Removes each previous cipher independently, including when only one stream direction exists.
@@ -74,72 +79,133 @@ public class MultiChannellingEncryption extends ChannelDuplexHandler {
         }
     }
 
-    /** Inbound payload transformer, or null while decryption is not enabled. */
-    private final PacketEncryptionManager decryption;
+    /** Negotiated secret copied from Minecraft before its stream ciphers consume any data. */
+    private final SecretKey key;
 
-    /** Outbound payload transformer, or null while encryption is not enabled. */
-    private final PacketEncryptionManager encryption;
+    /** Whether this handler verifies inbound frame payloads. */
+    private final boolean inbound;
+
+    /** Whether this handler authenticates outbound frame payloads. */
+    private final boolean outbound;
+
+    /** Explicit endpoint role for adapters, or null to infer it from a RakNet channel. */
+    private final Boolean clientSide;
+
+    /** Inbound payload transformer created when the handler joins a channel. */
+    private AuthenticatedFrameCipher decryption;
+
+    /** Outbound payload transformer created when the handler joins a channel. */
+    private AuthenticatedFrameCipher encryption;
 
     /**
-     * Creates matching AES/CFB8 payload transformers from Minecraft's shared session key.
+     * Creates authenticated frame encryption with a role determined from the native RakNet channel.
      *
-     * @param key negotiated session key also used as the initial cipher IV
-     * @throws GeneralSecurityException if the cipher is unavailable or rejects the key
+     * @param key negotiated Minecraft session secret
      */
-    public MultiChannellingEncryption(final SecretKey key) throws GeneralSecurityException {
-        Cipher decryption = Cipher.getInstance("AES/CFB8/NoPadding");
-        decryption.init(Cipher.DECRYPT_MODE, key, new IvParameterSpec(key.getEncoded()));
-        this.decryption = new PacketEncryptionManager(decryption);
-        Cipher encryption = Cipher.getInstance("AES/CFB8/NoPadding");
-        encryption.init(Cipher.ENCRYPT_MODE, key, new IvParameterSpec(key.getEncoded()));
-        this.encryption = new PacketEncryptionManager(encryption);
+    public MultiChannellingEncryption(final SecretKey key) {
+        this(key, true, true, null);
     }
 
     /**
-     * Wraps separately initialized ciphers for both directions of the connection.
+     * Creates authenticated frame encryption for an adapter with a known endpoint role.
      *
-     * @param decryption initialized inbound cipher owned by this handler
-     * @param encryption initialized outbound cipher owned by this handler
+     * @param key negotiated Minecraft session secret
+     * @param clientSide true for a connecting client, false for an accepting server
+     */
+    public MultiChannellingEncryption(final SecretKey key, final boolean clientSide) {
+        this(key, true, true, clientSide);
+    }
+
+    /**
+     * Extracts Minecraft's shared secret without using or modifying its stream ciphers.
+     *
+     * @param decryption unused Minecraft inbound cipher
+     * @param encryption unused Minecraft outbound cipher
      */
     public MultiChannellingEncryption(final Cipher decryption, final Cipher encryption) {
-        this.decryption = new PacketEncryptionManager(Objects.requireNonNull(decryption));
-        this.encryption = new PacketEncryptionManager(Objects.requireNonNull(encryption));
+        this(FrameKeyDerivation.minecraftSecret(decryption, encryption), true, true, null);
     }
 
-    // A null manager passes that direction through while the handshake enables the other direction
-    // independently.
     /**
-     * Creates a handler whose disabled direction passes frames through unchanged.
+     * Retains the enabled directions until the connection role is available during installation.
      *
-     * @param decryption inbound transformer, or null to leave incoming frames unchanged
-     * @param encryption outbound transformer, or null to leave outgoing frames unchanged
+     * @param key Minecraft session secret used for direction-separated key derivation
+     * @param inbound whether to authenticate incoming frames
+     * @param outbound whether to encrypt outgoing frames
+     * @param clientSide explicit endpoint role, or null for native channel inference
      */
     private MultiChannellingEncryption(
-            final PacketEncryptionManager decryption, final PacketEncryptionManager encryption) {
-        this.decryption = decryption;
-        this.encryption = encryption;
+            final SecretKey key,
+            final boolean inbound,
+            final boolean outbound,
+            final Boolean clientSide) {
+        this.key = Objects.requireNonNull(key);
+        this.inbound = inbound;
+        this.outbound = outbound;
+        this.clientSide = clientSide;
     }
 
     /**
-     * Enables decryption only, leaving outgoing frames unchanged during handshake transitions.
+     * Enables decryption only while Minecraft completes its outbound handshake transition.
      *
-     * @param cipher initialized inbound cipher owned by the new handler
-     * @return handler that transforms incoming frame payloads only
+     * @param cipher unused Minecraft inbound cipher
+     * @return handler that authenticates incoming frames only
      */
     public static MultiChannellingEncryption inbound(final Cipher cipher) {
         return new MultiChannellingEncryption(
-                new PacketEncryptionManager(Objects.requireNonNull(cipher)), null);
+                FrameKeyDerivation.minecraftSecret(cipher), true, false, null);
     }
 
     /**
-     * Enables encryption only, leaving incoming frames unchanged during handshake transitions.
+     * Enables encryption only while leaving incoming handshake traffic unchanged.
      *
-     * @param cipher initialized outbound cipher owned by the new handler
-     * @return handler that transforms outgoing frame payloads only
+     * @param cipher unused Minecraft outbound cipher
+     * @return handler that encrypts outgoing frames only
      */
     public static MultiChannellingEncryption outbound(final Cipher cipher) {
         return new MultiChannellingEncryption(
-                null, new PacketEncryptionManager(Objects.requireNonNull(cipher)));
+                FrameKeyDerivation.minecraftSecret(cipher), false, true, null);
+    }
+
+    /**
+     * Initializes direction-specific keys only after the native channel identifies the endpoint
+     * role.
+     *
+     * @param ctx newly installed connection context
+     * @throws GeneralSecurityException if authenticated encryption cannot be initialized
+     */
+    @Override
+    public void handlerAdded(final ChannelHandlerContext ctx) throws GeneralSecurityException {
+        try {
+            boolean client = clientSide != null ? clientSide : isClient(ctx.channel());
+            if (inbound) {
+                decryption = new AuthenticatedFrameCipher(key, false, !client);
+            }
+            if (outbound) {
+                encryption = new AuthenticatedFrameCipher(key, true, client);
+            }
+        } catch (GeneralSecurityException | IllegalArgumentException failure) {
+            ctx.close();
+            throw failure;
+        }
+    }
+
+    /**
+     * Rejects unknown channel wrappers rather than silently using the wrong direction key.
+     *
+     * @param channel native RakNet endpoint receiving this handler
+     * @return true for a client channel and false for an accepted server channel
+     * @throws IllegalArgumentException if the endpoint does not expose a recognized RakNet role
+     */
+    private static boolean isClient(final Channel channel) {
+        if (channel instanceof RakNetClientChannel
+                || channel instanceof RakNetClientThreadedChannel) {
+            return true;
+        }
+        if (channel instanceof RakNetChildChannel || channel instanceof RakNetApplicationChannel) {
+            return false;
+        }
+        throw new IllegalArgumentException("Cannot determine RakNet encryption endpoint role");
     }
 
     /**
@@ -161,15 +227,17 @@ public class MultiChannellingEncryption extends ChannelDuplexHandler {
             ByteBuf res = null;
             FrameData resFrame = null;
             try {
-                res = ctx.alloc().buffer(data.getDataSize());
-                encryption.doWork(buf, res);
+                res = ctx.alloc().buffer(data.getDataSize() + AuthenticatedFrameCipher.OVERHEAD);
+                encryption.transform(data, buf, res);
                 resFrame = FrameData.create(ctx.alloc(), data.getPacketId(), res);
-                //                res = null;
                 resFrame.setOrderChannel(data.getOrderChannel());
                 resFrame.setReliability(data.getReliability());
                 ctx.write(resFrame, promise);
                 resFrame = null;
                 return;
+            } catch (GeneralSecurityException failure) {
+                ctx.close();
+                throw failure;
             } finally {
                 buf.release();
                 data.release();
@@ -201,13 +269,18 @@ public class MultiChannellingEncryption extends ChannelDuplexHandler {
             FrameData resFrame = null;
             try {
                 res = ctx.alloc().buffer(data.getDataSize());
-                decryption.doWork(buf, res);
+                if (!decryption.transform(data, buf, res)) {
+                    return;
+                }
                 resFrame = FrameData.create(ctx.alloc(), data.getPacketId(), res);
                 resFrame.setOrderChannel(data.getOrderChannel());
                 resFrame.setReliability(data.getReliability());
                 ctx.fireChannelRead(resFrame);
                 resFrame = null;
                 return;
+            } catch (GeneralSecurityException failure) {
+                ctx.close();
+                throw failure;
             } finally {
                 buf.release();
                 data.release();

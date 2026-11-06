@@ -103,7 +103,7 @@ class SpigotCipherStateTest {
     @Test
     void acceptedKeyEncryptsFramesAndClosesNativeCiphers() throws Exception {
         EmbeddedChannel channel = pipeline();
-        EmbeddedChannel peer = new EmbeddedChannel(new MultiChannellingEncryption(KEY));
+        EmbeddedChannel peer = new EmbeddedChannel(new MultiChannellingEncryption(KEY, true));
         RemovalWitness inbound = new RemovalWitness();
         RemovalWitness outbound = new RemovalWitness();
         try {

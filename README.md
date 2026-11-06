@@ -35,6 +35,8 @@ Development builds are available from [GitHub Actions](https://github.com/pjscru
 
 Install Raknetify2 in place of Raknetify. Do not install both. Normal server addresses continue to use TCP.
 
+Encrypted RakNet connections require the authenticated encryption protocol on both ends. Original Raknetify and older Raknetify2 releases cannot connect to updated clients or servers over encrypted RakNet.
+
 ## Proxy setup
 
 Install the matching plugin on Velocity or BungeeCord and the matching client mod on each connecting client. Allow UDP on the proxy's listening port. Clients use the `raknet;` prefix with the proxy address. Backend servers do not need Raknetify2 for this setup.

@@ -8,7 +8,6 @@
   "mixins": [
     "access.IClientConnection",
     "access.IPacketCodecDispatcher",
-    "access.IPacketEncryptionManager",
     "access.IWorld",
     "common.MixinCCConnect",
     "common.MixinClientConnection",
@@ -18,9 +17,6 @@
     "common.MixinClientConnection1_20_2",
     "common.encryption.MixinClientConnection",
     "common.encryption.MixinClientConnection26_4",
-    "common.encryption.MixinPacketDecryptor",
-    "common.encryption.MixinPacketEncryptionManager",
-    "common.encryption.MixinPacketEncryptor",
     "common.quirks.MixinPlayerEntity",
     "compat.fabricapi.MixinServerLoginNetworkAddon",
     "compat.krypton.MixinServerLoginNetworkHandler",

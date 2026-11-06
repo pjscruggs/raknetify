@@ -93,7 +93,7 @@ final class SpigotCipherState {
         if (pipeline.get("encrypt") == null || pipeline.get("decrypt") == null) {
             throw new IllegalStateException("Incomplete native encryption transition");
         }
-        MultiChannellingEncryption encryption = new MultiChannellingEncryption(pending);
+        MultiChannellingEncryption encryption = new MultiChannellingEncryption(pending, false);
         pipeline.addBefore(
                 MultiChannelingStreamingCompression.NAME,
                 MultiChannellingEncryption.NAME,
