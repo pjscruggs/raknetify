@@ -1,5 +1,6 @@
 /** Configures shared dependencies, publication settings, and verification for every mod and proxy module. */
 plugins {
+	id 'org.cyclonedx.bom' version '3.5.1'
 	id 'fabric-loom' version '1.17.21' apply false
 	id 'net.fabricmc.fabric-loom' version '1.17.21' apply false
 	id 'com.gradleup.shadow' version '9.2.1' apply false
@@ -17,6 +18,19 @@ ext.modrinthProjectId = providers.gradleProperty('modrinth_project_id')
 ext.curseforgeProjectId = providers.gradleProperty('curseforge_project_id')
 ext.supportedVersions = new groovy.json.JsonSlurper().parse(file('supported-versions.json'))
 ext.nativeLoaders = new groovy.json.JsonSlurper().parse(file('native-loaders.json'))
+
+allprojects {
+	tasks.named('cyclonedxDirectBom') {
+		// These are the dependencies actually copied into the released JARs.
+		includeConfigs = ['shadowInclude']
+		jsonOutput = layout.buildDirectory.file('reports/sbom/direct-bom.json')
+		if (project.name.startsWith('transport-test-')) enabled = false
+	}
+}
+
+tasks.named('cyclonedxBom') {
+	jsonOutput = layout.buildDirectory.file('reports/sbom/bom.json')
+}
 
 tasks.register('qualityChecks') {
 	group = 'verification'
