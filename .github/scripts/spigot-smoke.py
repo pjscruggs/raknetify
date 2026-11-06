@@ -11,6 +11,7 @@ import subprocess
 import threading
 import time
 from types import SimpleNamespace
+import zipfile
 
 
 def sibling(name):
@@ -32,11 +33,22 @@ def prepare_server(args, lock, native):
     tool = native.download(folder / 'BuildTools.jar', entry['buildTools'], entry['sha256'], 'sha256')
     with (args.work_dir / 'buildtools.log').open('w', encoding='utf-8') as output:
         subprocess.run([args.java, '-jar', str(tool), '--rev', lock['minecraft'], '--compile', 'SPIGOT', '--nogui'],
-                       cwd=folder, stdout=output, stderr=subprocess.STDOUT, check=True, timeout=1200)
+                       cwd=folder, env=maven_environment(args, entry['maven'], native),
+                       stdout=output, stderr=subprocess.STDOUT, check=True, timeout=1200)
     for name, expected in entry['refs'].items():
         actual = subprocess.check_output(['git', '-C', str(folder / name), 'rev-parse', 'HEAD'], text=True).strip()
         assert actual == expected, 'Spigot source changed: ' + name
     return folder / ('spigot-' + lock['minecraft'] + '.jar')
+
+
+def maven_environment(args, entry, native):
+    """Give BuildTools its pinned Maven distribution with bounded downloads instead of its unbounded archive request."""
+    archive = native.download(args.work_dir / 'maven.zip', entry['url'], entry['sha512'], 'sha512')
+    with zipfile.ZipFile(archive) as distribution:
+        distribution.extractall(args.work_dir / 'maven')
+    home = args.work_dir / 'maven' / ('apache-maven-' + entry['version'])
+    assert (home / 'bin/mvn').is_file() and (home / 'bin/mvn.cmd').is_file(), 'Incomplete Maven distribution'
+    return os.environ | {'M2_HOME': str(home)}
 
 
 def configure_server(args, native):

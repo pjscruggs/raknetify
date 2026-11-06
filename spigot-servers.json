@@ -9,6 +9,11 @@
   "spigot": {
     "buildTools": "https://hub.spigotmc.org/jenkins/job/BuildTools/201/artifact/target/BuildTools.jar",
     "sha256": "81ed06f5ce5fb705b558bf9b3cc2c5c53cdd9742406c5338c452faa13a1e1c24",
+    "maven": {
+      "version": "3.9.6",
+      "url": "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.9.6/apache-maven-3.9.6-bin.zip",
+      "sha512": "0eb0432004a91ebf399314ad33e5aaffec3d3b29279f2f143b2f43ade26f4db7bd1c0f08e436e9445ac6dc4a564a2945d13072a160ae54a930e90581284d6461"
+    },
     "refs": {
       "Bukkit": "29025a7ed5789807e11158a2263316b13ed50c3b",
       "CraftBukkit": "e89124d3e8e9585e75ceb7f9a4daba133788e5bd",
