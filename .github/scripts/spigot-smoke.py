@@ -71,6 +71,8 @@ def configure_server(args, native):
     plugins = folder / 'plugins'
     plugins.mkdir(exist_ok=True)
     shutil.copy2(args.jar, plugins / 'raknetify2.jar')
+    if args.voicechat:
+        sibling('voicechat-fixture').install(folder, 'bukkit', 28991 if args.proxy_protocol else None)
     return folder
 
 
@@ -123,6 +125,7 @@ def join_server(args, authority, native, server):
     settings = SimpleNamespace(loader='neoforge', java=args.java, work_dir=args.work_dir / 'client-runtime',
                                assets_dir=args.assets_dir, fixture=args.client_fixture, jar=args.client_jar,
                                discovery_url=authority.url, world_changes=True, client_port=args.client_port)
+    settings.voicechat = args.voicechat
     settings.work_dir.mkdir(exist_ok=True)
     log = settings.work_dir / 'client.log'
     log.write_text('', encoding='utf-8')
@@ -179,10 +182,12 @@ def exercise(args, lock, native, authority, server_jar):
         expected = {'name': args.platform.capitalize() + ' ' + lock['minecraft'], 'protocol_version': lock['protocol']}
         smoke.check_tcp_when_ready(28990, expected, args.proxy_protocol and args.platform == 'paper')
         with sibling('udp-proxy-fixture').transport(args.proxy_protocol, 28990, repeated=True,
-                                                   duplicate=args.proxy_protocol) as port:
+                                                   duplicate=args.proxy_protocol, frontend_port=28991) as port:
             args.client_port = port
             smoke.check_udp(port)
             smoke.check_connected_udp(port, expected, args.java, args.probe_dir)
+            if args.voicechat:
+                sibling('voicechat-fixture').check(folder, log, 28990, port)
             rejected_logins(args, authority)
             if args.side == 'both':
                 join_server(args, authority, native, process)
@@ -212,6 +217,7 @@ def main():
     parser.add_argument('--java', default='java')
     parser.add_argument('--side', choices=['server', 'both'], default='both')
     parser.add_argument('--proxy-protocol', action='store_true')
+    parser.add_argument('--voicechat', action='store_true')
     args = parser.parse_args()
     args.work_dir = args.work_dir.resolve()
     args.probe_dir = args.probe_dir.resolve()

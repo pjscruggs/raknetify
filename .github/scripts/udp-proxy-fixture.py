@@ -53,7 +53,7 @@ def header(client, destination):
 class UdpProxy:
     """One selector thread gives every client a separate connected backend socket, as real UDP proxies do."""
 
-    def __init__(self, port, repeated=False, identity='192.0.2.50', duplicate=False):
+    def __init__(self, port, repeated=False, identity='192.0.2.50', duplicate=False, frontend_port=0):
         """Bind a disposable frontend and retain only bounded, loopback fixture resources."""
         self.target = ('127.0.0.1', port)
         self.repeated = repeated
@@ -62,7 +62,7 @@ class UdpProxy:
         self.duplicates = 0
         self.selector = selectors.DefaultSelector()
         self.front = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.front.bind(('127.0.0.1', 0))
+        self.front.bind(('127.0.0.1', frontend_port))
         self.front.setblocking(False)
         self.selector.register(self.front, selectors.EVENT_READ, None)
         self.clients = {}
@@ -186,12 +186,12 @@ def await_ban(path, present):
 
 
 @contextmanager
-def transport(enabled, port, repeated=False, duplicate=False):
+def transport(enabled, port, repeated=False, duplicate=False, frontend_port=0):
     """Select a real relay for proxy checks and verify direct access is rejected after backend readiness is proven."""
     if not enabled:
         yield port
         return
-    proxy = UdpProxy(port, repeated, duplicate=duplicate)
+    proxy = UdpProxy(port, repeated, duplicate=duplicate, frontend_port=frontend_port)
     with proxy as frontend:
         yield frontend
         reject_direct(port)

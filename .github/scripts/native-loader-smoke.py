@@ -70,7 +70,8 @@ def install(args, lock, side):
                        cwd=folder, stdout=output, stderr=subprocess.STDOUT, check=True, timeout=600)
     mods = folder / 'mods'
     mods.mkdir(exist_ok=True)
-    assert all(path.name in ('raknetify2.jar', 'transport-test.jar') for path in mods.iterdir()), mods
+    allowed_mods = ('raknetify2.jar', 'transport-test.jar', 'voicechat.jar') if args.voicechat else ('raknetify2.jar', 'transport-test.jar')
+    assert all(path.name in allowed_mods for path in mods.iterdir()), mods
     shutil.copy2(args.jar, mods / 'raknetify2.jar')
     return folder
 
@@ -109,6 +110,8 @@ def server(args, lock, metadata):
     folder = install(args, lock, 'server')
     expected = server_metadata(folder, metadata)
     configure_server(folder)
+    if args.voicechat:
+        sibling('voicechat-fixture').install(folder, args.loader, 28991 if args.proxy_protocol else None)
     sibling('udp-proxy-fixture').configure(folder, args.proxy_protocol)
     group = 'minecraftforge' if args.loader == 'forge' else 'neoforged'
     filename = 'win_args.txt' if sys.platform == 'win32' else 'unix_args.txt'
@@ -125,9 +128,11 @@ def server(args, lock, metadata):
     try:
         smoke.await_ready(process, events)
         smoke.check_tcp_when_ready(28990, expected)
-        with sibling('udp-proxy-fixture').transport(args.proxy_protocol, 28990) as port:
+        with sibling('udp-proxy-fixture').transport(args.proxy_protocol, 28990, frontend_port=28991) as port:
             smoke.check_udp(port)
             smoke.check_connected_udp(port, expected, args.java, args.probe_dir)
+            if args.voicechat:
+                sibling('voicechat-fixture').check(folder, log, 28990, port)
             if args.side == 'both':
                 args.client_port = port
                 client(args, lock, metadata, join=True)
@@ -148,17 +153,22 @@ def fabric_server(args, lock, metadata):
     """Require the native client to join a Fabric server so loader negotiation cannot silently break interoperability."""
     smoke = sibling('server-smoke')
     settings = SimpleNamespace(work_dir=args.work_dir / 'fabric-server', jar=args.fabric_jar,
-                               encryption_legacy=None, encryption_modern=None)
+                               encryption_legacy=None, encryption_modern=None,
+                               voicechat_lock=Path(__file__).resolve().parents[2] / 'voicechat-lock.json' if args.voicechat else None)
     folder = smoke.prepare_server(settings, lock['minecraft'], {}, {}, {})
     configure_server(folder)
+    if args.voicechat:
+        sibling('voicechat-fixture').configure(folder, public_port=28991 if args.proxy_protocol else None)
     sibling('udp-proxy-fixture').configure(folder, args.proxy_protocol)
     log = args.work_dir / 'fabric-server.log'
     events = queue.Queue()
     process, reader = smoke.start_server(folder, log, events, args.java)
     try:
         smoke.await_ready(process, events)
-        with sibling('udp-proxy-fixture').transport(args.proxy_protocol, 28990) as port:
+        with sibling('udp-proxy-fixture').transport(args.proxy_protocol, 28990, frontend_port=28991) as port:
             args.client_port = port
+            if args.voicechat:
+                sibling('voicechat-fixture').check(folder, log, 28990, port)
             client(args, lock, metadata, join=True)
             shutil.copy2(args.work_dir / 'client.log', args.work_dir / 'fabric-client.log')
     finally:
@@ -265,6 +275,8 @@ def client(args, lock, metadata, join=False):
     """Run shared packet contracts in the packaged client after its ordinary native mod lifecycle finishes."""
     folder = install(args, lock, 'client')
     shutil.copy2(args.fixture, folder / 'mods/transport-test.jar')
+    if args.voicechat:
+        sibling('voicechat-fixture').client(folder, args.loader)
     with zipfile.ZipFile(args.work_dir / 'installer.jar') as installer:
         profile = json.loads(installer.read('version.json'))
     asset_directory = args.assets_dir or args.work_dir / 'assets'
@@ -275,6 +287,7 @@ def client(args, lock, metadata, join=False):
     command = [args.java, '-Xmx1G', '-Dstdout.encoding=UTF-8', '-Dstderr.encoding=UTF-8',
                '-Draknetify.test.port=' + str(getattr(args, 'client_port', 28990)),
                '-Draknetify.test.worldChanges=' + str(getattr(args, 'world_changes', False)).lower(),
+               '-Draknetify.test.voicechat=' + str(args.voicechat).lower(),
                '-Draknetify.test.join=' + str(join).lower(), *authentication_arguments(args), *arguments,
                profile['mainClass'], *profile['arguments']['game'], '--gameDir', str(folder),
                '--assetsDir', str(asset_directory), '--assetIndex', metadata['assetIndex']['id'],
@@ -291,6 +304,8 @@ def client(args, lock, metadata, join=False):
     assert 'PASS native entity lifecycle ordering 4' in text, log
     if join:
         assert 'PASS native RakNet login, configuration and playable world' in text, log
+        if args.voicechat:
+            assert 'PASS native authenticated voice connection' in text, log
     witnesses = sibling('client-address-check')
     witnesses.check_chat_witness(lock['minecraft'], text)
     witnesses.check_transfer_witness(lock['minecraft'], text)
@@ -332,6 +347,7 @@ def main():
     parser.add_argument('--java', default='java')
     parser.add_argument('--side', choices=['client', 'server', 'both'], default='both')
     parser.add_argument('--proxy-protocol', action='store_true')
+    parser.add_argument('--voicechat', action='store_true')
     args = parser.parse_args()
     args.work_dir = args.work_dir.resolve()
     if args.assets_dir:

@@ -1,0 +1,17 @@
+{
+  "forge": {
+    "filename": "voicechat-forge-2.6.27+26.3.jar",
+    "url": "https://cdn.modrinth.com/data/9eGKb6K1/versions/7rXMezmy/voicechat-forge-2.6.27%2B26.3.jar",
+    "sha512": "cbeb62cafd0fcfb80276e3d6e921e60e1c4455dbc3533a4bc3dc3e321cf2e7c2fc05557b120373ba72aec939ec3db9d96e2028df1a657fb6cc80bd32e3dde228"
+  },
+  "neoforge": {
+    "filename": "voicechat-neoforge-2.6.27+26.3.jar",
+    "url": "https://cdn.modrinth.com/data/9eGKb6K1/versions/qqFzNjgd/voicechat-neoforge-2.6.27%2B26.3.jar",
+    "sha512": "56ec2b31881836bb66fa7b0fe72df80dff65e95b0fc85f3e4c6fe0ab0aced9c5bc78c0b1192f050dd4f86b13940718f7a0ee63175a77a4e993f8e731cb951fb1"
+  },
+  "bukkit": {
+    "filename": "voicechat-bukkit-2.6.27.jar",
+    "url": "https://cdn.modrinth.com/data/9eGKb6K1/versions/3Br8wxJY/voicechat-bukkit-2.6.27.jar",
+    "sha512": "9d55c64e79289da87b6c51295124477b4061f5820bd68370c1f6b82137c7ca19d5db7bc05828f12091f23c6ddf1b328b8c5018d4df85fa7c3ddacc6f8f114abe"
+  }
+}

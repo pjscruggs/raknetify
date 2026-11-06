@@ -108,6 +108,18 @@ jobs:
         suite: [server, proxy, bungee, proxy-protocol, disconnect, polymer, polymer-krypton, packetfixer-krypton, packetfixer-polymer-krypton, ordering, transfers, transfer-clients, fastipping]
         include:
           - os: ubuntu-24.04
+            suite: voicechat
+            shard: 1
+          - os: ubuntu-24.04
+            suite: voicechat
+            shard: 2
+          - os: ubuntu-24.04
+            suite: voicechat
+            shard: 3
+          - os: ubuntu-24.04
+            suite: voicechat
+            shard: 4
+          - os: ubuntu-24.04
             suite: krypton
             shard: 1
           - os: ubuntu-24.04
@@ -231,6 +243,16 @@ jobs:
           --shard ${{ matrix.shard }} --shards 4
           --encryption-legacy transport-test-legacy/build/libs/*.jar
           --encryption-modern transport-test-modern/build/libs/*.jar
+      - name: Simple Voice Chat version compatibility
+        if: matrix.suite == 'voicechat'
+        run: >-
+          python .github/scripts/server-smoke.py --discard-runtime --proxy-protocol
+          --jar fabric-universal/build/libs/*.jar
+          --work-dir "$RUNNER_TEMP/raknetify-smoke/voicechat"
+          --java-17 "${{ steps.java17.outputs.path }}/bin/java"
+          --java-21 "${{ steps.java21.outputs.path }}/bin/java"
+          --voicechat-lock voicechat-lock.json
+          --shard ${{ matrix.shard }} --shards 4
       - name: Polymer and Krypton together
         if: matrix.suite == 'polymer-krypton'
         run: >-
@@ -365,7 +387,7 @@ jobs:
         run: |
           jar=$(find "$LOADER/build/libs" -name '*.jar' ! -name '*-dev.jar' ! -name '*-transport-test.jar')
           fixture=$(find "$LOADER/build/libs" -name '*-transport-test.jar')
-          command=(python .github/scripts/native-loader-smoke.py --loader "$LOADER" --jar "$jar" --fixture "$fixture" --fabric-jar fabric-universal/build/libs/*.jar --probe-dir common/build/transport-probe --work-dir "$RUNNER_TEMP/native-$LOADER")
+          command=(python .github/scripts/native-loader-smoke.py --voicechat --loader "$LOADER" --jar "$jar" --fixture "$fixture" --fabric-jar fabric-universal/build/libs/*.jar --probe-dir common/build/transport-probe --work-dir "$RUNNER_TEMP/native-$LOADER")
           if [ "$RUNNER_OS" = Linux ]; then
             # EGL supplies the sRGB framebuffer Minecraft requires on the software-rendered X display.
             SDL_VIDEO_FORCE_EGL=1 xvfb-run -a -s '-screen 0 1280x720x24' "${command[@]}"
@@ -426,7 +448,7 @@ jobs:
           jar=$(find spigot/build/libs -name '*.jar' ! -name '*-dev.jar')
           client=$(find neoforge/build/libs -name '*.jar' ! -name '*-dev.jar' ! -name '*-transport-test.jar')
           fixture=$(find neoforge/build/libs -name '*-transport-test.jar')
-          command=(python .github/scripts/spigot-smoke.py --platform "$PLATFORM" --jar "$jar" --client-jar "$client" --client-fixture "$fixture" --probe-dir common/build/transport-probe --work-dir "$RUNNER_TEMP/plugin-$PLATFORM")
+          command=(python .github/scripts/spigot-smoke.py --voicechat --platform "$PLATFORM" --jar "$jar" --client-jar "$client" --client-fixture "$fixture" --probe-dir common/build/transport-probe --work-dir "$RUNNER_TEMP/plugin-$PLATFORM")
           if [ "$RUNNER_OS" = Linux ]; then
             SDL_VIDEO_FORCE_EGL=1 xvfb-run -a -s '-screen 0 1280x720x24' "${command[@]}"
           else

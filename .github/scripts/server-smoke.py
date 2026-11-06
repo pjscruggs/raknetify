@@ -245,7 +245,7 @@ def bundled_mappings(jar):
     return tables[0]
 
 
-def check_server(folder, version, native, java, probe_dir, polymer=False, krypton=False, encryption=False, packetfixer=False, port=25871, proxy_protocol=False):
+def check_server(folder, version, native, java, probe_dir, polymer=False, krypton=False, encryption=False, packetfixer=False, port=25871, proxy_protocol=False, voicechat=False):
     """Run one transport configuration through startup, network probes, and clean shutdown.
 
     The supplied folder is an isolated smoke-test installation. Its properties and
@@ -271,18 +271,15 @@ def check_server(folder, version, native, java, probe_dir, polymer=False, krypto
         with proxy.transport(proxy_protocol, port, repeated=not native) as frontend:
             check_udp(frontend)
             check_connected_udp(frontend, metadata, java, probe_dir)
+            if voicechat:
+                voice_fixture().check(folder, log, port, frontend)
             if encryption:
                 check_encryption(frontend, metadata, java, probe_dir, packetfixer)
             if proxy_protocol:
                 proxy.check_ip_ban(process, folder, java, probe_dir, frontend, metadata['protocol_version'])
         if polymer:
             check_polymer_http(port)
-        java_path = Path(shutil.which(java) or java).resolve()
-        jcmd = java_path.with_name('jcmd.exe' if os.name == 'nt' else 'jcmd')
-        dump = subprocess.check_output([str(jcmd), str(process.pid), 'Thread.print'], text=True)
-        (folder / ('native-threads.log' if native else 'nio-threads.log')).write_text(dump)
-        transport = 'Epoll' if native and sys.platform.startswith('linux') else 'NIO'
-        assert 'Netty Server ' + transport + ' Raknetify' in dump, transport
+        transport = check_transport_threads(folder, native, java, process.pid)
         process.stdin.write('stop\n')
         process.stdin.flush()
         assert process.wait(timeout=45) == 0
@@ -293,9 +290,28 @@ def check_server(folder, version, native, java, probe_dir, polymer=False, krypto
         stop_server(process, reader)
 
 
+def check_transport_threads(folder, native, java, pid):
+    """Verify the actual native or NIO event loops and preserve their thread dump for failures."""
+    java_path = Path(shutil.which(java) or java).resolve()
+    jcmd = java_path.with_name('jcmd.exe' if os.name == 'nt' else 'jcmd')
+    dump = subprocess.check_output([str(jcmd), str(pid), 'Thread.print'], text=True)
+    (folder / ('native-threads.log' if native else 'nio-threads.log')).write_text(dump)
+    transport = 'Epoll' if native and sys.platform.startswith('linux') else 'NIO'
+    assert 'Netty Server ' + transport + ' Raknetify' in dump, transport
+    return transport
+
+
 def proxy_fixture():
     """Load the loopback forwarding fixture without importing its helpers into production code."""
     spec = importlib.util.spec_from_file_location('udp_proxy_fixture', Path(__file__).with_name('udp-proxy-fixture.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def voice_fixture():
+    """Load optional voice checks without introducing fixture code into release artifacts."""
+    spec = importlib.util.spec_from_file_location('voicechat_fixture', Path(__file__).with_name('voicechat-fixture.py'))
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -345,6 +361,7 @@ def arguments():
     parser.add_argument('--polymer-lock', type=Path)
     parser.add_argument('--krypton-lock', type=Path)
     parser.add_argument('--packetfixer-lock', type=Path)
+    parser.add_argument('--voicechat-lock', type=Path)
     parser.add_argument('--versions', nargs='+')
     parser.add_argument('--shard', type=int, default=1)
     parser.add_argument('--shards', type=int, default=1)
@@ -369,6 +386,10 @@ def prepare_server(args, version, polymer, krypton, packetfixer):
         install_mods(folder, krypton[version])
     if packetfixer:
         prepare_packetfixer(folder, packetfixer[version])
+    voice_lock = getattr(args, 'voicechat_lock', None)
+    if voice_lock:
+        install_mods(folder, json.loads(voice_lock.read_text())[version])
+        voice_fixture().configure(folder)
     fixture = encryption_fixture(args, version)
     if fixture:
         shutil.copy2(fixture, folder / 'mods' / 'encryption-test.jar')
@@ -437,19 +458,25 @@ def shard_versions(versions, shard, shards):
     return versions[shard - 1::shards]
 
 
+def read_lock(path):
+    """Read one explicitly selected dependency lock, leaving an omitted compatibility suite disabled."""
+    return json.loads(path.read_text()) if path else {}
+
+
 def main():
     """Check both native and NIO transport settings for each selected or locked Minecraft version."""
     args = arguments()
-    polymer = json.loads(args.polymer_lock.read_text()) if args.polymer_lock else {}
-    krypton = json.loads(args.krypton_lock.read_text()) if args.krypton_lock else {}
-    packetfixer = json.loads(args.packetfixer_lock.read_text()) if args.packetfixer_lock else {}
+    polymer = read_lock(args.polymer_lock)
+    krypton = read_lock(args.krypton_lock)
+    packetfixer = read_lock(args.packetfixer_lock)
+    voicechat = read_lock(args.voicechat_lock)
     supported = json.loads((Path(__file__).resolve().parents[2] / 'supported-versions.json').read_text())
-    versions = args.versions or list(packetfixer) or list(krypton) or ['1.18.2', '1.21.1'] + supported['modern']['gameVersions']
+    versions = args.versions or list(voicechat) or list(packetfixer) or list(krypton) or ['1.18.2', '1.21.1'] + supported['modern']['gameVersions']
     for version in shard_versions(versions, args.shard, args.shards):
         folder = prepare_server(args, version, polymer, krypton, packetfixer)
         java = select_java(args, version)
         for native in (True, False):
-            check_server(folder, version, native, java, args.probe_dir, bool(polymer), bool(krypton), bool(encryption_fixture(args, version)), bool(packetfixer), args.port, args.proxy_protocol)
+            check_server(folder, version, native, java, args.probe_dir, bool(polymer), bool(krypton), bool(encryption_fixture(args, version)), bool(packetfixer), args.port, args.proxy_protocol, bool(voicechat))
         if args.discard_runtime:
             discard_runtime(folder)
 

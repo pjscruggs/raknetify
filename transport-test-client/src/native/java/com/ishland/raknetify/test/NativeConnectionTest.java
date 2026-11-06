@@ -117,8 +117,7 @@ public final class NativeConnectionTest {
         if (Boolean.getBoolean("raknetify.test.encrypted") && channel.pipeline().get(MultiChannellingEncryption.class) == null) {
             throw new IllegalStateException("Native login did not negotiate frame encryption");
         }
-        if (!verifyWorldChanges(minecraft)) return;
-        if (!verifyChatAcknowledgement(minecraft)) return;
+        if (!gameplayComplete(minecraft)) return;
         finishing = true;
         closingChannel = channel;
         channel.closeFuture().addListener(future -> {
@@ -130,6 +129,16 @@ public final class NativeConnectionTest {
             });
         });
         listener.getConnection().disconnect(Component.literal("Transport fixture complete"));
+    }
+
+    /**
+     * Waits for every selected gameplay and voice witness before closing their shared transport.
+     * @param minecraft client with a playable world
+     * @return whether dimension changes, chat and optional voice authentication have completed
+     */
+    private static boolean gameplayComplete(Minecraft minecraft) {
+        return verifyWorldChanges(minecraft) && verifyChatAcknowledgement(minecraft)
+                && (!Boolean.getBoolean("raknetify.test.voicechat") || VoiceClientWitness.connected());
     }
 
     /**
