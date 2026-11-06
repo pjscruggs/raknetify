@@ -35,19 +35,27 @@ public interface ModPlatform {
 
     /**
      * Resolves the adapter from this runtime's class loader and rejects ambiguous distributions.
+     *
      * @return the only installed platform service
      * @throws IllegalStateException if no adapter or more than one adapter is available
      */
     private static ModPlatform load() {
-        var providers = ServiceLoader.load(ModPlatform.class, ModPlatform.class.getClassLoader()).iterator();
-        if (!providers.hasNext()) throw new IllegalStateException("Missing Raknetify2 loader adapter");
+        var providers =
+                ServiceLoader.load(ModPlatform.class, ModPlatform.class.getClassLoader())
+                        .iterator();
+        if (!providers.hasNext()) {
+            throw new IllegalStateException("Missing Raknetify2 loader adapter");
+        }
         ModPlatform selected = providers.next();
-        if (providers.hasNext()) throw new IllegalStateException("Multiple Raknetify2 loader adapters");
+        if (providers.hasNext()) {
+            throw new IllegalStateException("Multiple Raknetify2 loader adapters");
+        }
         return selected;
     }
 
     /**
      * Returns the adapter supplied by the installed loader distribution.
+     *
      * @return loader-specific configuration and discovery operations
      */
     static ModPlatform get() {
@@ -56,24 +64,28 @@ public interface ModPlatform {
 
     /**
      * Reads Minecraft's version from loader metadata, before Minecraft classes are initialized.
+     *
      * @return Minecraft version identifier declared by the running loader
      */
     String minecraftVersion();
 
     /**
      * Tests the physical distribution without referencing dedicated-client Minecraft classes.
+     *
      * @return true for a client process, including an integrated server
      */
     boolean isClient();
 
     /**
      * Checks whether loader development facilities are active.
+     *
      * @return true when development-only validation is appropriate
      */
     boolean isDevelopmentEnvironment();
 
     /**
      * Looks up a mod in the loader's discovery inventory, including during early mixin selection.
+     *
      * @param id loader mod identifier
      * @return whether the mod was discovered for this instance
      */
@@ -81,6 +93,7 @@ public interface ModPlatform {
 
     /**
      * Locates the configuration directory chosen by the active loader.
+     *
      * @return directory containing user-editable transport settings
      */
     Path configDirectory();
