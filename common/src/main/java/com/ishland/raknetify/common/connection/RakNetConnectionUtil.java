@@ -32,6 +32,7 @@ import io.netty.handler.timeout.ReadTimeoutHandler;
 import network.ycc.raknet.RakNet;
 import network.ycc.raknet.client.channel.RakNetClientThreadedChannel;
 import network.ycc.raknet.frame.Frame;
+import network.ycc.raknet.pipeline.FrameJoiner;
 import network.ycc.raknet.pipeline.ReliabilityHandler;
 import network.ycc.raknet.server.channel.RakNetApplicationChannel;
 
@@ -160,6 +161,7 @@ public class RakNetConnectionUtil {
                 simpleMetricsLogger.setMetricsSynchronizationHandler(metricsSynchronizationHandler);
                 final SynchronizationLayer synchronizationLayer = new SynchronizationLayer(Constants.SYNC_IGNORE_CHANNELS);
                 reInitChannelForOrdering(channel);
+                ch.pipeline().addBefore(FrameJoiner.NAME, "raknetify-reliable-dedup", new ReliableFrameDeduplicator());
                 if (threadedReadHandlerName != null) {
                     ch.pipeline().addBefore(threadedReadHandlerName, "raknetify-metrics-sync", metricsSynchronizationHandler);
                     ch.pipeline().addBefore(threadedReadHandlerName, "raknetify-synchronization-layer", synchronizationLayer);
