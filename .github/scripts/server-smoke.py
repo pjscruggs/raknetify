@@ -294,6 +294,7 @@ def report_success(version, transport, log, polymer, krypton, encryption, packet
         checks += ', Krypton loaded'
     if packetfixer:
         assert 'PASS native compression above eight MiB' in log.read_text()
+        assert 'PASS native frame helper ownership' in log.read_text()
         assert 'PASS native string above 32767 characters' in log.read_text()
         checks += ', PacketFixer native size limits'
     if encryption:

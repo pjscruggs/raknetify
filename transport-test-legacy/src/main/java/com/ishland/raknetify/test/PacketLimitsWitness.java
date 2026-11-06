@@ -29,6 +29,7 @@ import net.fabricmc.api.ModInitializer;
 import net.minecraft.network.PacketByteBuf;
 import net.minecraft.network.handler.PacketDeflater;
 import net.minecraft.network.handler.PacketInflater;
+import net.minecraft.network.handler.SplitterHandler;
 
 /** Checks PacketFixer's transformed native limits without changing any production codec. */
 public final class PacketLimitsWitness implements ModInitializer {
@@ -43,6 +44,7 @@ public final class PacketLimitsWitness implements ModInitializer {
         if (!Boolean.getBoolean("raknetify.test.packetLimits")) return;
         PacketByteBuf buffer = new PacketByteBuf(Unpooled.buffer());
         try {
+            NativeSplitterWitness.verify(SplitterHandler.class);
             String expected = "p".repeat(40000);
             buffer.writeString(expected);
             if (!expected.equals(buffer.readString())) throw new IllegalStateException("Native string corruption");

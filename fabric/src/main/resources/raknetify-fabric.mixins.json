@@ -33,6 +33,7 @@
     "common.quirks.MixinSampleSubscriptionTracker",
     "compat.fabricapi.MixinServerLoginNetworkAddon",
     "compat.krypton.MixinServerLoginNetworkHandler",
+    "compat.packetfixer.MixinSplitterHandler",
     "compat.qsl.MixinServerLoginNetworkAddon",
     "server.MixinPlayerManager1_20_1",
     "server.MixinPlayerManager1_20_2",

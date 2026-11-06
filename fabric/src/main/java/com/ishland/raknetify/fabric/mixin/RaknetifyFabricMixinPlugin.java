@@ -135,6 +135,8 @@ public class RaknetifyFabricMixinPlugin implements IMixinConfigPlugin {
      */
     private static boolean isSharedMixinSupported(String mixinClassName) {
         return switch (mixinClassName.substring("com.ishland.raknetify.fabric.mixin.".length())) {
+            case "compat.packetfixer.MixinSplitterHandler" -> AFTER_1_20_1
+                    && FabricLoader.getInstance().isModLoaded("packetfixer");
             case "server.MixinServerPlayNetworkHandler1_20_1", "server.MixinPlayerManager1_20_1" -> !AFTER_1_20_1;
             case "server.MixinServerCommonNetworkHandler", "server.MixinPlayerManager1_20_2",
                     "common.MixinClientConnection1_20_2" -> AFTER_1_20_1;

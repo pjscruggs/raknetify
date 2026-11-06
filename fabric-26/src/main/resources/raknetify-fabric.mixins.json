@@ -24,6 +24,7 @@
     "common.quirks.MixinPlayerEntity",
     "compat.fabricapi.MixinServerLoginNetworkAddon",
     "compat.krypton.MixinServerLoginNetworkHandler",
+    "compat.packetfixer.MixinSplitterHandler",
     "compat.krypton.MixinServerLoginNetworkHandler26_4",
     "compat.qsl.MixinServerLoginNetworkAddon",
     "server.MixinPlayerManager1_20_2",
