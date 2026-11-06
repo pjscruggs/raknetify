@@ -100,15 +100,26 @@ def java_for(args, version):
 
 def launch_command(args, version, folder, libraries):
     """Build a headless fixture launch with a private hosts file and no usable account credentials."""
-    return [java_for(args, version), '-Xmx1G', '-Djava.awt.headless=true',
+    return [java_for(args, version), '-Xmx1G', '-Djava.awt.headless=true', '-Dmixin.debug.export=true',
+               '-Dmixin.debug.export.decompile=false',
                '-Draknetify.test.addresses=true', '-Draknetify.test.orderingOnly=' + str(args.ordering_only).lower(), '-Draknetify.test.baseline=' + str(args.baseline).lower(), '-Djdk.net.hosts.file=' + str(folder / 'hosts'),
                '-cp', os.pathsep.join(map(str, libraries)), 'net.fabricmc.loader.impl.launch.knot.KnotClient',
                '--gameDir', str(folder), '--version', version, '--accessToken', '0', '--username', 'AddressProbe']
 
 
+def clear_mixin_exports(folder):
+    """Discard prior fixture exports so a skipped transformation cannot pass with stale bytecode."""
+    export = folder / '.mixin.out'
+    if export.is_symlink() or export.resolve().parent != folder.resolve():
+        raise ValueError('Mixin export directory is outside the isolated client folder')
+    if export.exists():
+        shutil.rmtree(export)
+
+
 def run(args, version, metadata, lock):
     """Require all native client address witnesses and fail on mixin or linkage errors."""
     folder, libraries = prepare(args, version, metadata, lock)
+    clear_mixin_exports(folder)
     command = launch_command(args, version, folder, libraries)
     with (folder / 'client.log').open('w', encoding='utf8') as output:
         result = subprocess.run(command, cwd=folder, stdout=output, stderr=subprocess.STDOUT, timeout=180)
@@ -121,6 +132,8 @@ def run(args, version, metadata, lock):
         assert 'PASS standalone resolver baseline' in text
     else:
         assert '\t- raknetify ' in text, 'Raknetify was not loaded'
+        if not version.startswith('26.'):
+            assert 'PASS native legacy mixin call sites and rejected missing-hook control' in text
         assert 'PASS native gameplay ordering 12' in text
         assert 'PASS native entity lifecycle ordering 4' in text
         check_transfer_witness(version, text)

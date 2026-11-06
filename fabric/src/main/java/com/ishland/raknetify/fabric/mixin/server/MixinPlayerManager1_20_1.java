@@ -54,7 +54,7 @@ public class MixinPlayerManager1_20_1 {
      */
     // The two literal selectors cover named development and intermediary production runtimes.
     @Dynamic
-    @Inject(remap = false, method = {"onPlayerConnect", "method_12975"}, at = @At("HEAD"), require = 0)
+    @Inject(remap = false, method = {"onPlayerConnect", "method_14570"}, at = @At("HEAD"), require = 1)
     private void onJoin(ClientConnection connection, ServerPlayerEntity player, int latency, CallbackInfo ci) {
         if (((IClientConnection) connection).getChannel().config() instanceof RakNet.Config config) {
             System.out.println(String.format("Raknetify: %s logged in via RakNet, mtu %d", player.getName().getString(), config.getMTU()));
@@ -86,7 +86,7 @@ public class MixinPlayerManager1_20_1 {
      */
     // The two literal selectors cover named development and intermediary production runtimes.
     @Dynamic
-    @Inject(remap = false, method = {"onPlayerConnect", "method_12975"}, at = @At("RETURN"), require = 0)
+    @Inject(remap = false, method = {"onPlayerConnect", "method_14570"}, at = @At("RETURN"), require = 1)
     private void postJoin(ClientConnection connection, ServerPlayerEntity player, int latency, CallbackInfo ci) {
         final Channel channel = ((IClientConnection) connection).getChannel();
         if (channel == null) {

@@ -3,6 +3,7 @@ repositories { maven { url = 'https://maven.fabricmc.net/' } }
 dependencies { compileOnly "net.fabricmc:fabric-loader:${project.loader_version}" }
 dependencies {
     compileOnly project(':common')
+    compileOnly 'org.ow2.asm:asm-tree:9.11'
     compileOnly 'io.netty:netty-all:4.1.25.Final'
 }
 java {
