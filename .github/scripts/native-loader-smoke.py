@@ -166,6 +166,8 @@ def fabric_server(args, lock, metadata):
         smoke.stop_server(process, reader)
     assert process.returncode == 0, process.returncode
     check_failures(log)
+    if args.proxy_protocol:
+        assert 'TransportProbe[/192.0.2.50:' in log.read_text(encoding='utf-8'), 'Fabric lost forwarded client IP'
     print('PASS', args.loader, 'client joined Fabric server over RakNet', flush=True)
 
 

@@ -359,7 +359,7 @@ def arguments():
 def prepare_server(args, version, polymer, krypton, packetfixer):
     """Prepare an isolated runtime with only the explicitly selected pinned dependency sets."""
     folder = args.work_dir / version
-    (folder / 'mods').mkdir(parents=True, exist_ok=True)
+    reset_fixture_mods(folder)
     shutil.copy2(args.jar, folder / 'mods' / args.jar.name)
     (folder / 'expected-mappings.json').write_text(json.dumps(bundled_mappings(args.jar)))
     (folder / 'channelMappings.json').unlink(missing_ok=True)
@@ -372,12 +372,40 @@ def prepare_server(args, version, polymer, krypton, packetfixer):
     fixture = encryption_fixture(args, version)
     if fixture:
         shutil.copy2(fixture, folder / 'mods' / 'encryption-test.jar')
+    (folder / 'fixture-mods.json').write_text(json.dumps(fixture_mod_inventory(folder)), encoding='utf-8')
     launcher = folder / 'fabric-server-launch.jar'
     if not launcher.exists():
         url = f'https://meta.fabricmc.net/v2/versions/loader/{version}/0.20.1/1.1.1/server/jar'
         with urllib.request.urlopen(url, timeout=60) as response:
             launcher.write_bytes(response.read())
     return folder
+
+
+def fixture_mod_inventory(folder):
+    """Fingerprint every installed fixture mod, rejecting links and directories that could hide additional inputs."""
+    mods = folder / 'mods'
+    if mods.is_symlink() or mods.resolve().parent != folder.resolve():
+        raise ValueError('Fixture mods directory escapes its runtime')
+    inventory = {}
+    for path in mods.iterdir():
+        if path.is_symlink() or not path.is_file():
+            raise ValueError('Unexpected entry in fixture mods directory')
+        inventory[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return inventory
+
+
+def reset_fixture_mods(folder):
+    """Remove only unchanged mods recorded by an earlier fixture run so stale builds cannot satisfy new checks."""
+    mods = folder / 'mods'
+    mods.mkdir(parents=True, exist_ok=True)
+    current = fixture_mod_inventory(folder)
+    receipt = folder / 'fixture-mods.json'
+    expected = json.loads(receipt.read_text(encoding='utf-8')) if receipt.exists() else {}
+    if current != expected:
+        raise ValueError('Fixture mods changed or lack an ownership receipt. Use a fresh work directory')
+    for name in current:
+        (mods / name).unlink()
+    receipt.write_text('{}', encoding='utf-8')
 
 
 def select_java(args, version):
