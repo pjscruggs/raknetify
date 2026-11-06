@@ -93,7 +93,7 @@ jobs:
           retention-days: 7
 
   network:
-    name: ${{ matrix.suite }} (${{ matrix.os }})
+    name: ${{ matrix.suite }}${{ matrix.shard && format(' {0}/4', matrix.shard) || '' }} (${{ matrix.os }})
     needs: build
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
@@ -102,11 +102,35 @@ jobs:
         shell: bash
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 8
       matrix:
         os: [ubuntu-24.04]
-        suite: [server, proxy, disconnect, polymer, krypton, polymer-krypton, packetfixer, packetfixer-krypton, packetfixer-polymer-krypton, ordering, transfers, transfer-clients, fastipping]
+        suite: [server, proxy, disconnect, polymer, polymer-krypton, packetfixer-krypton, packetfixer-polymer-krypton, ordering, transfers, transfer-clients, fastipping]
         include:
+          - os: ubuntu-24.04
+            suite: krypton
+            shard: 1
+          - os: ubuntu-24.04
+            suite: krypton
+            shard: 2
+          - os: ubuntu-24.04
+            suite: krypton
+            shard: 3
+          - os: ubuntu-24.04
+            suite: krypton
+            shard: 4
+          - os: ubuntu-24.04
+            suite: packetfixer
+            shard: 1
+          - os: ubuntu-24.04
+            suite: packetfixer
+            shard: 2
+          - os: ubuntu-24.04
+            suite: packetfixer
+            shard: 3
+          - os: ubuntu-24.04
+            suite: packetfixer
+            shard: 4
           - os: windows-2022
             suite: disconnect
           - os: windows-2022
@@ -179,6 +203,7 @@ jobs:
           --java-17 "${{ steps.java17.outputs.path }}/bin/java"
           --java-21 "${{ steps.java21.outputs.path }}/bin/java"
           --krypton-lock .github/krypton-versions.json
+          --shard ${{ matrix.shard }} --shards 4
           --encryption-legacy transport-test-legacy/build/libs/*.jar
           --encryption-modern transport-test-modern/build/libs/*.jar
       - name: Polymer and Krypton together
@@ -202,6 +227,7 @@ jobs:
           --java-17 "${{ steps.java17.outputs.path }}/bin/java"
           --java-21 "${{ steps.java21.outputs.path }}/bin/java"
           --packetfixer-lock .github/packetfixer-versions.json
+          --shard ${{ matrix.shard }} --shards 4
           --encryption-legacy transport-test-legacy/build/libs/*.jar
           --encryption-modern transport-test-modern/build/libs/*.jar
       - name: PacketFixer and Krypton together
@@ -272,7 +298,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: Network-${{ matrix.os }}-${{ matrix.suite }}
+          name: Network-${{ matrix.os }}-${{ matrix.suite }}-${{ matrix.shard || 'all' }}
           path: ${{ runner.temp }}/raknetify-smoke/**/*.log
           if-no-files-found: warn
 

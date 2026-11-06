@@ -330,6 +330,8 @@ def arguments():
     parser.add_argument('--krypton-lock', type=Path)
     parser.add_argument('--packetfixer-lock', type=Path)
     parser.add_argument('--versions', nargs='+')
+    parser.add_argument('--shard', type=int, default=1)
+    parser.add_argument('--shards', type=int, default=1)
     parser.add_argument('--port', type=int, default=25871)
     parser.add_argument('--discard-runtime', action='store_true')
     parser.add_argument('--encryption-legacy', type=Path)
@@ -381,6 +383,15 @@ def discard_runtime(folder):
             shutil.rmtree(target)
 
 
+def shard_versions(versions, shard, shards):
+    """Partition the complete selected version list without omissions, duplicates, empty jobs, or order changes within a job."""
+    if len(versions) != len(set(versions)):
+        raise ValueError('Duplicate Minecraft version in the selected test list')
+    if not 1 <= shard <= shards <= len(versions):
+        raise ValueError('Invalid or empty Minecraft test shard')
+    return versions[shard - 1::shards]
+
+
 def main():
     """Check both native and NIO transport settings for each selected or locked Minecraft version."""
     args = arguments()
@@ -389,7 +400,7 @@ def main():
     packetfixer = json.loads(args.packetfixer_lock.read_text()) if args.packetfixer_lock else {}
     supported = json.loads((Path(__file__).resolve().parents[2] / 'supported-versions.json').read_text())
     versions = args.versions or list(packetfixer) or list(krypton) or ['1.18.2', '1.21.1'] + supported['modern']['gameVersions']
-    for version in versions:
+    for version in shard_versions(versions, args.shard, args.shards):
         folder = prepare_server(args, version, polymer, krypton, packetfixer)
         java = select_java(args, version)
         for native in (True, False):
