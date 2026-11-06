@@ -102,19 +102,31 @@ public final class RaknetProxyProbe {
      * @throws IllegalArgumentException if the expected native ban reason is missing
      */
     private static void bannedLogin(Channel channel, LinkedBlockingQueue<byte[]> packets, int protocol) throws Exception {
+        channel.writeAndFlush(loginHello(protocol)).sync();
+        String reason = textPacket(next(packets));
+        if (!reason.contains("Transport rejection fixture") || !reason.contains("END_OF_REASON")) {
+            throw new IllegalArgumentException("Missing or truncated native ban reason: " + reason);
+        }
+        System.out.println("BAN_REASON_OK");
+    }
+
+    /**
+     * Encodes the native login-start layout, including the short-lived optional profile-key fields.
+     * @param protocol Minecraft protocol number negotiated in the handshake
+     * @return owned packet buffer for the caller to write or release
+     */
+    static ByteBuf loginHello(int protocol) {
         ByteBuf hello = Unpooled.buffer();
         hello.writeByte(0);
         byte[] name = "DisconnectProbe".getBytes(StandardCharsets.UTF_8);
         RaknetStatusProbe.writeVarint(hello, name.length);
         hello.writeBytes(name);
-        if (protocol < 764) hello.writeBoolean(true);
-        hello.writeLong(0x1234567812345678L).writeLong(0x1234567812345678L);
-        channel.writeAndFlush(hello).sync();
-        String reason = textPacket(next(packets));
-        if (!reason.contains("Transport rejection fixture") || !reason.contains("END_OF_REASON")) {
-            throw new IllegalArgumentException("Missing or truncated native ban reason");
+        if (protocol == 759 || protocol == 760) hello.writeBoolean(false);
+        if (protocol >= 760) {
+            if (protocol < 764) hello.writeBoolean(true);
+            hello.writeLong(0x1234567812345678L).writeLong(0x1234567812345678L);
         }
-        System.out.println("BAN_REASON_OK");
+        return hello;
     }
 
     /**
