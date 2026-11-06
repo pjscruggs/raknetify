@@ -35,8 +35,10 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 
 import org.junit.jupiter.api.Test;
 
+import java.net.BindException;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
+import java.net.SocketException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.util.List;
@@ -54,22 +56,23 @@ class SpigotListenersTest {
     @Test
     void disableReleasesUdpAndPreservesTcp() throws Exception {
         NioEventLoopGroup group = new NioEventLoopGroup(1);
-        ChannelFuture tcp = tcpListener(group);
-        SpigotListeners listeners = new SpigotListeners(new ServerAccess(new CraftFacade(tcp)));
-        try {
-            listeners.bind();
-            assertTrue(tcp.channel().isActive());
-            listeners.close();
-            assertTrue(tcp.channel().isActive());
-            try (DatagramSocket replacement = new DatagramSocket(null)) {
-                replacement.bind(tcp.channel().localAddress());
-                assertEquals(
-                        ((InetSocketAddress) tcp.channel().localAddress()).getPort(),
-                        replacement.getLocalPort());
+        try (PortPair ports = reservePortPair(group)) {
+            ChannelFuture tcp = ports.tcp();
+            SpigotListeners listeners = new SpigotListeners(new ServerAccess(new CraftFacade(tcp)));
+            try {
+                ports.udp().close();
+                listeners.bind();
+                assertTrue(tcp.channel().isActive());
+                listeners.close();
+                assertTrue(tcp.channel().isActive());
+                try (DatagramSocket replacement = new DatagramSocket(null)) {
+                    replacement.bind(tcp.channel().localAddress());
+                    assertEquals(ports.udpPort(), replacement.getLocalPort());
+                }
+            } finally {
+                listeners.close();
             }
         } finally {
-            listeners.close();
-            tcp.channel().close().sync();
             group.shutdownGracefully(0, 5, TimeUnit.SECONDS).sync();
         }
     }
@@ -83,18 +86,61 @@ class SpigotListenersTest {
     @Test
     void bindFailureDoesNotCloseAnotherServicesSocket() throws Exception {
         NioEventLoopGroup group = new NioEventLoopGroup(1);
-        ChannelFuture tcp = tcpListener(group);
-        SpigotListeners listeners = new SpigotListeners(new ServerAccess(new CraftFacade(tcp)));
-        try (DatagramSocket occupied = new DatagramSocket(null)) {
-            occupied.bind(tcp.channel().localAddress());
-            assertThrows(Exception.class, listeners::bind);
-            listeners.close();
-            assertTrue(tcp.channel().isActive());
-            assertFalse(occupied.isClosed());
+        try (PortPair ports = reservePortPair(group)) {
+            ChannelFuture tcp = ports.tcp();
+            SpigotListeners listeners = new SpigotListeners(new ServerAccess(new CraftFacade(tcp)));
+            try {
+                assertThrows(Exception.class, listeners::bind);
+                listeners.close();
+                assertTrue(tcp.channel().isActive());
+                assertFalse(ports.udp().isClosed());
+            } finally {
+                listeners.close();
+            }
         } finally {
-            listeners.close();
-            tcp.channel().close().sync();
             group.shutdownGracefully(0, 5, TimeUnit.SECONDS).sync();
+        }
+    }
+
+    /**
+     * Reserves both protocols instead of assuming an ephemeral TCP port is also free for UDP.
+     *
+     * @param group fixture-owned Netty event loop
+     * @return simultaneously bound loopback sockets owned by the caller
+     * @throws SocketException if UDP cannot allocate an ephemeral loopback port
+     * @throws IllegalStateException if no pair can be reserved or TCP fails for another reason
+     */
+    private static PortPair reservePortPair(final NioEventLoopGroup group) throws SocketException {
+        for (int attempt = 0; attempt < 20; attempt++) {
+            DatagramSocket udp = new DatagramSocket(new InetSocketAddress("127.0.0.1", 0));
+            ChannelFuture tcp = tcpListener(group, udp.getLocalPort());
+            tcp.awaitUninterruptibly();
+            if (tcp.isSuccess()) {
+                return new PortPair(tcp, udp, udp.getLocalPort());
+            }
+            udp.close();
+            tcp.channel().close().syncUninterruptibly();
+            if (!(tcp.cause() instanceof BindException)) {
+                throw new IllegalStateException("Cannot reserve fixture TCP listener", tcp.cause());
+            }
+        }
+        throw new IllegalStateException("Cannot reserve a loopback TCP/UDP port pair");
+    }
+
+    /**
+     * Owns both protocols until the test deliberately hands the UDP reservation to the plugin.
+     *
+     * @param tcp bound native-style listener inspected by the plugin
+     * @param udp reservation retained for the intentional bind-conflict test
+     * @param udpPort reserved port retained after the UDP socket is closed
+     */
+    private record PortPair(ChannelFuture tcp, DatagramSocket udp, int udpPort)
+            implements AutoCloseable {
+        /** Releases both fixture sockets after successful assertions or an exception. */
+        @Override
+        public void close() {
+            udp.close();
+            tcp.channel().close().syncUninterruptibly();
         }
     }
 
@@ -102,11 +148,10 @@ class SpigotListenersTest {
      * Creates the same Netty acceptor structure inspected by production listener discovery.
      *
      * @param group fixture-owned I/O loop
-     * @return completed bind future retaining the native TCP channel
-     * @throws InterruptedException if socket registration is interrupted
+     * @param port port whose UDP socket is already reserved by this fixture
+     * @return pending bind future retaining the native TCP channel
      */
-    private static ChannelFuture tcpListener(final NioEventLoopGroup group)
-            throws InterruptedException {
+    private static ChannelFuture tcpListener(final NioEventLoopGroup group, final int port) {
         return new ServerBootstrap()
                 .group(group)
                 .channel(NioServerSocketChannel.class)
@@ -123,8 +168,7 @@ class SpigotListenersTest {
                                 channel.close();
                             }
                         })
-                .bind("127.0.0.1", 0)
-                .sync();
+                .bind("127.0.0.1", port);
     }
 
     /** Minimal CraftServer accessor contract around a fixture-owned native listener. */
