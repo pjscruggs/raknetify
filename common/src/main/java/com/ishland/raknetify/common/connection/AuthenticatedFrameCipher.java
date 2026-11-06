@@ -40,6 +40,9 @@ import javax.crypto.spec.GCMParameterSpec;
 
 /** Authenticates each frame independently so RakNet channels remain independently deliverable. */
 final class AuthenticatedFrameCipher {
+    /** Thread-safe entropy source reused across connections instead of reseeding each sender. */
+    private static final SecureRandom SESSION_RANDOM = new SecureRandom();
+
     /** Four-byte protocol marker followed by version one. Older CFB8 frames are never accepted. */
     private static final int MAGIC = 0x524e3245;
 
@@ -117,7 +120,7 @@ final class AuthenticatedFrameCipher {
         cipher = Cipher.getInstance("AES/GCM/NoPadding");
         if (encrypting) {
             salt = new byte[16];
-            new SecureRandom().nextBytes(salt);
+            SESSION_RANDOM.nextBytes(salt);
             trafficKey = FrameKeyDerivation.derive(secret, salt, clientSender);
         }
     }
