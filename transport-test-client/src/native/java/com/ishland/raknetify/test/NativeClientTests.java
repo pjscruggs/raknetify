@@ -37,6 +37,8 @@ public final class NativeClientTests {
     public static void run() {
         try {
             if (!ModPlatform.get().isClient()) throw new IllegalStateException("Client fixture loaded on server");
+            ThreadedChannelCloseWitness.verify();
+            System.out.println("PASS native threaded transport closure");
             GameplayOrderingTest.verify();
             SignedChatTest.verify();
             TransferNativeTest.verify();

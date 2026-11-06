@@ -134,12 +134,14 @@ public final class GracefulCloseHandler extends ChannelDuplexHandler {
     }
 
     /**
-     * Completes a waiting close if the peer or a lower transport handler closes independently.
+     * Completes application cleanup when the peer or a lower transport handler closes independently.
+     * Threaded RakNet channels forward socket inactivity without closing their own application future.
      * @param context inactive application channel
      */
     @Override
     public void channelInactive(ChannelHandlerContext context) {
         if (this.closingPromise != null) finishClose(context);
+        else context.close();
         context.fireChannelInactive();
     }
 

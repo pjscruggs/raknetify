@@ -82,6 +82,7 @@ assemble.dependsOn shadowJar
 
 sourceSets {
     transportTest {
+        java.srcDir rootProject.file('transport-tests/shared')
         java.srcDir rootProject.file('transport-test-client/src/shared/java')
         java.srcDir rootProject.file('transport-test-client/src/native/java')
         resources.srcDir rootProject.file('transport-test-client/src/native/resources')
