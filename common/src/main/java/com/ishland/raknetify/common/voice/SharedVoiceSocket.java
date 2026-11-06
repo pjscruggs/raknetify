@@ -34,10 +34,8 @@ import java.net.SocketException;
 
 /** Adapts an existing RakNet listener to Simple Voice Chat's supported server socket interface. */
 final class SharedVoiceSocket implements VoicechatSocket {
-    /** Listener selected once by the voice configuration's port and bind address. */
-    private volatile VoiceHub hub;
-    /** Attachment survives only until voice or the primary game listener closes. */
-    private volatile VoiceHub.Inbox inbox;
+    /** Publishes the listener and its inbox together so readers cannot observe half an open operation. */
+    private volatile Attachment attachment;
     /** Prevents close during startup from being undone by a late listener bind. */
     private volatile boolean closed;
     /** A voice socket instance may be opened only once, including after a failed open. */
@@ -57,8 +55,7 @@ final class SharedVoiceSocket implements VoicechatSocket {
         VoiceHub selected = VoiceTransport.await(port, address, () -> closed);
         synchronized (this) {
             if (closed) throw new SocketException("Voice socket closed during startup");
-            inbox = selected.attach();
-            hub = selected;
+            attachment = new Attachment(selected, selected.attach());
         }
     }
 
@@ -80,7 +77,7 @@ final class SharedVoiceSocket implements VoicechatSocket {
      */
     @Override
     public RawUdpPacket read() throws Exception {
-        VoiceHub.Received received = requireInbox().read();
+        VoiceHub.Received received = requireAttachment().inbox().read();
         return new Packet(received);
     }
 
@@ -93,21 +90,21 @@ final class SharedVoiceSocket implements VoicechatSocket {
      */
     @Override
     public void send(byte[] data, SocketAddress address) throws Exception {
-        VoiceHub.Inbox current = requireInbox();
+        Attachment current = requireAttachment();
         if (!(address instanceof InetSocketAddress inet) || inet.isUnresolved()) {
             throw new SocketException("Voice destination must be a resolved UDP address");
         }
-        hub.send(current, data, inet);
+        current.hub().send(current.inbox(), data, inet);
     }
 
     /**
      * Rejects reads and writes before successful startup instead of dereferencing a partial attachment.
-     * @return current open inbox
+     * @return atomically published listener and open inbox
      * @throws SocketException if no open attachment exists
      */
-    private VoiceHub.Inbox requireInbox() throws SocketException {
-        VoiceHub.Inbox current = inbox;
-        if (current == null || current.closed()) throw new SocketException("Voice socket is not open");
+    private Attachment requireAttachment() throws SocketException {
+        Attachment current = attachment;
+        if (current == null || current.inbox().closed()) throw new SocketException("Voice socket is not open");
         return current;
     }
 
@@ -117,16 +114,16 @@ final class SharedVoiceSocket implements VoicechatSocket {
      */
     @Override
     public int getLocalPort() {
-        VoiceHub current = hub;
-        SocketAddress local = current == null ? null : current.channel().localAddress();
-        return local instanceof InetSocketAddress inet ? inet.getPort() : -1;
+        Attachment current = attachment;
+        InetSocketAddress local = current == null ? null : current.hub().channel().localAddress();
+        return local == null ? -1 : local.getPort();
     }
 
     /** Detaches voice and wakes its reader while keeping every Minecraft connection open. */
     @Override
     public synchronized void close() {
         closed = true;
-        if (inbox != null) inbox.close();
+        if (attachment != null) attachment.inbox().close();
         VoiceTransport.wakeWaiters();
     }
 
@@ -136,8 +133,16 @@ final class SharedVoiceSocket implements VoicechatSocket {
      */
     @Override
     public boolean isClosed() {
-        VoiceHub.Inbox current = inbox;
-        return current == null || current.closed();
+        Attachment current = attachment;
+        return current == null || current.inbox().closed();
+    }
+
+    /**
+     * Keeps the reply listener and received-packet queue from different startup stages from mixing.
+     * @param hub listener owning the physical socket
+     * @param inbox exclusive voice subscription on that listener
+     */
+    private record Attachment(VoiceHub hub, VoiceHub.Inbox inbox) {
     }
 
     /**
