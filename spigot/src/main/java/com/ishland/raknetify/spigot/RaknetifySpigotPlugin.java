@@ -25,6 +25,7 @@
 package com.ishland.raknetify.spigot;
 
 import com.ishland.raknetify.common.data.ProtocolMultiChannelMappings;
+
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.logging.Level;
@@ -34,15 +35,23 @@ public final class RaknetifySpigotPlugin extends JavaPlugin {
     /** Listener and event-loop owner, absent until the server finishes enabling plugins. */
     private SpigotListeners listeners;
 
-    /** Defers binding until the native TCP listener exists and the server can report its game version. */
+    /**
+     * Defers binding until the native TCP listener exists and the server can report its game
+     * version.
+     */
     @Override
     public void onEnable() {
         ProtocolMultiChannelMappings.init();
-        if (getServer().getPluginManager().isPluginEnabled("voicechat")) SpigotVoice.register(this);
+        if (getServer().getPluginManager().isPluginEnabled("voicechat")) {
+            SpigotVoice.register(this);
+        }
         getServer().getScheduler().runTask(this, this::startListeners);
     }
 
-    /** Starts the UDP transport or disables this plugin after closing every partially opened listener. */
+    /**
+     * Starts the UDP transport or disables this plugin after closing every partially opened
+     * listener.
+     */
     private void startListeners() {
         try {
             ServerAccess access = new ServerAccess(getServer());
@@ -55,7 +64,10 @@ public final class RaknetifySpigotPlugin extends JavaPlugin {
         }
     }
 
-    /** Closes only this plugin's UDP channels and event loops, including after a partial startup failure. */
+    /**
+     * Closes only this plugin's UDP channels and event loops, including after a partial startup
+     * failure.
+     */
     @Override
     public void onDisable() {
         if (listeners != null) {

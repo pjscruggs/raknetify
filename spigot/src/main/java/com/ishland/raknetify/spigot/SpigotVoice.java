@@ -25,23 +25,30 @@
 package com.ishland.raknetify.spigot;
 
 import com.ishland.raknetify.common.voice.VoicePlugin;
+
 import de.maxhenkel.voicechat.api.BukkitVoicechatService;
+
 import org.bukkit.plugin.java.JavaPlugin;
 
 /** Loads the optional voice API only after Bukkit confirms Simple Voice Chat is installed. */
 final class SpigotVoice {
     /** Prevents construction of the optional service registration utility. */
-    private SpigotVoice() {
-    }
+    private SpigotVoice() {}
 
     /**
      * Registers before Simple Voice Chat starts its deferred server thread.
+     *
      * @param plugin enabled Raknetify2 plugin with an optional dependency on voicechat
-     * @throws IllegalStateException if the installed voice plugin does not provide its expected API service
+     * @throws IllegalStateException if the installed voice plugin does not provide its expected API
+     *     service
      */
-    static void register(JavaPlugin plugin) {
-        BukkitVoicechatService service = plugin.getServer().getServicesManager().load(BukkitVoicechatService.class);
-        if (service == null) throw new IllegalStateException("Simple Voice Chat did not register its Bukkit API service");
+    static void register(final JavaPlugin plugin) {
+        BukkitVoicechatService service =
+                plugin.getServer().getServicesManager().load(BukkitVoicechatService.class);
+        if (service == null) {
+            throw new IllegalStateException(
+                    "Simple Voice Chat did not register its Bukkit API service");
+        }
         service.registerPlugin(new VoicePlugin());
     }
 }

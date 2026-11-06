@@ -24,37 +24,48 @@
 
 package com.ishland.raknetify.spigot;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import com.ishland.raknetify.common.Constants;
 import com.ishland.raknetify.common.connection.MultiChannelingStreamingCompression;
 import com.ishland.raknetify.common.connection.MultiChannellingEncryption;
 import com.ishland.raknetify.common.connection.RakNetSimpleMultiChannelCodec;
 import com.ishland.raknetify.common.data.ProtocolMultiChannelMappings;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.embedded.EmbeddedChannel;
+
 import network.ycc.raknet.frame.FrameData;
+
 import org.junit.jupiter.api.Test;
+
+import java.security.PrivateKey;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
-import java.security.PrivateKey;
 
-import static org.junit.jupiter.api.Assertions.*;
-
-/** Exercises native-handler transitions, encrypted frame bytes, and ownership on rejected logins. */
+/**
+ * Exercises native-handler transitions, encrypted frame bytes, and ownership on rejected logins.
+ */
 class SpigotCipherStateTest {
     /** Deterministic fixture key with no relationship to a Minecraft account. */
     private static final SecretKey KEY = new SecretKeySpec(new byte[16], "AES");
 
-    /** A status response sharing the play bundle delimiter's ID must reach the client instead of being discarded. */
+    /**
+     * A status response sharing the play bundle delimiter's ID must reach the client instead of
+     * being discarded.
+     */
     @Test
     void statusPacketNeverUsesPlayDiscardRules() {
         SpigotCipherState state = new SpigotCipherState(null);
         var mapping = ProtocolMultiChannelMappings.INSTANCE.mappings.get(777);
-        var classifier = new RakNetSimpleMultiChannelCodec.PacketIdBasedOverrideHandler(mapping.s2c, "test");
-        SpigotPacketHandler packets = new SpigotPacketHandler(state, new SpigotTransportGuard(state), classifier);
+        var classifier =
+                new RakNetSimpleMultiChannelCodec.PacketIdBasedOverrideHandler(mapping.s2c, "test");
+        SpigotPacketHandler packets =
+                new SpigotPacketHandler(state, new SpigotTransportGuard(state), classifier);
         ByteBuf payload = Unpooled.buffer().writeByte(0).writeByte(2).writeByte('{').writeByte('}');
         try {
             assertEquals(Integer.MIN_VALUE, classifier.getChannelOverride(payload, true));
@@ -67,6 +78,7 @@ class SpigotCipherStateTest {
 
     /**
      * A recovered candidate secret cannot enable encryption before native challenge validation.
+     *
      * @throws Exception if fixture key extraction or cipher initialization fails
      */
     @Test
@@ -83,7 +95,9 @@ class SpigotCipherStateTest {
     }
 
     /**
-     * Native cipher cleanup runs once and replacement frames preserve both plaintext and routing metadata.
+     * Native cipher cleanup runs once and replacement frames preserve both plaintext and routing
+     * metadata.
+     *
      * @throws Exception if fixture key extraction or cipher initialization fails
      */
     @Test
@@ -100,7 +114,7 @@ class SpigotCipherStateTest {
             assertEquals(1, inbound.removals);
             assertEquals(1, outbound.removals);
             assertNull(channel.pipeline().get("encrypt"));
-            ByteBuf bytes = Unpooled.wrappedBuffer(new byte[]{4, 8, 15, 16, 23, 42});
+            ByteBuf bytes = Unpooled.wrappedBuffer(new byte[] {4, 8, 15, 16, 23, 42});
             FrameData original = FrameData.create(channel.alloc(), 0xfd, bytes);
             bytes.release();
             original.setOrderChannel(3);
@@ -115,7 +129,7 @@ class SpigotCipherStateTest {
                 assertEquals(0xfd, data.readUnsignedByte());
                 byte[] actual = new byte[data.readableBytes()];
                 data.readBytes(actual);
-                assertArrayEquals(new byte[]{4, 8, 15, 16, 23, 42}, actual);
+                assertArrayEquals(new byte[] {4, 8, 15, 16, 23, 42}, actual);
                 assertEquals(3, decoded.getOrderChannel());
             } finally {
                 data.release();
@@ -131,6 +145,7 @@ class SpigotCipherStateTest {
 
     /**
      * An incomplete native transition fails before installing an asymmetric transport cipher.
+     *
      * @throws Exception if fixture key extraction or cipher initialization fails
      */
     @Test
@@ -149,6 +164,7 @@ class SpigotCipherStateTest {
 
     /**
      * A repeated key packet cannot replace a pending shared secret before native processing.
+     *
      * @throws Exception if fixture key extraction or cipher initialization fails
      */
     @Test
@@ -158,7 +174,10 @@ class SpigotCipherStateTest {
         assertThrows(IllegalStateException.class, () -> state.capture(new KeyResponse()));
     }
 
-    /** Unexpected encryption closes the connection and releases the frame that could not be safely decrypted. */
+    /**
+     * Unexpected encryption closes the connection and releases the frame that could not be safely
+     * decrypted.
+     */
     @Test
     void invalidTransitionReleasesIncomingFrame() {
         EmbeddedChannel channel = pipeline();
@@ -177,7 +196,9 @@ class SpigotCipherStateTest {
     }
 
     /**
-     * Redundant native compressors are removed only after a negotiated streaming capability was observed.
+     * Redundant native compressors are removed only after a negotiated streaming capability was
+     * observed.
+     *
      * @throws Exception if fixture key extraction or cipher initialization fails
      */
     @Test
@@ -191,8 +212,11 @@ class SpigotCipherStateTest {
             assertFalse(guard.suppressCompression(channel.pipeline()));
             guard.refresh(channel.pipeline());
             assertEquals(0, compressor.removals);
-            channel.pipeline().replace(MultiChannelingStreamingCompression.NAME,
-                    MultiChannelingStreamingCompression.NAME, new NegotiatedCompression());
+            channel.pipeline()
+                    .replace(
+                            MultiChannelingStreamingCompression.NAME,
+                            MultiChannelingStreamingCompression.NAME,
+                            new NegotiatedCompression());
             assertTrue(guard.suppressCompression(channel.pipeline()));
             guard.refresh(channel.pipeline());
             assertEquals(1, compressor.removals);
@@ -204,47 +228,66 @@ class SpigotCipherStateTest {
 
     /**
      * Creates a pipeline anchor without starting streaming negotiation or transport timers.
+     *
      * @return owned embedded channel that each test must close
      */
     private static EmbeddedChannel pipeline() {
         EmbeddedChannel channel = new EmbeddedChannel();
-        channel.pipeline().addLast(MultiChannelingStreamingCompression.NAME, new ChannelDuplexHandler());
+        channel.pipeline()
+                .addLast(MultiChannelingStreamingCompression.NAME, new ChannelDuplexHandler());
         return channel;
     }
 
     /** Public fixture matching only the native key response's shared-secret accessor contract. */
     public static final class KeyResponse {
         /**
-         * Supplies a known test secret while leaving native challenge acceptance to the separate handler markers.
+         * Supplies a known test secret while leaving native challenge acceptance to the separate
+         * handler markers.
+         *
          * @param ignored unused fixture server key
          * @return deterministic AES secret
          */
-        public SecretKey getSecretKey(PrivateKey ignored) { return KEY; }
+        public SecretKey getSecretKey(final PrivateKey ignored) {
+            return KEY;
+        }
     }
 
     /** Counts native resource cleanup calls when transport handlers are removed. */
     private static final class RemovalWitness extends ChannelDuplexHandler {
         /** Number of times this handler's native cleanup would have run. */
         private int removals;
+
         /**
          * Records cleanup without owning an actual native allocation.
+         *
          * @param context removed handler context
          */
         @Override
-        public void handlerRemoved(ChannelHandlerContext context) { removals++; }
+        public void handlerRemoved(final ChannelHandlerContext context) {
+            removals++;
+        }
     }
 
-    /** Models a completed peer negotiation without requiring UDP scheduling in the ownership regression. */
+    /**
+     * Models a completed peer negotiation without requiring UDP scheduling in the ownership
+     * regression.
+     */
     private static final class NegotiatedCompression extends MultiChannelingStreamingCompression {
         /** Creates the same frame-ID contract used by production streaming compression. */
         private NegotiatedCompression() {
-            super(Constants.RAKNET_GAME_PACKET_ID, Constants.RAKNET_STREAMING_COMPRESSION_PACKET_ID);
+            super(
+                    Constants.RAKNET_GAME_PACKET_ID,
+                    Constants.RAKNET_STREAMING_COMPRESSION_PACKET_ID);
         }
+
         /**
          * Reports the completed negotiation modeled by this fixture.
+         *
          * @return true for the established streaming capability
          */
         @Override
-        public boolean isActive() { return true; }
+        public boolean isActive() {
+            return true;
+        }
     }
 }

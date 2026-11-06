@@ -25,6 +25,7 @@
 package com.ishland.raknetify.spigot;
 
 import com.ishland.raknetify.common.connection.MultiChannelingStreamingCompression;
+
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
@@ -34,21 +35,30 @@ import io.netty.util.ReferenceCountUtil;
 final class SpigotTransportGuard extends ChannelDuplexHandler {
     /** Encryption state shared with the decoded-packet observer. */
     private final SpigotCipherState cipher;
-    /** True only after the server's compression packet was deliberately replaced by negotiated streaming compression. */
+
+    /**
+     * True only after the server's compression packet was deliberately replaced by negotiated
+     * streaming compression.
+     */
     private boolean streamingOnly;
 
     /**
      * Links inbound transport checks to the same login state used by outbound packets.
+     *
      * @param cipher connection-local encryption adapter
      */
-    SpigotTransportGuard(SpigotCipherState cipher) { this.cipher = cipher; }
+    SpigotTransportGuard(final SpigotCipherState cipher) {
+        this.cipher = cipher;
+    }
 
     /**
-     * Records whether the peer has already negotiated streaming compression before suppressing a setup packet.
+     * Records whether the peer has already negotiated streaming compression before suppressing a
+     * setup packet.
+     *
      * @param pipeline current connection pipeline
      * @return true when vanilla packet compression must be disabled for this connection
      */
-    boolean suppressCompression(ChannelPipeline pipeline) {
+    boolean suppressCompression(final ChannelPipeline pipeline) {
         var compression = pipeline.get(MultiChannelingStreamingCompression.class);
         streamingOnly = compression != null && compression.isActive();
         return streamingOnly;
@@ -56,10 +66,11 @@ final class SpigotTransportGuard extends ChannelDuplexHandler {
 
     /**
      * Reconciles handlers installed by native login callbacks before the next packet crosses them.
+     *
      * @param pipeline pipeline owned by the current channel event loop
      * @throws Exception if a native encryption transition is invalid
      */
-    void refresh(ChannelPipeline pipeline) throws Exception {
+    void refresh(final ChannelPipeline pipeline) throws Exception {
         cipher.refresh(pipeline);
         if (streamingOnly) {
             SpigotConnection.remove(pipeline, "compress");
@@ -69,12 +80,13 @@ final class SpigotTransportGuard extends ChannelDuplexHandler {
 
     /**
      * Refreshes dynamic login handlers before forwarding the next transport frame.
+     *
      * @param ctx context before streaming compression and Minecraft decoding
      * @param msg incoming transport frame or unrelated event
      * @throws Exception if handler reconciliation or downstream decoding fails
      */
     @Override
-    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+    public void channelRead(final ChannelHandlerContext ctx, final Object msg) throws Exception {
         try {
             refresh(ctx.pipeline());
         } catch (Exception exception) {

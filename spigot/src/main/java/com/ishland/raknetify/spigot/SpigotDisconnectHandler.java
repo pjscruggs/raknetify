@@ -28,43 +28,67 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
 
-/** Drains terminal disconnect packets before invoking native callbacks that may wait for channel closure. */
+/**
+ * Drains terminal disconnect packets before invoking native callbacks that may wait for channel
+ * closure.
+ */
 final class SpigotDisconnectHandler extends ChannelOutboundHandlerAdapter {
     /**
-     * Keeps ordinary packet promises unchanged and gives terminal packets an asynchronous close sequence.
+     * Keeps ordinary packet promises unchanged and gives terminal packets an asynchronous close
+     * sequence.
+     *
      * @param context outbound context immediately before the native packet listener
      * @param message native packet to encode and send
      * @param promise native send callback, completed after transport closure for disconnect packets
      */
     @Override
-    public void write(ChannelHandlerContext context, Object message, ChannelPromise promise) {
-        if (isDisconnect(message.getClass().getName())) writeAndClose(context, message, promise);
-        else context.write(message, promise);
+    public void write(
+            final ChannelHandlerContext context,
+            final Object message,
+            final ChannelPromise promise) {
+        if (isDisconnect(message.getClass().getName())) {
+            writeAndClose(context, message, promise);
+        } else {
+            context.write(message, promise);
+        }
     }
 
     /**
-     * Recognizes both native login and common-protocol terminal packets without linking Minecraft classes.
+     * Recognizes both native login and common-protocol terminal packets without linking Minecraft
+     * classes.
+     *
      * @param name complete native packet class name
      * @return true only for a packet that ends this connection
      */
-    static boolean isDisconnect(String name) {
-        return name.equals("net.minecraft.network.protocol.login.ClientboundLoginDisconnectPacket")
-                || name.equals("net.minecraft.network.protocol.common.ClientboundDisconnectPacket");
+    static boolean isDisconnect(final String name) {
+        return "net.minecraft.network.protocol.login.ClientboundLoginDisconnectPacket".equals(name)
+                || "net.minecraft.network.protocol.common.ClientboundDisconnectPacket".equals(name);
     }
 
     /**
-     * Lets the transport drain the reason while keeping a blocking native close callback off the live event loop.
-     * The lower graceful-close handler tracks the separate write promise and bounds acknowledgement waiting.
+     * Lets the transport drain the reason while keeping a blocking native close callback off the
+     * live event loop. The lower graceful-close handler tracks the separate write promise and
+     * bounds acknowledgement waiting.
+     *
      * @param context outbound context before transport encoding and graceful close
      * @param message terminal packet whose ownership passes to the pipeline
      * @param promise original send completion, retaining the actual packet write outcome
      */
-    static void writeAndClose(ChannelHandlerContext context, Object message, ChannelPromise promise) {
+    static void writeAndClose(
+            final ChannelHandlerContext context,
+            final Object message,
+            final ChannelPromise promise) {
         ChannelPromise written = context.newPromise();
-        written.addListener(sent -> context.channel().closeFuture().addListener(closed -> {
-            if (sent.isSuccess()) promise.trySuccess();
-            else promise.tryFailure(sent.cause());
-        }));
+        written.addListener(sent ->
+                context.channel()
+                        .closeFuture()
+                        .addListener(closed -> {
+                            if (sent.isSuccess()) {
+                                promise.trySuccess();
+                            } else {
+                                promise.tryFailure(sent.cause());
+                            }
+                        }));
         context.writeAndFlush(message, written);
         context.close();
     }

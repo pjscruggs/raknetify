@@ -42,50 +42,66 @@ import java.util.Map;
 final class ServerAccess {
     /** Server-owned login key, used only to adapt the already negotiated encryption state. */
     private final PrivateKey privateKey;
-    /** Snapshot of bound TCP listeners whose original child initializers will also handle UDP clients. */
+
+    /**
+     * Snapshot of bound TCP listeners whose original child initializers will also handle UDP
+     * clients.
+     */
     private final List<Channel> listeners;
 
     /**
      * Validates the modern server layout before any public UDP socket is opened.
+     *
      * @param craftServer Bukkit server exposing its native server through getServer
      * @throws ReflectiveOperationException when the running server has an unsupported layout
      * @throws IllegalArgumentException if the actual Minecraft version has not been tested
      */
-    ServerAccess(Object craftServer) throws ReflectiveOperationException {
+    ServerAccess(final Object craftServer) throws ReflectiveOperationException {
         Object server = invoke(craftServer, "getServer");
         if (!"26.3".equals(invoke(server, "getServerVersion"))) {
-            throw new IllegalArgumentException("This Raknetify2 Spigot build supports Minecraft 26.3");
+            throw new IllegalArgumentException(
+                    "This Raknetify2 Spigot build supports Minecraft 26.3");
         }
         privateKey = ((KeyPair) invoke(server, "getKeyPair")).getPrivate();
         Object connection = invoke(server, "getConnection");
         Object channels = field(connection, "channels");
         listeners = new ArrayList<>();
         synchronized (channels) {
-            for (Object item : (List<?>) channels) listeners.add(((ChannelFuture) item).channel());
+            for (Object item : (List<?>) channels) {
+                listeners.add(((ChannelFuture) item).channel());
+            }
         }
     }
 
     /**
      * Returns the login key without exposing it to configuration or logging.
+     *
      * @return private key owned by the running server
      */
-    PrivateKey privateKey() { return privateKey; }
+    PrivateKey privateKey() {
+        return privateKey;
+    }
 
     /**
      * Returns the listener snapshot taken after server startup.
+     *
      * @return immutable list of existing TCP channels
      */
-    List<Channel> listeners() { return List.copyOf(listeners); }
+    List<Channel> listeners() {
+        return List.copyOf(listeners);
+    }
 
     /**
      * Finds the actual bootstrap acceptor rather than guessing a pipeline position.
+     *
      * @param listener initialized TCP listener
      * @return handler retaining the original child initializer and attributes
      * @throws IllegalStateException if no supported Netty acceptor is installed
      */
-    static ChannelHandler acceptor(Channel listener) {
+    static ChannelHandler acceptor(final Channel listener) {
         for (Map.Entry<String, ChannelHandler> entry : listener.pipeline()) {
-            if (entry.getValue().getClass().getName().equals("io.netty.bootstrap.ServerBootstrap$ServerBootstrapAcceptor")) {
+            if ("io.netty.bootstrap.ServerBootstrap$ServerBootstrapAcceptor"
+                    .equals(entry.getValue().getClass().getName())) {
                 return entry.getValue();
             }
         }
@@ -93,12 +109,15 @@ final class ServerAccess {
     }
 
     /**
-     * Copies bootstrap attributes and invokes the original server initializer on the accepted channel.
+     * Copies bootstrap attributes and invokes the original server initializer on the accepted
+     * channel.
+     *
      * @param acceptor TCP acceptor supplying the server's child configuration
      * @param channel new RakNet application channel
      * @throws ReflectiveOperationException if Netty or the native initializer rejects this channel
      */
-    static void initialize(ChannelHandler acceptor, Channel channel) throws ReflectiveOperationException {
+    static void initialize(final ChannelHandler acceptor, final Channel channel)
+            throws ReflectiveOperationException {
         for (Object item : (Object[]) field(acceptor, "childAttrs")) {
             Map.Entry<?, ?> entry = (Map.Entry<?, ?>) item;
             AttributeKey<?> key = (AttributeKey<?>) entry.getKey();
@@ -112,23 +131,27 @@ final class ServerAccess {
 
     /**
      * Calls an explicit public no-argument method on a supported server object.
+     *
      * @param target instance owning the method
      * @param name verified modern method name
      * @return value returned by the server
      * @throws ReflectiveOperationException if the method is absent or invocation fails
      */
-    static Object invoke(Object target, String name) throws ReflectiveOperationException {
+    static Object invoke(final Object target, final String name)
+            throws ReflectiveOperationException {
         return target.getClass().getMethod(name).invoke(target);
     }
 
     /**
      * Reads one declared implementation field after making its access explicit.
+     *
      * @param target instance whose concrete class declares the field
      * @param name verified field name
      * @return field value without copying mutable server state
      * @throws ReflectiveOperationException if the expected field is unavailable
      */
-    private static Object field(Object target, String name) throws ReflectiveOperationException {
+    private static Object field(final Object target, final String name)
+            throws ReflectiveOperationException {
         Field field = target.getClass().getDeclaredField(name);
         field.setAccessible(true);
         return field.get(target);
