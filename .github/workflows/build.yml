@@ -60,6 +60,12 @@ jobs:
           --work-dir "$RUNNER_TEMP/raknetify-smoke"
           --java-17 "${{ steps.java17.outputs.path }}/bin/java"
           --java-21 "${{ steps.java21.outputs.path }}/bin/java"
+      - name: Velocity and FastMOTD compatibility
+        run: >-
+          python3 .github/scripts/proxy-smoke.py
+          --jar velocity/build/libs/*-all.jar
+          --probe-dir common/build/transport-probe
+          --work-dir "$RUNNER_TEMP/raknetify-smoke/fastmotd"
       - name: Polymer shared-port compatibility
         run: >-
           python3 .github/scripts/server-smoke.py --discard-runtime

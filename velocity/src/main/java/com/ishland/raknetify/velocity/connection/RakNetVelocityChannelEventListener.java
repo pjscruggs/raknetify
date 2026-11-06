@@ -25,14 +25,18 @@ import com.ishland.raknetify.common.connection.MultiChannelingStreamingCompressi
 import com.ishland.raknetify.common.connection.MultiChannellingEncryption;
 import com.ishland.raknetify.common.connection.RakNetSimpleMultiChannelCodec;
 import com.ishland.raknetify.common.connection.SynchronizationLayer;
+import com.ishland.raknetify.common.util.MathUtil;
 import com.ishland.raknetify.velocity.RaknetifyVelocityPlugin;
 import com.velocitypowered.proxy.VelocityServer;
 import com.velocitypowered.proxy.connection.MinecraftConnection;
+import com.velocitypowered.proxy.connection.client.HandshakeSessionHandler;
 import com.velocitypowered.proxy.crypto.EncryptionUtils;
 import com.velocitypowered.proxy.network.Connections;
 import com.velocitypowered.proxy.protocol.VelocityConnectionEvent;
+import com.velocitypowered.proxy.protocol.StateRegistry;
 import com.velocitypowered.proxy.protocol.packet.AvailableCommandsPacket;
 import com.velocitypowered.proxy.protocol.packet.EncryptionResponsePacket;
+import com.velocitypowered.proxy.protocol.packet.HandshakePacket;
 import com.velocitypowered.proxy.protocol.packet.JoinGamePacket;
 import com.velocitypowered.proxy.protocol.packet.RespawnPacket;
 import com.velocitypowered.proxy.protocol.packet.SetCompressionPacket;
@@ -41,9 +45,13 @@ import com.velocitypowered.proxy.protocol.packet.config.StartUpdatePacket;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
+import io.netty.buffer.ByteBuf;
+import io.netty.handler.codec.MessageToMessageEncoder;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
+import java.lang.reflect.Field;
+import java.util.List;
 
 /**
  * Adapts Velocity login, configuration, and world transitions to RakNet frame processing.
@@ -100,6 +108,9 @@ public class RakNetVelocityChannelEventListener extends ChannelDuplexHandler {
      */
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+        if (msg instanceof HandshakePacket packet) {
+            adaptFastMOTD(ctx, packet);
+        }
         if (msg instanceof EncryptionResponsePacket packet) {
             try {
                 byte[] secret = EncryptionUtils.decryptRsa(((VelocityServer) RaknetifyVelocityPlugin.PROXY).getServerKeyPair(), packet.getSharedSecret());
@@ -109,6 +120,64 @@ public class RakNetVelocityChannelEventListener extends ChannelDuplexHandler {
             }
         }
         super.channelRead(ctx, msg);
+    }
+
+    /**
+     * Uses Velocity's normal status encoder when FastMOTD would otherwise send preframed TCP bytes.
+     * FastMOTD's ProxyPingEvent listener still supplies its configured MOTD and player sample.
+     * Login still uses FastMOTD's admission handler, with framing corrected for its prepared rejection.
+     *
+     * @param ctx RakNet connection whose status handshake has not yet reached the session handler
+     * @param packet intention packet identifying status or login
+     * @throws ReflectiveOperationException if the detected FastMOTD hook no longer exposes its delegate
+     * @throws IllegalStateException if the hook contains an unexpected delegate type
+     */
+    private static void adaptFastMOTD(ChannelHandlerContext ctx, HandshakePacket packet) throws ReflectiveOperationException {
+        MinecraftConnection connection = ctx.pipeline().get(MinecraftConnection.class);
+        if (connection == null) return;
+        Object handler = connection.getActiveSessionHandler();
+        if (handler == null || !handler.getClass().getName().equals("net.elytrium.fastmotd.injection.HandshakeSessionHandlerHook")) return;
+        if (packet.getNextStatus() == StateRegistry.LOGIN_ID) {
+            ctx.pipeline().addBefore(Connections.MINECRAFT_ENCODER, "raknetify-fastmotd-disconnect", new PreparedDisconnectEncoder());
+            return;
+        }
+        if (packet.getNextStatus() != StateRegistry.STATUS_ID) return;
+        Field original = handler.getClass().getDeclaredField("original");
+        original.setAccessible(true);
+        Object delegate = original.get(handler);
+        if (!(delegate instanceof HandshakeSessionHandler handshake)) {
+            throw new IllegalStateException("FastMOTD status handler has an unexpected delegate");
+        }
+        connection.setActiveSessionHandler(connection.getState(), handshake);
+    }
+
+    /** Removes TCP framing only from FastMOTD's prepared maintenance disconnect packet. */
+    private static final class PreparedDisconnectEncoder extends MessageToMessageEncoder<ByteBuf> {
+
+        /**
+         * Keeps ordinary login traffic unchanged unless FastMOTD installed its prepared-packet encoder.
+         * A retained slice gives RakNet ownership without modifying FastMOTD's cached buffer indices.
+         *
+         * @param ctx outbound context before Velocity's Minecraft packet encoder
+         * @param buffer encoded login bytes, released by MessageToMessageEncoder
+         * @param output packet bodies passed to RakNet without an outer TCP length
+         * @throws IllegalArgumentException if the prepared payload is not one complete disconnect packet
+         */
+        @Override
+        protected void encode(ChannelHandlerContext ctx, ByteBuf buffer, List<Object> output) {
+            Object prepared = ctx.pipeline().get("fastprepare-encoder");
+            if (prepared == null || !prepared.getClass().getName().equals(
+                    "net.elytrium.fastmotd.thirdparty.fastprepare.handler.PreparedPacketEncoder")) {
+                output.add(buffer.retain());
+                return;
+            }
+            ByteBuf view = buffer.duplicate();
+            int length = MathUtil.readVarInt(view);
+            if (length != view.readableBytes() || length < 2 || view.getUnsignedByte(view.readerIndex()) != 0) {
+                throw new IllegalArgumentException("Unexpected FastMOTD prepared disconnect framing");
+            }
+            output.add(view.readRetainedSlice(length));
+        }
     }
 
     /**
