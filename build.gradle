@@ -98,13 +98,13 @@ afterEvaluate {
 }
 
 /**
- * Derives the development build number from the nearest Git tag and marks uncommitted changes.
+ * Counts commits after the fixed version anchor so publishing a release tag cannot reset build numbering.
  *
- * @return commit distance from the tag, followed by a dirty marker when needed
+ * @return commit distance from the configured anchor, followed by a dirty marker when needed
  */
 String getVersionSuffix() {
     def stdout = providers.exec {
-        commandLine 'git', 'describe', '--tags', '--dirty', '--broken'
+        commandLine 'git', 'describe', '--tags', '--match', project.version_base_tag, '--dirty', '--broken'
     }.standardOutput.asText.get()
 	stdout = stdout.toString().strip()
 	def suffix = ""
