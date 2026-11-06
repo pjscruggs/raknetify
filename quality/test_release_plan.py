@@ -1,5 +1,6 @@
 """Exercise publication guards against untrusted runs, changed bytes and stale loader metadata."""
 import hashlib
+import io
 import importlib.util
 import json
 from pathlib import Path
@@ -56,6 +57,25 @@ class ReleasePlanTests(unittest.TestCase):
     def test_accepts_successful_main(self):
         """Permit the exact provenance expected from the release-gating build workflow."""
         self.assertEqual('a' * 40, self.guard.validate_run(self.trusted_run(), 'pjscruggs/raknetify2'))
+
+    def test_rejects_minimized_nested_entrypoint(self):
+        """Check both positive and missing-class cases inside a runtime nested in the universal Fabric JAR."""
+        for present in (True, False):
+            nested = io.BytesIO()
+            with zipfile.ZipFile(nested, 'w') as runtime:
+                runtime.writestr('fabric.mod.json', json.dumps({'entrypoints': {'voicechat': ['example.Voice']}}))
+                if present:
+                    runtime.writestr('example/Voice.class', b'fixture')
+            outer = io.BytesIO()
+            with zipfile.ZipFile(outer, 'w') as universal:
+                universal.writestr('fabric.mod.json', json.dumps({'jars': [{'file': 'META-INF/jars/runtime.jar'}]}))
+                universal.writestr('META-INF/jars/runtime.jar', nested.getvalue())
+            with zipfile.ZipFile(outer) as artifact:
+                if present:
+                    self.guard.verify_fabric_entrypoints(artifact)
+                else:
+                    with self.assertRaisesRegex(AssertionError, 'Missing Fabric entrypoint'):
+                        self.guard.verify_fabric_entrypoints(artifact)
 
     def test_rejects_untrusted_or_incomplete_runs(self):
         """Reject forks, PRs, other workflows, non-main branches, failures and unfinished builds independently."""

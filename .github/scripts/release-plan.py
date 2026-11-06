@@ -1,6 +1,7 @@
 """Validate release provenance and artifact integrity before publication credentials become available."""
 import argparse
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -55,6 +56,7 @@ def verify_mod_version(path, loader, version):
         if loader == 'fabric':
             metadata = json.loads(archive.read('fabric.mod.json'))
             assert metadata['id'] == 'raknetify', 'Wrong Fabric mod'
+            verify_fabric_entrypoints(archive)
         elif loader == 'spigot':
             metadata = spigot_metadata(archive)
         else:
@@ -63,6 +65,19 @@ def verify_mod_version(path, loader, version):
                             if item['modId'] == 'raknetify')
         assert metadata['version'] == version, 'JAR metadata version does not match the release'
         assert not any(name.startswith('com/ishland/raknetify/test/') for name in archive.namelist()), 'Test fixture in release'
+
+
+def verify_fabric_entrypoints(archive):
+    """Reject minimization that removes metadata-discovered entrypoints from either nested Fabric runtime."""
+    metadata = json.loads(archive.read('fabric.mod.json'))
+    for entries in metadata.get('entrypoints', {}).values():
+        for entry in entries:
+            name = entry if isinstance(entry, str) else entry['value']
+            path = name.split('::')[0].replace('.', '/') + '.class'
+            assert path in archive.namelist(), 'Missing Fabric entrypoint: ' + name
+    for nested in metadata.get('jars', []):
+        with zipfile.ZipFile(io.BytesIO(archive.read(nested['file']))) as dependency:
+            verify_fabric_entrypoints(dependency)
 
 
 def spigot_metadata(archive):
