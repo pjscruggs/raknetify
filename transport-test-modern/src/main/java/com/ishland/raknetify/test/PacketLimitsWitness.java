@@ -25,10 +25,11 @@
 package com.ishland.raknetify.test;
 
 import io.netty.buffer.Unpooled;
+
 import net.fabricmc.api.ModInitializer;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.CompressionEncoder;
 import net.minecraft.network.CompressionDecoder;
+import net.minecraft.network.CompressionEncoder;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.Varint21FrameDecoder;
 
 /** Checks PacketFixer's transformed native limits without changing any production codec. */
@@ -37,17 +38,22 @@ public final class PacketLimitsWitness implements ModInitializer {
     /**
      * Verifies larger strings and compressed packets only when the runner explicitly requests them.
      *
-     * @throws IllegalStateException if native codecs reject or corrupt a value above vanilla's limit
+     * @throws IllegalStateException if native codecs reject or corrupt a value above vanilla's
+     *     limit
      */
     @Override
     public void onInitialize() {
-        if (!Boolean.getBoolean("raknetify.test.packetLimits")) return;
+        if (!Boolean.getBoolean("raknetify.test.packetLimits")) {
+            return;
+        }
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
         try {
             NativeSplitterWitness.verify(Varint21FrameDecoder.class);
             String expected = "p".repeat(40000);
             buffer.writeUtf(expected);
-            if (!expected.equals(buffer.readUtf())) throw new IllegalStateException("Native string corruption");
+            if (!expected.equals(buffer.readUtf())) {
+                throw new IllegalStateException("Native string corruption");
+            }
             NativeCompressionWitness.verify(CompressionEncoder.class, CompressionDecoder.class);
         } catch (ReflectiveOperationException failure) {
             throw new IllegalStateException("Unsupported native compression constructor", failure);
