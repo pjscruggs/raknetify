@@ -24,6 +24,8 @@ class NativeDownloadTests(unittest.TestCase):
         self.digest = hashlib.sha1(self.payload).hexdigest()
         self.requests = 0
         self.failures = 0
+        self.connections = set()
+        self.request_lock = threading.Lock()
         self.server = ThreadingHTTPServer(('127.0.0.1', 0), self.handler())
         self.worker = threading.Thread(target=self.server.serve_forever)
         self.worker.start()
@@ -37,13 +39,20 @@ class NativeDownloadTests(unittest.TestCase):
         class Handler(BaseHTTPRequestHandler):
             """Serve deterministic successes or retryable failures without reaching a public dependency host."""
 
+            protocol_version = 'HTTP/1.1'
+
             def do_GET(self):
                 """Return one bounded response and count every actual network attempt."""
-                test.requests += 1
-                failed = test.requests <= test.failures
+                with test.request_lock:
+                    test.requests += 1
+                    test.connections.add(self.client_address)
+                    failed = test.requests <= test.failures
                 body = b'temporary failure' if failed else test.payload
                 self.send_response(503 if failed else 200)
                 self.send_header('Content-Length', str(len(body)))
+                if failed:
+                    self.send_header('Connection', 'close')
+                    self.close_connection = True
                 self.end_headers()
                 self.wfile.write(body)
 
@@ -81,6 +90,34 @@ class NativeDownloadTests(unittest.TestCase):
         self.artifact.write_bytes(b'changed cache')
         with self.assertRaises(AssertionError):
             self.native.download(self.artifact, self.url, self.digest)
+        self.assertEqual(0, self.requests)
+
+    def test_asset_batch_reuses_connections(self):
+        """Fetch twelve files through at most four actual connections and reuse every verified cached result."""
+        transfers = [(self.artifact.with_name('asset ' + str(index)), self.url, self.digest) for index in range(12)]
+        self.native.download_assets(transfers)
+        self.assertEqual(12, self.requests)
+        self.assertLessEqual(len(self.connections), 4)
+        for path, _, _ in transfers:
+            self.assertEqual(self.payload, path.read_bytes())
+        self.native.download_assets(transfers)
+        self.assertEqual(12, self.requests)
+
+    def test_asset_batch_retries_and_checks_hashes(self):
+        """A transient HTTP failure may recover, but a successful response with wrong bytes must never be promoted."""
+        self.failures = 1
+        self.native.download_assets([(self.artifact, self.url, self.digest)])
+        self.assertEqual(2, self.requests)
+        bad = self.artifact.with_name('bad asset')
+        with self.assertRaises(AssertionError):
+            self.native.download_assets([(bad, self.url, '0' * 40)])
+        self.assertFalse(bad.exists())
+
+    def test_asset_batch_rejects_corrupt_cache(self):
+        """Reject changed cached assets before opening the batch's first network connection."""
+        self.artifact.write_bytes(b'changed cache')
+        with self.assertRaises(AssertionError):
+            self.native.download_assets([(self.artifact, self.url, self.digest)])
         self.assertEqual(0, self.requests)
 
 

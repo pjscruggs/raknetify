@@ -1,6 +1,5 @@
 """Verify packaged native loader mods in isolated, officially installed servers and clients."""
 import argparse
-from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import importlib.util
 import json
@@ -217,13 +216,33 @@ def assets(folder, metadata):
     objects = json.loads(path.read_text(encoding='utf-8'))['objects']
     hashes = sorted({item['hash'] for item in objects.values()})
 
-    def acquire(digest):
-        """Fetch one content-addressed asset and validate its hash before placing it in the shared cache."""
-        relative = digest[:2] + '/' + digest
-        return download(folder / 'objects' / relative, 'https://resources.download.minecraft.net/' + relative, digest)
+    transfers = [(folder / 'objects' / digest[:2] / digest,
+                  'https://resources.download.minecraft.net/' + digest[:2] + '/' + digest, digest) for digest in hashes]
+    download_assets(transfers)
 
-    with ThreadPoolExecutor(max_workers=8) as workers:
-        list(workers.map(acquire, hashes))
+
+def download_assets(transfers):
+    """Reuse a bounded connection pool for the asset batch and admit only complete, hash-verified files."""
+    pending = []
+    config = []
+    for path, url, digest in transfers:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists():
+            assert hashlib.sha1(path.read_bytes()).hexdigest() == digest, path
+            continue
+        temporary = path.with_name(path.name + '.part')
+        config.extend(('url = ' + json.dumps(url, ensure_ascii=False),
+                       'output = ' + json.dumps(temporary.as_posix(), ensure_ascii=False)))
+        pending.append((path, temporary, digest))
+    if not pending:
+        return
+    subprocess.run(['curl', '--disable', '--parallel', '--parallel-max', '4', '--fail-early', '--fail',
+                    '--location', '--silent', '--show-error', '--retry', '3', '--retry-all-errors',
+                    '--connect-timeout', '10', '--max-time', '60', '--config', '-'],
+                   input='\n'.join(config) + '\n', encoding='utf-8', check=True, timeout=900)
+    for path, temporary, digest in pending:
+        assert hashlib.sha1(temporary.read_bytes()).hexdigest() == digest, path
+        temporary.replace(path)
 
 
 def launcher_arguments(arguments, values):
