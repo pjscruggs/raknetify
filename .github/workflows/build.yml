@@ -123,6 +123,14 @@ jobs:
           --krypton-lock .github/krypton-versions.json
           --encryption-legacy transport-test-legacy/build/libs/*.jar
           --encryption-modern transport-test-modern/build/libs/*.jar
+      - name: Native gameplay packet ordering
+        run: >-
+          python3 .github/scripts/client-address-check.py --ordering-only
+          --jar fabric-universal/build/libs/*.jar
+          --fixture transport-test-client/build/libs/*.jar
+          --work-dir "$RUNNER_TEMP/raknetify-smoke/ordering"
+          --java-17 "${{ steps.java17.outputs.path }}/bin/java"
+          --java-21 "${{ steps.java21.outputs.path }}/bin/java"
       - name: Fast IP Ping client addresses
         run: >-
           python3 .github/scripts/client-address-check.py

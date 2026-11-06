@@ -44,9 +44,12 @@ public final class ClientAddressTest implements PreLaunchEntrypoint {
     public void onPreLaunch() {
         if (!Boolean.getBoolean("raknetify.test.addresses")) return;
         try {
-            AddressChecks checks = new AddressChecks();
-            if (Boolean.getBoolean("raknetify.test.baseline")) checks.verifyBaseline();
-            else checks.verify();
+            if (!Boolean.getBoolean("raknetify.test.baseline")) GameplayOrderingTest.verify();
+            if (!Boolean.getBoolean("raknetify.test.orderingOnly")) {
+                AddressChecks checks = new AddressChecks();
+                if (Boolean.getBoolean("raknetify.test.baseline")) checks.verifyBaseline();
+                else checks.verify();
+            }
             System.out.println("PASS native client address compatibility");
             System.exit(0);
         } catch (Throwable failure) {

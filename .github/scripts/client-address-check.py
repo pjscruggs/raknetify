@@ -79,7 +79,7 @@ def prepare(args, version, metadata, lock):
     libraries.extend(minecraft_libraries(cache, metadata, profile))
     item = metadata['downloads']['client']
     libraries.append(download(cache, item['url'], item['sha1']))
-    for item in lock[version]:
+    for item in lock.get(version, []):
         artifact = download(cache, item['url'], item['sha512'], 'sha512')
         shutil.copy2(artifact, folder / 'mods' / item['filename'])
     if not args.baseline:
@@ -101,7 +101,7 @@ def java_for(args, version):
 def launch_command(args, version, folder, libraries):
     """Build a headless fixture launch with a private hosts file and no usable account credentials."""
     return [java_for(args, version), '-Xmx1G', '-Djava.awt.headless=true',
-               '-Draknetify.test.addresses=true', '-Draknetify.test.baseline=' + str(args.baseline).lower(), '-Djdk.net.hosts.file=' + str(folder / 'hosts'),
+               '-Draknetify.test.addresses=true', '-Draknetify.test.orderingOnly=' + str(args.ordering_only).lower(), '-Draknetify.test.baseline=' + str(args.baseline).lower(), '-Djdk.net.hosts.file=' + str(folder / 'hosts'),
                '-cp', os.pathsep.join(map(str, libraries)), 'net.fabricmc.loader.impl.launch.knot.KnotClient',
                '--gameDir', str(folder), '--version', version, '--accessToken', '0', '--username', 'AddressProbe']
 
@@ -115,17 +115,30 @@ def run(args, version, metadata, lock):
     text = (folder / 'client.log').read_text()
     assert result.returncode == 0, str(folder / 'client.log')
     assert 'PASS native client address compatibility' in text
-    assert '\t- fastipping ' in text, 'Fast IP Ping was not loaded'
+    if not args.ordering_only:
+        assert '\t- fastipping ' in text, 'Fast IP Ping was not loaded'
     if args.baseline:
         assert 'PASS standalone resolver baseline' in text
     else:
         assert '\t- raknetify ' in text, 'Raknetify was not loaded'
-        assert text.count('PASS connect address ') == 18
-        assert text.count('PASS ping address ') == 18
+        assert 'PASS native gameplay ordering 12' in text
+        assert 'PASS native entity lifecycle ordering 4' in text
+        if not args.ordering_only:
+            assert text.count('PASS connect address ') == 18
+            assert text.count('PASS ping address ') == 18
     for failure in ['Mixin apply failed', 'Critical injection failure', 'NoClassDefFoundError']:
         assert failure not in text, failure
     scope = 'standalone resolver baseline' if args.baseline else 'native client IPv4, IPv6 and hostname resolution with TCP and both RakNet prefixes'
+    if args.ordering_only:
+        scope = 'native gameplay packet ordering under reversed delivery'
     print('PASS', version, scope, flush=True)
+
+
+def supported_versions():
+    """Select every advertised version for standalone native packet-ordering checks."""
+    manifest = Path(__file__).resolve().parents[2] / 'supported-versions.json'
+    groups = json.loads(manifest.read_text())
+    return {version: [] for group in groups.values() for version in group['gameVersions']}
 
 
 def main():
@@ -133,15 +146,20 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--jar', type=Path, required=True)
     parser.add_argument('--fixture', type=Path, required=True)
-    parser.add_argument('--lock', type=Path, required=True)
+    parser.add_argument('--lock', type=Path)
     parser.add_argument('--work-dir', type=Path, required=True)
     parser.add_argument('--java-17', default='java')
     parser.add_argument('--java-21', default='java')
     parser.add_argument('--java-modern', default='java')
     parser.add_argument('--versions', nargs='+')
     parser.add_argument('--baseline', action='store_true')
+    parser.add_argument('--ordering-only', action='store_true')
     args = parser.parse_args()
-    lock = json.loads(args.lock.read_text())
+    if args.ordering_only and args.baseline:
+        parser.error('Ordering checks require Raknetify')
+    if not args.ordering_only and not args.lock:
+        parser.error('Address checks require a companion lock')
+    lock = json.loads(args.lock.read_text()) if args.lock else supported_versions()
     manifest = fetch_json('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json')
     versions = {item['id']: item for item in manifest['versions']}
     for version in args.versions or list(lock):

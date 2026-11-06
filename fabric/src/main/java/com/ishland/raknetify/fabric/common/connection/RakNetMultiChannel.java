@@ -173,22 +173,15 @@ public class RakNetMultiChannel {
             "net/minecraft/class_7472", // CommandExecutionC2SPacket
             "net/minecraft/class_9449", // ChatCommandSignedC2SPacket
             "net/minecraft/class_7496", // RequestChatPreviewC2SPacket
-            "net/minecraft/class_2811", // ButtonClickC2S
             "net/minecraft/class_2797", // ChatMessageC2S
-            "net/minecraft/class_2813", // ClickSlotC2S
-            "net/minecraft/class_2848", // ClientCommandC2S
             "net/minecraft/class_2803", // ClientSettingsC2S
             "net/minecraft/class_2803", // ClientStatusC2S
             "net/minecraft/class_4210", // UpdateDifficultyC2S
             "net/minecraft/class_4211", // UpdateDifficultyLockC2S
             "net/minecraft/class_2708", // PlayerPositionLookS2C
 
-            "net/minecraft/class_2846", // PlayerActionC2S
-            "net/minecraft/class_2851", // PlayerInputC2S
 
             // hard to categorize
-            "net/minecraft/class_10370", // PickItemFromBlockC2SPacket
-            "net/minecraft/class_10371", // PickItemFromEntityC2SPacket
 
             "net/minecraft/class_2707", // LookAtS2C
 
@@ -234,6 +227,27 @@ public class RakNetMultiChannel {
      * Entity lifecycle, movement, combat, and related player interactions that share an ordering dependency.
      */
     private static final Set<Class<?>> channel2 = createClassSet(new String[]{
+            // Item selection, inventory edits and player actions must arrive before the movement or use that follows.
+            "net/minecraft/class_2811", // ButtonClickC2S
+            "net/minecraft/class_2813", // ClickSlotC2S
+            "net/minecraft/class_2848", // ClientCommandC2S
+            "net/minecraft/class_2846", // PlayerActionC2S
+            "net/minecraft/class_2851", // PlayerInputC2S
+            "net/minecraft/class_10370", // PickItemFromBlockC2SPacket
+            "net/minecraft/class_10371", // PickItemFromEntityC2SPacket
+            "net/minecraft/class_2820", // BookUpdateC2S
+            "net/minecraft/class_2855", // RenameItemC2S
+            "net/minecraft/class_2815", // CloseHandledScreenC2S
+            "net/minecraft/class_2873", // CreativeInventoryActionC2S
+            "net/minecraft/class_2840", // CraftRequestC2S
+            "net/minecraft/class_2838", // PickFromInventoryC2S
+            "net/minecraft/class_2863", // SelectMerchantTradeC2S
+            "net/minecraft/class_2866", // UpdateBeaconC2S
+            "net/minecraft/class_2842", // UpdatePlayerAbilitiesC2S
+            "net/minecraft/class_2868", // UpdateSelectedSlotC2S
+            "net/minecraft/class_8875", // SlotChangedStateC2SPacket
+            "net/minecraft/class_9837", // BundleItemSelectedC2SPacket
+
             "net/minecraft/class_1_126", // AttackC2SPacket
             "net/minecraft/class_1_1438", // HandSwingC2SPacket
             "net/minecraft/class_1_1444", // SwingAnimationS2CPacket
@@ -331,29 +345,17 @@ public class RakNetMultiChannel {
             "net/minecraft/class_10268", // RecipeBookRemoveS2CPacket
             "net/minecraft/class_10269", // RecipeBookSettingsS2CPacket
 
-            "net/minecraft/class_2820", // BookUpdateC2S
             "net/minecraft/class_2853", // RecipeBookDataC2S
             "net/minecraft/class_5427", // RecipeCategoryOptionsC2S
-            "net/minecraft/class_2855", // RenameItemC2S
-            "net/minecraft/class_2815", // CloseHandledScreenC2S
-            "net/minecraft/class_2873", // CreativeInventoryActionC2S
-            "net/minecraft/class_2840", // CraftRequestC2S
-            "net/minecraft/class_2838", // PickFromInventoryC2S
-            "net/minecraft/class_2863", // SelectMerchantTradeC2S
-            "net/minecraft/class_2866", // UpdateBeaconC2S
             "net/minecraft/class_2870", // UpdateCommandBlockC2S
             "net/minecraft/class_2871", // UpdateCommandBlockMinecartC2S
             "net/minecraft/class_10615", // SetTestBlockC2SPacket
             "net/minecraft/class_10616", // TestInstanceBlockActionC2SPacket
             "net/minecraft/class_3753", // UpdateJigsawC2S
-            "net/minecraft/class_2842", // UpdatePlayerAbilitiesC2S
-            "net/minecraft/class_2868", // UpdateSelectedSlotC2S
             "net/minecraft/class_2875", // UpdateStructureBlockC2S
             "net/minecraft/class_2695", // CraftFailedResponseS2CPacket
-            "net/minecraft/class_8875", // SlotChangedStateC2SPacket
             "net/minecraft/class_9834", // SetCursorItemS2CPacket
             "net/minecraft/class_9835", // SetPlayerInventoryS2CPacket
-            "net/minecraft/class_9837", // BundleItemSelectedC2SPacket
 
             "net/minecraft/class_5889", // WorldBorderInitializeS2C
             "net/minecraft/class_5895", // WorldBorderCenterChangedS2C
