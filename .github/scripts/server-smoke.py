@@ -145,7 +145,7 @@ def start_server(folder, log, events, java, encryption=False, packetfixer=False)
     test_flags = ['-Draknetify.test.encryption=true'] if encryption else []
     if packetfixer:
         test_flags.append('-Draknetify.test.packetLimits=true')
-    process = subprocess.Popen([java, *test_flags, '-Xms256M', '-Xmx1G', '-jar', 'fabric-server-launch.jar', 'nogui'],
+    process = subprocess.Popen([java, '-Draknetify.saveChannelMappings=true', *test_flags, '-Xms256M', '-Xmx1G', '-jar', 'fabric-server-launch.jar', 'nogui'],
                                cwd=folder, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace')
 
@@ -221,6 +221,25 @@ def server_metadata(folder, version):
     return metadata
 
 
+def check_mappings(folder, metadata):
+    """Require native packet-ID routes to match the tables shipped to proxy users."""
+    protocol = str(metadata['protocol_version'])
+    generated = json.loads((folder / 'channelMappings.json').read_text())['mappings'][protocol]
+    expected = json.loads((folder / 'expected-mappings.json').read_text())['mappings'][protocol]
+    assert generated == expected, 'Native and bundled proxy routes differ for ' + protocol
+
+
+def bundled_mappings(jar):
+    """Read both universal components and reject inconsistent bundled proxy routing tables."""
+    with zipfile.ZipFile(jar) as archive:
+        tables = []
+        for component in ('legacy', 'modern'):
+            with zipfile.ZipFile(io.BytesIO(archive.read('META-INF/jars/' + component + '.jar'))) as nested:
+                tables.append(json.loads(nested.read('raknetify-channel-mappings.json')))
+    assert tables[0] == tables[1], 'Universal components contain different proxy routes'
+    return tables[0]
+
+
 def check_server(folder, version, native, java, probe_dir, polymer=False, krypton=False, encryption=False, packetfixer=False, port=25871):
     """Run one transport configuration through startup, network probes, and clean shutdown.
 
@@ -240,6 +259,7 @@ def check_server(folder, version, native, java, probe_dir, polymer=False, krypto
     try:
         await_ready(process, events)
         metadata = server_metadata(folder, version)
+        check_mappings(folder, metadata)
         check_tcp_when_ready(port, metadata)
         check_udp(port)
         check_connected_udp(port, metadata, java, probe_dir)
@@ -265,7 +285,7 @@ def check_server(folder, version, native, java, probe_dir, polymer=False, krypto
 
 def report_success(version, transport, log, polymer, krypton, encryption, packetfixer):
     """Report only the checks selected for this run, including the server-side encryption witness."""
-    checks = 'startup, TCP and connected RakNet status, shutdown'
+    checks = 'startup, native/proxy routing parity, TCP and connected RakNet status, shutdown'
     if polymer:
         checks += ', Polymer HTTP resource-pack download'
     if krypton:
@@ -319,6 +339,8 @@ def prepare_server(args, version, polymer, krypton, packetfixer):
     folder = args.work_dir / version
     (folder / 'mods').mkdir(parents=True, exist_ok=True)
     shutil.copy2(args.jar, folder / 'mods' / args.jar.name)
+    (folder / 'expected-mappings.json').write_text(json.dumps(bundled_mappings(args.jar)))
+    (folder / 'channelMappings.json').unlink(missing_ok=True)
     if polymer:
         prepare_polymer(folder, polymer[version])
     if krypton:
