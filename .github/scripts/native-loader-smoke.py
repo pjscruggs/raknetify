@@ -265,6 +265,8 @@ def client(args, lock, metadata, join=False):
         subprocess.run(command, cwd=folder, stdout=output, stderr=subprocess.STDOUT, check=True, timeout=180)
     text = log.read_text(encoding='utf-8')
     assert 'PASS native loader client contracts' in text, log
+    if args.loader == 'forge':
+        assert 'PASS Forge payload storage ownership' in text, log
     assert 'PASS native gameplay ordering 12' in text, log
     assert 'PASS native entity lifecycle ordering 4' in text, log
     if join:

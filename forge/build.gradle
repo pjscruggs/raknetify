@@ -23,7 +23,7 @@ minecraft {
         configureEach {
             workingDir = layout.buildDirectory.dir('run/' + name)
             systemProperty 'eventbus.api.strictRuntimeChecks', 'true'
-            args '--mixin', 'raknetify-fabric.mixins.json'
+            args '--mixin', 'raknetify-fabric.mixins.json', '--mixin', 'raknetify-forge.mixins.json'
         }
         register('client')
         register('server') { args '--nogui' }
@@ -71,12 +71,12 @@ shadowJar {
     from rootProject.file('LICENSE')
     from(rootProject.file('netty-raknet/LICENSE')) { into 'META-INF/licenses/netty-raknet' }
     mergeServiceFiles()
-    manifest { attributes 'MixinConfigs': 'raknetify-fabric.mixins.json' }
+    manifest { attributes 'MixinConfigs': 'raknetify-fabric.mixins.json,raknetify-forge.mixins.json' }
 }
 
 jar {
     archiveClassifier = 'dev'
-    manifest { attributes 'MixinConfigs': 'raknetify-fabric.mixins.json' }
+    manifest { attributes 'MixinConfigs': 'raknetify-fabric.mixins.json,raknetify-forge.mixins.json' }
 }
 assemble.dependsOn shadowJar
 

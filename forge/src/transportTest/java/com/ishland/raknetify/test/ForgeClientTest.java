@@ -45,6 +45,14 @@ public final class ForgeClientTest {
      * @param event final mod lifecycle event
      */
     private void complete(FMLLoadCompleteEvent event) {
-        event.enqueueWork(NativeClientTests::run);
+        event.enqueueWork(() -> {
+            try {
+                ForgePayloadOwnershipTest.verify();
+                NativeClientTests.run();
+            } catch (Throwable failure) {
+                failure.printStackTrace();
+                System.exit(1);
+            }
+        });
     }
 }
