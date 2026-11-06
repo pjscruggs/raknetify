@@ -26,15 +26,15 @@ package com.ishland.raknetify.fabric.mixin.access;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
+
+import net.minecraft.network.CipherBase;
+
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Invoker;
 
 import javax.crypto.ShortBufferException;
-import net.minecraft.network.CipherBase;
 
-/**
- * Exposes Minecraft's cipher-buffer operations for encryption compatibility hooks.
- */
+/** Exposes Minecraft's cipher-buffer operations for encryption compatibility hooks. */
 @Mixin(CipherBase.class)
 public interface IPacketEncryptionManager {
 
@@ -58,5 +58,4 @@ public interface IPacketEncryptionManager {
      */
     @Invoker
     void invokeEncipher(ByteBuf buf, ByteBuf result) throws ShortBufferException;
-
 }

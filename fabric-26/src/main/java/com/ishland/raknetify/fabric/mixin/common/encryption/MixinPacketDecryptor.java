@@ -25,8 +25,13 @@
 package com.ishland.raknetify.fabric.mixin.common.encryption;
 
 import com.ishland.raknetify.fabric.common.connection.encryption.PacketEncryptionManagerInterface;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
+
+import net.minecraft.network.CipherBase;
+import net.minecraft.network.CipherDecoder;
+
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -35,8 +40,6 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.List;
-import net.minecraft.network.CipherBase;
-import net.minecraft.network.CipherDecoder;
 
 /**
  * Passes the inbound handler context to Minecraft's cipher helper for transport-aware processing.
@@ -44,9 +47,7 @@ import net.minecraft.network.CipherDecoder;
 @Mixin(CipherDecoder.class)
 public class MixinPacketDecryptor {
 
-    /**
-     * Vanilla cipher-buffer helper whose context is set before each payload is processed.
-     */
+    /** Vanilla cipher-buffer helper whose context is set before each payload is processed. */
     @Shadow @Final private CipherBase cipher;
 
     /**
@@ -57,9 +58,15 @@ public class MixinPacketDecryptor {
      * @param list vanilla decoder output list, unused by this context hook
      * @param ci injection callback, left uncancelled so vanilla processing continues
      */
-    @Inject(method = "decode(Lio/netty/channel/ChannelHandlerContext;Lio/netty/buffer/ByteBuf;Ljava/util/List;)V", at = @At("HEAD"))
-    private void preDecrypt(ChannelHandlerContext ctx, ByteBuf byteBuf, List<Object> list, CallbackInfo ci) {
+    @Inject(
+            method =
+                    "decode(Lio/netty/channel/ChannelHandlerContext;Lio/netty/buffer/ByteBuf;Ljava/util/List;)V",
+            at = @At("HEAD"))
+    private void preDecrypt(
+            final ChannelHandlerContext ctx,
+            final ByteBuf byteBuf,
+            final List<Object> list,
+            final CallbackInfo ci) {
         ((PacketEncryptionManagerInterface) this.cipher).setContext(ctx);
     }
-
 }

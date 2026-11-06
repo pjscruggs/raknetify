@@ -25,16 +25,16 @@
 package com.ishland.raknetify.fabric.mixin.server;
 
 import com.ishland.raknetify.fabric.common.connection.RakNetFabricConnectionUtil;
+
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
+
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/**
- * Wraps vanilla server channel initialization with RakNet transport setup and codec adaptation.
- */
+/** Wraps vanilla server channel initialization with RakNet transport setup and codec adaptation. */
 @Mixin(targets = "net/minecraft/server/network/ServerConnectionListener$1")
 public abstract class MixinServerNetworkIo1 extends ChannelInitializer<Channel> {
 
@@ -45,7 +45,7 @@ public abstract class MixinServerNetworkIo1 extends ChannelInitializer<Channel> 
      * @param ci injection callback, left uncancelled so vanilla initialization proceeds
      */
     @Inject(method = "initChannel(Lio/netty/channel/Channel;)V", at = @At("HEAD"))
-    private void onChannelInit(Channel channel, CallbackInfo ci) {
+    private void onChannelInit(final Channel channel, final CallbackInfo ci) {
         RakNetFabricConnectionUtil.initChannel(channel);
     }
 
@@ -56,8 +56,7 @@ public abstract class MixinServerNetworkIo1 extends ChannelInitializer<Channel> 
      * @param ci return injection callback, unused because setup runs after vanilla completes
      */
     @Inject(method = "initChannel(Lio/netty/channel/Channel;)V", at = @At("RETURN"))
-    private void postChannelInit(Channel channel, CallbackInfo ci) {
+    private void postChannelInit(final Channel channel, final CallbackInfo ci) {
         RakNetFabricConnectionUtil.postInitChannel(channel, false);
     }
-
 }

@@ -27,12 +27,17 @@ package com.ishland.raknetify.fabric.mixin.common;
 import com.ishland.raknetify.common.connection.TransferQueryAnswer;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.login.ServerboundCustomQueryAnswerPacket;
+
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 
-/** Observes the handled flag without consuming bytes or interfering with other login payload decoders. */
+/**
+ * Observes the handled flag without consuming bytes or interfering with other login payload
+ * decoders.
+ */
 @Mixin(ServerboundCustomQueryAnswerPacket.class)
 public abstract class MixinTransferQueryAnswer implements TransferQueryAnswer {
 
@@ -40,18 +45,24 @@ public abstract class MixinTransferQueryAnswer implements TransferQueryAnswer {
     @Unique private boolean raknetify$transferSupported;
 
     /**
-     * Preserves the nullable wire marker before vanilla replaces unknown response data with a discard marker.
+     * Preserves the nullable wire marker before vanilla replaces unknown response data with a
+     * discard marker.
+     *
      * @param buffer native login response beginning with its transaction VarInt
      * @param original complete existing decoder, including other mods' payload hooks
      * @return the original native packet with an additional private capability observation
      */
     @WrapMethod(method = "read")
-    private static ServerboundCustomQueryAnswerPacket raknetify$observeAnswer(FriendlyByteBuf buffer, Operation<ServerboundCustomQueryAnswerPacket> original) {
+    private static ServerboundCustomQueryAnswerPacket raknetify$observeAnswer(
+            final FriendlyByteBuf buffer,
+            final Operation<ServerboundCustomQueryAnswerPacket> original) {
         int start = buffer.readerIndex();
         final boolean supported;
         try {
             buffer.readVarInt();
-            supported = buffer.readableBytes() == 1 && buffer.getUnsignedByte(buffer.readerIndex()) == 1;
+            supported =
+                    buffer.readableBytes() == 1
+                            && buffer.getUnsignedByte(buffer.readerIndex()) == 1;
         } finally {
             buffer.readerIndex(start);
         }
@@ -61,18 +72,23 @@ public abstract class MixinTransferQueryAnswer implements TransferQueryAnswer {
     }
 
     /**
-     * Returns the observation belonging to this decoded response, never a result from another connection.
+     * Returns the observation belonging to this decoded response, never a result from another
+     * connection.
+     *
      * @return whether the response has the exact handled empty form
      */
-    @Override public boolean raknetify$isTransferSupported() {
+    @Override
+    public boolean raknetify$isTransferSupported() {
         return this.raknetify$transferSupported;
     }
 
     /**
      * Stores the observed flag after the original decoder completes successfully.
+     *
      * @param supported decoded handled-empty response flag
      */
-    @Override public void raknetify$setTransferSupported(boolean supported) {
+    @Override
+    public void raknetify$setTransferSupported(final boolean supported) {
         this.raknetify$transferSupported = supported;
     }
 }

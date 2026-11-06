@@ -26,11 +26,13 @@ package com.ishland.raknetify.fabric.mixin.common.quirks;
 
 import com.ishland.raknetify.fabric.common.quirks.ClientHungerManager;
 import com.ishland.raknetify.fabric.mixin.access.IWorld;
+
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.food.FoodData;
 import net.minecraft.world.level.Level;
+
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -38,14 +40,13 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Installs hunger handling that ignores client prediction while preserving server-controlled player state.
+ * Installs hunger handling that ignores client prediction while preserving server-controlled player
+ * state.
  */
 @Mixin(Player.class)
 public abstract class MixinPlayerEntity extends LivingEntity {
 
-    /**
-     * Vanilla hunger state replaced only for players in a logical client world.
-     */
+    /** Vanilla hunger state replaced only for players in a logical client world. */
     @Shadow protected FoodData foodData;
 
     /**
@@ -54,7 +55,8 @@ public abstract class MixinPlayerEntity extends LivingEntity {
      * @param entityType living-entity type passed through to the vanilla superclass
      * @param world world containing the entity
      */
-    protected MixinPlayerEntity(EntityType<? extends LivingEntity> entityType, Level world) {
+    protected MixinPlayerEntity(
+            final EntityType<? extends LivingEntity> entityType, final Level world) {
         super(entityType, world);
     }
 
@@ -64,10 +66,9 @@ public abstract class MixinPlayerEntity extends LivingEntity {
      * @param ci constructor-return callback, unused after vanilla state initialization
      */
     @Inject(method = "<init>", at = @At("RETURN"), remap = false)
-    private void replaceHungerManager(CallbackInfo ci) {
+    private void replaceHungerManager(final CallbackInfo ci) {
         if (((IWorld) this.level()).raknetify$isClient()) {
             this.foodData = ClientHungerManager.from(this.foodData);
         }
     }
-
 }

@@ -27,13 +27,17 @@ package com.ishland.raknetify.fabric.mixin.server;
 import com.ishland.raknetify.fabric.mixin.access.IClientConnection;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.WrapWithCondition;
+
 import io.netty.channel.Channel;
+
 import net.minecraft.network.Connection;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.common.ServerCommonPacketListener;
 import net.minecraft.server.network.ServerCommonPacketListenerImpl;
 import net.minecraft.util.Util;
+
 import network.ycc.raknet.RakNet;
+
 import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -42,15 +46,11 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/**
- * Uses RakNet transport liveness and RTT instead of Minecraft keepalive timing.
- */
+/** Uses RakNet transport liveness and RTT instead of Minecraft keepalive timing. */
 @Mixin(ServerCommonPacketListenerImpl.class)
 public abstract class MixinServerCommonNetworkHandler implements ServerCommonPacketListener {
 
-    /**
-     * Vanilla player connection inspected for RakNet transport configuration.
-     */
+    /** Vanilla player connection inspected for RakNet transport configuration. */
     @Shadow @Final protected Connection connection;
 
     /**
@@ -64,9 +64,17 @@ public abstract class MixinServerCommonNetworkHandler implements ServerCommonPac
      * @param original vanilla timestamp of the last keepalive check
      * @return current monotonic time for RakNet, or the original timestamp for TCP
      */
-    @ModifyExpressionValue(method = "keepConnectionAlive", at = @At(value = "FIELD", target = "Lnet/minecraft/server/network/ServerCommonPacketListenerImpl;keepAliveTime:J", opcode = Opcodes.GETFIELD))
-    private long disableKeepAlive(long original) {
-        if (!(((IClientConnection) this.connection).getChannel().config() instanceof RakNet.Config)) {
+    @ModifyExpressionValue(
+            method = "keepConnectionAlive",
+            at =
+                    @At(
+                            value = "FIELD",
+                            target =
+                                    "Lnet/minecraft/server/network/ServerCommonPacketListenerImpl;keepAliveTime:J",
+                            opcode = Opcodes.GETFIELD))
+    private long disableKeepAlive(final long original) {
+        if (!(((IClientConnection) this.connection).getChannel().config()
+                instanceof RakNet.Config)) {
             return original;
         }
         return Util.getMillis();
@@ -79,9 +87,17 @@ public abstract class MixinServerCommonNetworkHandler implements ServerCommonPac
      * @param reason vanilla keepalive disconnect reason
      * @return false for RakNet to suppress this disconnect, true for ordinary TCP behavior
      */
-    @WrapWithCondition(method = "handleKeepAlive", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/network/ServerCommonPacketListenerImpl;disconnect(Lnet/minecraft/network/chat/Component;)V"))
-    private boolean stopTimeoutPlayersOnKeepAlive(ServerCommonPacketListenerImpl instance, Component reason) {
-        return !(((IClientConnection) this.connection).getChannel().config() instanceof RakNet.Config);
+    @WrapWithCondition(
+            method = "handleKeepAlive",
+            at =
+                    @At(
+                            value = "INVOKE",
+                            target =
+                                    "Lnet/minecraft/server/network/ServerCommonPacketListenerImpl;disconnect(Lnet/minecraft/network/chat/Component;)V"))
+    private boolean stopTimeoutPlayersOnKeepAlive(
+            final ServerCommonPacketListenerImpl instance, final Component reason) {
+        return !(((IClientConnection) this.connection).getChannel().config()
+                instanceof RakNet.Config);
     }
 
     /**
@@ -91,9 +107,18 @@ public abstract class MixinServerCommonNetworkHandler implements ServerCommonPac
      * @param value latency measured from the vanilla keepalive exchange
      * @return false for RakNet, true when vanilla should store the TCP measurement
      */
-    @WrapWithCondition(method = "handleKeepAlive", at = @At(value = "FIELD", target = "Lnet/minecraft/server/network/ServerCommonPacketListenerImpl;latency:I", opcode = Opcodes.PUTFIELD))
-    private boolean redirectPingStoring(ServerCommonPacketListenerImpl instance, int value) {
-        return !(((IClientConnection) this.connection).getChannel().config() instanceof RakNet.Config);
+    @WrapWithCondition(
+            method = "handleKeepAlive",
+            at =
+                    @At(
+                            value = "FIELD",
+                            target =
+                                    "Lnet/minecraft/server/network/ServerCommonPacketListenerImpl;latency:I",
+                            opcode = Opcodes.PUTFIELD))
+    private boolean redirectPingStoring(
+            final ServerCommonPacketListenerImpl instance, final int value) {
+        return !(((IClientConnection) this.connection).getChannel().config()
+                instanceof RakNet.Config);
     }
 
     /**
@@ -102,11 +127,10 @@ public abstract class MixinServerCommonNetworkHandler implements ServerCommonPac
      * @param ci tick injection callback, left uncancelled so other vanilla maintenance continues
      */
     @Inject(method = "keepConnectionAlive", at = @At("HEAD"))
-    private void onTick(CallbackInfo ci) {
+    private void onTick(final CallbackInfo ci) {
         final Channel channel = ((IClientConnection) this.connection).getChannel();
         if (channel != null && channel.config() instanceof RakNet.Config config) {
             this.latency = (int) ((config.getRTTNanos() + config.getRTTStdDevNanos()) / 1_000_000);
         }
     }
-
 }

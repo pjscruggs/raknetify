@@ -25,13 +25,17 @@
 package com.ishland.raknetify.fabric.mixin.compat.krypton;
 
 import com.ishland.raknetify.fabric.mixin.access.IClientConnection;
+
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPipeline;
+
 import net.minecraft.network.Connection;
 import net.minecraft.server.network.ServerLoginPacketListenerImpl;
 import net.minecraft.util.Crypt;
 import net.minecraft.util.CryptException;
+
 import network.ycc.raknet.RakNet;
+
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -43,35 +47,45 @@ import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 
-/**
- * Adapts Krypton encryption after the snapshot applies negotiated connection options.
- */
+/** Adapts Krypton encryption after the snapshot applies negotiated connection options. */
 @Mixin(ServerLoginPacketListenerImpl.class)
 public class MixinServerLoginNetworkHandler26_4 {
 
-    /**
-     * Snapshot login connection inspected for Krypton stream-cipher handlers.
-     */
-    @Shadow
-    @Final
-    public Connection connection;
+    /** Snapshot login connection inspected for Krypton stream-cipher handlers. */
+    @Shadow @Final public Connection connection;
 
     /**
-     * Replaces detected Krypton stream ciphers using the session key captured from the snapshot login method.
+     * Replaces detected Krypton stream ciphers using the session key captured from the snapshot
+     * login method.
      *
      * @param options negotiated connection-option flags, unused by cipher replacement
      * @param ci injection callback after the snapshot enables encryption
      * @param secretKey session key captured from the target method's local variables
      * @throws CryptException if constructing replacement Minecraft ciphers fails
      */
-    @Inject(method = "applyConnectionOptions", locals = LocalCapture.CAPTURE_FAILHARD, at = @At(value = "INVOKE", target = "Lnet/minecraft/network/Connection;setEncryptionKey(Ljavax/crypto/Cipher;Ljavax/crypto/Cipher;)V", shift = At.Shift.AFTER))
-    private void afterSetupEncryption(byte options, CallbackInfo ci, SecretKey secretKey) throws CryptException {
-        final ChannelPipeline pipeline = ((IClientConnection) this.connection).getChannel().pipeline();
+    @Inject(
+            method = "applyConnectionOptions",
+            locals = LocalCapture.CAPTURE_FAILHARD,
+            at =
+                    @At(
+                            value = "INVOKE",
+                            target =
+                                    "Lnet/minecraft/network/Connection;setEncryptionKey(Ljavax/crypto/Cipher;Ljavax/crypto/Cipher;)V",
+                            shift = At.Shift.AFTER))
+    private void afterSetupEncryption(
+            final byte options, final CallbackInfo ci, final SecretKey secretKey)
+            throws CryptException {
+        final ChannelPipeline pipeline =
+                ((IClientConnection) this.connection).getChannel().pipeline();
         if (((IClientConnection) this.connection).getChannel().config() instanceof RakNet.Config) {
             final ChannelHandler decrypt = pipeline.get("decrypt");
             final ChannelHandler encrypt = pipeline.get("encrypt");
-            if (decrypt != null && (decrypt.getClass().getName().equals("me.steinborn.krypton.mod.shared.network.pipeline.MinecraftCipherDecoder")) &&
-                    encrypt != null && (encrypt.getClass().getName().equals("me.steinborn.krypton.mod.shared.network.pipeline.MinecraftCipherEncoder"))) {
+            if (decrypt != null
+                    && ("me.steinborn.krypton.mod.shared.network.pipeline.MinecraftCipherDecoder"
+                            .equals(decrypt.getClass().getName()))
+                    && encrypt != null
+                    && ("me.steinborn.krypton.mod.shared.network.pipeline.MinecraftCipherEncoder"
+                            .equals(encrypt.getClass().getName()))) {
                 System.out.println("Raknetify: Krypton detected, applying compatibility");
 
                 pipeline.remove("decrypt");
@@ -80,10 +94,10 @@ public class MixinServerLoginNetworkHandler26_4 {
                 Cipher cipher = Crypt.getCipher(2, secretKey);
                 Cipher cipher2 = Crypt.getCipher(1, secretKey);
 
-                // Re-enter the RakNet hooks to install frame encryption in place of Krypton's byte-stream handlers.
+                // Re-enter the RakNet hooks to install frame encryption in place of Krypton's
+                // byte-stream handlers.
                 this.connection.setEncryptionKey(cipher, cipher2);
             }
         }
     }
-
 }

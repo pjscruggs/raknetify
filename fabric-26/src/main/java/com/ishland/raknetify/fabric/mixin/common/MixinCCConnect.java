@@ -33,6 +33,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Share;
 import com.llamalad7.mixinextras.sugar.ref.LocalRef;
+
 import io.netty.bootstrap.AbstractBootstrap;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
@@ -41,32 +42,52 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.FixedRecvByteBufAllocator;
 import io.netty.channel.socket.DatagramChannel;
 import io.netty.channel.socket.SocketChannel;
+
+import net.minecraft.network.Connection;
+
 import network.ycc.raknet.RakNet;
 import network.ycc.raknet.client.channel.RakNetClientThreadedChannel;
+
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 
 import java.net.InetSocketAddress;
-import net.minecraft.network.Connection;
 
 /**
- * Substitutes a threaded RakNet channel during Minecraft bootstrap when transport flags request UDP.
+ * Substitutes a threaded RakNet channel during Minecraft bootstrap when transport flags request
+ * UDP.
  */
 @Mixin(Connection.class)
 public class MixinCCConnect {
 
     /**
-     * Separates RakNet application work from the vanilla transport event loops while retaining the latter for UDP I/O.
+     * Separates RakNet application work from the vanilla transport event loops while retaining the
+     * latter for UDP I/O.
      *
      * @param instance client bootstrap being configured
      * @param eventLoopGroup vanilla transport event loops to retain for the parent UDP channel
      * @param original original bootstrap group call
      * @param address remote address captured from the connection call, unused by group selection
-     * @param raknetify$eventLoop shared local carrying the original transport group to channel creation
+     * @param raknetify$eventLoop shared local carrying the original transport group to channel
+     *     creation
      * @return bootstrap configured with application loops for RakNet or the original group for TCP
      */
-    @WrapOperation(method = "connect(Ljava/net/InetSocketAddress;Lnet/minecraft/server/network/EventLoopGroupHolder;Lnet/minecraft/network/Connection;)Lio/netty/channel/ChannelFuture;", at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/Bootstrap;group(Lio/netty/channel/EventLoopGroup;)Lio/netty/bootstrap/AbstractBootstrap;", remap = false), require = 1)
-    private static AbstractBootstrap<Bootstrap, Channel> redirectGroup(Bootstrap instance, EventLoopGroup eventLoopGroup, Operation<AbstractBootstrap<Bootstrap, Channel>> original, InetSocketAddress address, @Share("raknetify$eventLoop") LocalRef<EventLoopGroup> raknetify$eventLoop) {
+    @WrapOperation(
+            method =
+                    "connect(Ljava/net/InetSocketAddress;Lnet/minecraft/server/network/EventLoopGroupHolder;Lnet/minecraft/network/Connection;)Lio/netty/channel/ChannelFuture;",
+            at =
+                    @At(
+                            value = "INVOKE",
+                            target =
+                                    "Lio/netty/bootstrap/Bootstrap;group(Lio/netty/channel/EventLoopGroup;)Lio/netty/bootstrap/AbstractBootstrap;",
+                            remap = false),
+            require = 1)
+    private static AbstractBootstrap<Bootstrap, Channel> redirectGroup(
+            final Bootstrap instance,
+            final EventLoopGroup eventLoopGroup,
+            final Operation<AbstractBootstrap<Bootstrap, Channel>> original,
+            final InetSocketAddress address,
+            @Share("raknetify$eventLoop") final LocalRef<EventLoopGroup> raknetify$eventLoop) {
         raknetify$eventLoop.set(eventLoopGroup);
         return ThreadLocalUtil.isInitializingRaknet()
                 ? original.call(instance, RaknetifyEventLoops.DEFAULT_CLIENT_EVENT_LOOP_GROUP.get())
@@ -75,7 +96,8 @@ public class MixinCCConnect {
 
     /**
      * Creates a RakNet channel with a UDP backend matching vanilla's chosen socket implementation.
-     * The selected MTU controls receive allocation and transport negotiation. TCP bootstrap remains unchanged.
+     * The selected MTU controls receive allocation and transport negotiation. TCP bootstrap remains
+     * unchanged.
      *
      * @param instance client bootstrap being configured
      * @param aClass vanilla socket class used to choose the corresponding UDP backend
@@ -84,26 +106,58 @@ public class MixinCCConnect {
      * @param raknetify$eventLoop shared local containing the retained vanilla transport event loops
      * @return bootstrap using the RakNet factory or the original TCP channel class
      */
-    @WrapOperation(method = "connect(Ljava/net/InetSocketAddress;Lnet/minecraft/server/network/EventLoopGroupHolder;Lnet/minecraft/network/Connection;)Lio/netty/channel/ChannelFuture;", at = @At(value = "INVOKE", target = "Lio/netty/bootstrap/Bootstrap;channel(Ljava/lang/Class;)Lio/netty/bootstrap/AbstractBootstrap;", remap = false), require = 1)
-    private static AbstractBootstrap<Bootstrap, Channel> redirectChannel(Bootstrap instance, Class<? extends SocketChannel> aClass, Operation<AbstractBootstrap<Bootstrap, Channel>> original, InetSocketAddress address, @Share("raknetify$eventLoop") LocalRef<EventLoopGroup> raknetify$eventLoop) {
+    @WrapOperation(
+            method =
+                    "connect(Ljava/net/InetSocketAddress;Lnet/minecraft/server/network/EventLoopGroupHolder;Lnet/minecraft/network/Connection;)Lio/netty/channel/ChannelFuture;",
+            at =
+                    @At(
+                            value = "INVOKE",
+                            target =
+                                    "Lio/netty/bootstrap/Bootstrap;channel(Ljava/lang/Class;)Lio/netty/bootstrap/AbstractBootstrap;",
+                            remap = false),
+            require = 1)
+    private static AbstractBootstrap<Bootstrap, Channel> redirectChannel(
+            final Bootstrap instance,
+            final Class<? extends SocketChannel> aClass,
+            final Operation<AbstractBootstrap<Bootstrap, Channel>> original,
+            final InetSocketAddress address,
+            @Share("raknetify$eventLoop") final LocalRef<EventLoopGroup> raknetify$eventLoop) {
         EventLoopGroup eventLoopGroup = raknetify$eventLoop.get();
         return ThreadLocalUtil.isInitializingRaknet()
                 ? instance.channelFactory(() -> {
-                    final boolean initializingRaknetLargeMTU = ThreadLocalUtil.isInitializingRaknetLargeMTU();
-                    final RakNetClientThreadedChannel channel = new RakNetClientThreadedChannel(() -> {
-                        final DatagramChannel channel1 = RakNetFabricConnectionUtil.fromSocketChannel(aClass);
-                        channel1.config().setOption(ChannelOption.IP_TOS, RakNetConnectionUtil.DEFAULT_IP_TOS);
-                        if (initializingRaknetLargeMTU)
-                            channel1.config().setRecvByteBufAllocator(new FixedRecvByteBufAllocator(Constants.LARGE_MTU + 512).maxMessagesPerRead(128));
-                        else
-                            channel1.config().setRecvByteBufAllocator(new FixedRecvByteBufAllocator(Constants.DEFAULT_MTU + 512).maxMessagesPerRead(128));
-                        return channel1;
-                    });
-                    RakNet.config(channel).setMTU(initializingRaknetLargeMTU ? Constants.LARGE_MTU : Constants.DEFAULT_MTU);
+                    final boolean initializingRaknetLargeMTU =
+                            ThreadLocalUtil.isInitializingRaknetLargeMTU();
+                    final RakNetClientThreadedChannel channel =
+                            new RakNetClientThreadedChannel(() -> {
+                                final DatagramChannel channel1 =
+                                        RakNetFabricConnectionUtil.fromSocketChannel(aClass);
+                                channel1.config()
+                                        .setOption(
+                                                ChannelOption.IP_TOS,
+                                                RakNetConnectionUtil.DEFAULT_IP_TOS);
+                                if (initializingRaknetLargeMTU) {
+                                    channel1.config()
+                                            .setRecvByteBufAllocator(
+                                                    new FixedRecvByteBufAllocator(
+                                                                    Constants.LARGE_MTU + 512)
+                                                            .maxMessagesPerRead(128));
+                                } else {
+                                    channel1.config()
+                                            .setRecvByteBufAllocator(
+                                                    new FixedRecvByteBufAllocator(
+                                                                    Constants.DEFAULT_MTU + 512)
+                                                            .maxMessagesPerRead(128));
+                                }
+                                return channel1;
+                            });
+                    RakNet.config(channel)
+                            .setMTU(
+                                    initializingRaknetLargeMTU
+                                            ? Constants.LARGE_MTU
+                                            : Constants.DEFAULT_MTU);
                     channel.setProvidedParentEventLoop(eventLoopGroup.next());
                     return channel;
                 })
                 : original.call(instance, aClass);
     }
-
 }

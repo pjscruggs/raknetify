@@ -26,38 +26,47 @@ package com.ishland.raknetify.fabric.mixin.common.encryption;
 
 import com.ishland.raknetify.common.connection.MultiChannelingStreamingCompression;
 import com.ishland.raknetify.common.connection.MultiChannellingEncryption;
+
 import io.netty.channel.Channel;
+
 import net.minecraft.network.Connection;
+
 import network.ycc.raknet.RakNet;
+
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
 import javax.crypto.Cipher;
 
 /**
- * Handles snapshot encryption setup where Minecraft enables inbound and outbound ciphers separately.
+ * Handles snapshot encryption setup where Minecraft enables inbound and outbound ciphers
+ * separately.
  */
 @Mixin(Connection.class)
 public class MixinClientConnection26_4 {
-    /**
-     * Minecraft application channel receiving direction-specific frame encryption handlers.
-     */
+    /** Minecraft application channel receiving direction-specific frame encryption handlers. */
     @Shadow private Channel channel;
 
     /**
-     * Installs only frame decryption when the snapshot enables inbound encryption on a RakNet connection.
+     * Installs only frame decryption when the snapshot enables inbound encryption on a RakNet
+     * connection.
      *
      * @param cipher initialized decryption cipher supplied by Minecraft
      * @param ci cancellable callback suppressing the corresponding vanilla stream handler
      */
     @Inject(method = "setInboundEncryptionKey", remap = false, at = @At("HEAD"), cancellable = true)
-    private void enableInboundEncryption(Cipher cipher, CallbackInfo ci) {
+    private void enableInboundEncryption(final Cipher cipher, final CallbackInfo ci) {
         if (this.channel.config() instanceof RakNet.Config) {
             ci.cancel();
-            this.channel.pipeline().addBefore(MultiChannelingStreamingCompression.NAME,
-                    MultiChannellingEncryption.NAME + "-inbound", MultiChannellingEncryption.inbound(cipher));
+            this.channel
+                    .pipeline()
+                    .addBefore(
+                            MultiChannelingStreamingCompression.NAME,
+                            MultiChannellingEncryption.NAME + "-inbound",
+                            MultiChannellingEncryption.inbound(cipher));
         }
     }
 
@@ -67,13 +76,22 @@ public class MixinClientConnection26_4 {
      * @param cipher initialized encryption cipher supplied by Minecraft
      * @param ci cancellable callback suppressing the corresponding vanilla stream handler
      */
-    @Inject(method = "setOutboundEncryptionKey", remap = false, at = @At("HEAD"), cancellable = true)
-    private void enableOutboundEncryption(Cipher cipher, CallbackInfo ci) {
+    @Inject(
+            method = "setOutboundEncryptionKey",
+            remap = false,
+            at = @At("HEAD"),
+            cancellable = true)
+    private void enableOutboundEncryption(final Cipher cipher, final CallbackInfo ci) {
         if (this.channel.config() instanceof RakNet.Config) {
             ci.cancel();
-            // Outbound traversal runs in reverse, so addBefore encrypts the frames after streaming compression.
-            this.channel.pipeline().addBefore(MultiChannelingStreamingCompression.NAME,
-                    MultiChannellingEncryption.NAME + "-outbound", MultiChannellingEncryption.outbound(cipher));
+            // Outbound traversal runs in reverse, so addBefore encrypts the frames after streaming
+            // compression.
+            this.channel
+                    .pipeline()
+                    .addBefore(
+                            MultiChannelingStreamingCompression.NAME,
+                            MultiChannellingEncryption.NAME + "-outbound",
+                            MultiChannellingEncryption.outbound(cipher));
         }
     }
 }

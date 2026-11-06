@@ -25,15 +25,19 @@
 package com.ishland.raknetify.fabric.mixin.compat.krypton;
 
 import com.ishland.raknetify.fabric.mixin.access.IClientConnection;
+
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPipeline;
+
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.login.ServerboundKeyPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerLoginPacketListenerImpl;
 import net.minecraft.util.Crypt;
 import net.minecraft.util.CryptException;
+
 import network.ycc.raknet.RakNet;
+
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -41,26 +45,19 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import javax.crypto.Cipher;
-import javax.crypto.SecretKey;
 import java.security.PrivateKey;
 
-/**
- * Replaces Krypton's stream ciphers with RakNet frame encryption after vanilla key negotiation.
- */
+import javax.crypto.Cipher;
+import javax.crypto.SecretKey;
+
+/** Replaces Krypton's stream ciphers with RakNet frame encryption after vanilla key negotiation. */
 @Mixin(ServerLoginPacketListenerImpl.class)
 public class MixinServerLoginNetworkHandler {
 
-    /**
-     * Login connection inspected for Krypton cipher handlers.
-     */
-    @Shadow
-    @Final
-    public Connection connection;
+    /** Login connection inspected for Krypton cipher handlers. */
+    @Shadow @Final public Connection connection;
 
-    /**
-     * Server supplying the RSA private key used to recover the negotiated session secret.
-     */
+    /** Server supplying the RSA private key used to recover the negotiated session secret. */
     @Shadow @Final private MinecraftServer server;
 
     /**
@@ -69,21 +66,34 @@ public class MixinServerLoginNetworkHandler {
     @Shadow @Final private byte[] challenge;
 
     /**
-     * Detects Krypton cipher handlers and re-enters Minecraft encryption setup with standard ciphers.
-     * The RakNet connection hooks then install frame encryption in their place.
+     * Detects Krypton cipher handlers and re-enters Minecraft encryption setup with standard
+     * ciphers. The RakNet connection hooks then install frame encryption in their place.
      *
      * @param packet client key response containing the encrypted session secret
      * @param ci injection callback after vanilla encryption setup
      * @throws CryptException if recovering the session key or creating replacement ciphers fails
      */
-    @Inject(method = "handleKey", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/Connection;setEncryptionKey(Ljavax/crypto/Cipher;Ljavax/crypto/Cipher;)V", shift = At.Shift.AFTER))
-    private void afterSetupEncryption(ServerboundKeyPacket packet, CallbackInfo ci) throws CryptException {
-        final ChannelPipeline pipeline = ((IClientConnection) this.connection).getChannel().pipeline();
+    @Inject(
+            method = "handleKey",
+            at =
+                    @At(
+                            value = "INVOKE",
+                            target =
+                                    "Lnet/minecraft/network/Connection;setEncryptionKey(Ljavax/crypto/Cipher;Ljavax/crypto/Cipher;)V",
+                            shift = At.Shift.AFTER))
+    private void afterSetupEncryption(final ServerboundKeyPacket packet, final CallbackInfo ci)
+            throws CryptException {
+        final ChannelPipeline pipeline =
+                ((IClientConnection) this.connection).getChannel().pipeline();
         if (((IClientConnection) this.connection).getChannel().config() instanceof RakNet.Config) {
             final ChannelHandler decrypt = pipeline.get("decrypt");
             final ChannelHandler encrypt = pipeline.get("encrypt");
-            if (decrypt != null && (decrypt.getClass().getName().equals("me.steinborn.krypton.mod.shared.network.pipeline.MinecraftCipherDecoder")) &&
-                    encrypt != null && (encrypt.getClass().getName().equals("me.steinborn.krypton.mod.shared.network.pipeline.MinecraftCipherEncoder"))) {
+            if (decrypt != null
+                    && ("me.steinborn.krypton.mod.shared.network.pipeline.MinecraftCipherDecoder"
+                            .equals(decrypt.getClass().getName()))
+                    && encrypt != null
+                    && ("me.steinborn.krypton.mod.shared.network.pipeline.MinecraftCipherEncoder"
+                            .equals(encrypt.getClass().getName()))) {
                 System.out.println("Raknetify: Krypton detected, applying compatibility");
 
                 pipeline.remove("decrypt");
@@ -100,5 +110,4 @@ public class MixinServerLoginNetworkHandler {
             }
         }
     }
-
 }

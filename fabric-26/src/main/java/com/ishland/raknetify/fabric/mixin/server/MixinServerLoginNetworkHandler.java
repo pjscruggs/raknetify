@@ -26,9 +26,11 @@ package com.ishland.raknetify.fabric.mixin.server;
 
 import com.ishland.raknetify.common.connection.MultiChannelingStreamingCompression;
 import com.ishland.raknetify.fabric.mixin.access.IClientConnection;
+
 import net.minecraft.network.Connection;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerLoginPacketListenerImpl;
+
 import org.spongepowered.asm.mixin.Dynamic;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -36,24 +38,21 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
-
 /**
- * Suppresses redundant vanilla packet compression during vanilla login when streaming compression is active.
+ * Suppresses redundant vanilla packet compression during vanilla login when streaming compression
+ * is active.
  */
 @Mixin(value = ServerLoginPacketListenerImpl.class, priority = 900)
 public class MixinServerLoginNetworkHandler {
 
-    /**
-     * Login connection whose pipeline advertises whether streaming compression was negotiated.
-     */
+    /** Login connection whose pipeline advertises whether streaming compression was negotiated. */
     @Shadow @Final public Connection connection;
 
-    /**
-     * Vanilla server reference retained by the login listener.
-     */
+    /** Vanilla server reference retained by the login listener. */
     @Shadow @Final private MinecraftServer server;
 
-    // Compression setup moved into the constructor in the snapshot, so both locations share this redirect.
+    // Compression setup moved into the constructor in the snapshot, so both locations share this
+    // redirect.
     /**
      * Substitutes the disabled vanilla threshold only after RakNet streaming compression is active.
      *
@@ -61,14 +60,26 @@ public class MixinServerLoginNetworkHandler {
      * @return -1 to disable vanilla compression, otherwise the configured server threshold
      */
     @Dynamic
-    @Redirect(method = {"verifyLoginAndFinishConnectionSetup", "<init>"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/server/MinecraftServer;getCompressionThreshold()I"), require = 1)
-    private int stopCompressionIfStreamingCompressionExists(MinecraftServer server) {
-        final MultiChannelingStreamingCompression compression = ((IClientConnection) this.connection).getChannel().pipeline().get(MultiChannelingStreamingCompression.class);
+    @Redirect(
+            method = {"verifyLoginAndFinishConnectionSetup", "<init>"},
+            at =
+                    @At(
+                            value = "INVOKE",
+                            target =
+                                    "Lnet/minecraft/server/MinecraftServer;getCompressionThreshold()I"),
+            require = 1)
+    private int stopCompressionIfStreamingCompressionExists(final MinecraftServer server) {
+        final MultiChannelingStreamingCompression compression =
+                ((IClientConnection) this.connection)
+                        .getChannel()
+                        .pipeline()
+                        .get(MultiChannelingStreamingCompression.class);
         if (compression != null && compression.isActive()) {
-            System.out.println("Raknetify: Preventing vanilla compression as streaming compression is enabled");
+            System.out.println(
+                    "Raknetify: Preventing vanilla compression as streaming compression is"
+                            + " enabled");
             return -1;
         }
         return server.getCompressionThreshold();
     }
-
 }

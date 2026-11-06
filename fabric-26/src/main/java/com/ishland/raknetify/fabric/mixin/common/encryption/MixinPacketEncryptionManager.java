@@ -25,8 +25,13 @@
 package com.ishland.raknetify.fabric.mixin.common.encryption;
 
 import com.ishland.raknetify.fabric.common.connection.encryption.PacketEncryptionManagerInterface;
+
 import io.netty.channel.ChannelHandlerContext;
+
+import net.minecraft.network.CipherBase;
+
 import network.ycc.raknet.RakNet;
+
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -36,19 +41,16 @@ import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.ShortBufferException;
-import net.minecraft.network.CipherBase;
 
 /**
- * Uses independent cipher finalization for RakNet payloads while retaining streaming updates for TCP.
+ * Uses independent cipher finalization for RakNet payloads while retaining streaming updates for
+ * TCP.
  */
 @Mixin(CipherBase.class)
 public class MixinPacketEncryptionManager implements PacketEncryptionManagerInterface {
 
-    /**
-     * Most recent cipher handler context, supplied immediately before encryption or decryption.
-     */
-    @Unique
-    private ChannelHandlerContext ctx;
+    /** Most recent cipher handler context, supplied immediately before encryption or decryption. */
+    @Unique private ChannelHandlerContext ctx;
 
     /**
      * Records the channel used to select frame-based or byte-stream cipher behavior.
@@ -56,13 +58,13 @@ public class MixinPacketEncryptionManager implements PacketEncryptionManagerInte
      * @param ctx active encryption or decryption handler context
      */
     @Override
-    public void setContext(ChannelHandlerContext ctx) {
+    public void setContext(final ChannelHandlerContext ctx) {
         this.ctx = ctx;
     }
 
     /**
-     * Transforms one inbound payload, resetting cipher state per RakNet frame through doFinal.
-     * TCP continues using Cipher.update so its byte-stream state remains continuous.
+     * Transforms one inbound payload, resetting cipher state per RakNet frame through doFinal. TCP
+     * continues using Cipher.update so its byte-stream state remains continuous.
      *
      * @param instance initialized vanilla cipher
      * @param input source array containing this payload
@@ -72,11 +74,21 @@ public class MixinPacketEncryptionManager implements PacketEncryptionManagerInte
      * @param outputOffset first destination index available for transformed bytes
      * @return number of bytes written to the destination array
      * @throws ShortBufferException if the destination has insufficient space
-     * @throws IllegalBlockSizeException if finalizing the payload violates the cipher's block-size requirements
+     * @throws IllegalBlockSizeException if finalizing the payload violates the cipher's block-size
+     *     requirements
      * @throws BadPaddingException if finalizing decryption rejects the payload padding
      */
-    @Redirect(method = "decipher", at = @At(value = "INVOKE", target = "Ljavax/crypto/Cipher;update([BII[BI)I"))
-    private int redirectDecrypt(Cipher instance, byte[] input, int inputOffset, int inputLen, byte[] output, int outputOffset) throws ShortBufferException, IllegalBlockSizeException, BadPaddingException {
+    @Redirect(
+            method = "decipher",
+            at = @At(value = "INVOKE", target = "Ljavax/crypto/Cipher;update([BII[BI)I"))
+    private int redirectDecrypt(
+            final Cipher instance,
+            final byte[] input,
+            final int inputOffset,
+            final int inputLen,
+            final byte[] output,
+            final int outputOffset)
+            throws ShortBufferException, IllegalBlockSizeException, BadPaddingException {
         if (ctx.channel().config() instanceof RakNet.Config) {
             return instance.doFinal(input, inputOffset, inputLen, output, outputOffset);
         } else {
@@ -85,8 +97,8 @@ public class MixinPacketEncryptionManager implements PacketEncryptionManagerInte
     }
 
     /**
-     * Transforms one outbound payload, resetting cipher state per RakNet frame through doFinal.
-     * TCP continues using Cipher.update so its byte-stream state remains continuous.
+     * Transforms one outbound payload, resetting cipher state per RakNet frame through doFinal. TCP
+     * continues using Cipher.update so its byte-stream state remains continuous.
      *
      * @param instance initialized vanilla cipher
      * @param input source array containing this payload
@@ -95,16 +107,24 @@ public class MixinPacketEncryptionManager implements PacketEncryptionManagerInte
      * @param output destination array for transformed bytes
      * @return number of bytes written to the destination array
      * @throws ShortBufferException if the destination has insufficient space
-     * @throws IllegalBlockSizeException if finalizing the payload violates the cipher's block-size requirements
+     * @throws IllegalBlockSizeException if finalizing the payload violates the cipher's block-size
+     *     requirements
      * @throws BadPaddingException if finalizing decryption rejects the payload padding
      */
-    @Redirect(method = "encipher", at = @At(value = "INVOKE", target = "Ljavax/crypto/Cipher;update([BII[B)I"))
-    private int redirectEncrypt(Cipher instance, byte[] input, int inputOffset, int inputLen, byte[] output) throws ShortBufferException, IllegalBlockSizeException, BadPaddingException {
+    @Redirect(
+            method = "encipher",
+            at = @At(value = "INVOKE", target = "Ljavax/crypto/Cipher;update([BII[B)I"))
+    private int redirectEncrypt(
+            final Cipher instance,
+            final byte[] input,
+            final int inputOffset,
+            final int inputLen,
+            final byte[] output)
+            throws ShortBufferException, IllegalBlockSizeException, BadPaddingException {
         if (ctx.channel().config() instanceof RakNet.Config) {
             return instance.doFinal(input, inputOffset, inputLen, output);
         } else {
             return instance.update(input, inputOffset, inputLen, output);
         }
     }
-
 }

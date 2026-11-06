@@ -27,16 +27,22 @@ package com.ishland.raknetify.fabric.mixin.common;
 import com.ishland.raknetify.common.connection.TransferDestinations;
 import com.ishland.raknetify.common.connection.TransferSupport;
 import com.ishland.raknetify.fabric.common.connection.TransferPacketUtil;
+
 import io.netty.channel.Channel;
+
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.common.ClientboundTransferPacket;
+
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
-/** Rewrites configured transfer destinations at the shared send path, including transfers with completion callbacks. */
+/**
+ * Rewrites configured transfer destinations at the shared send path, including transfers with
+ * completion callbacks.
+ */
 @Mixin(Connection.class)
 public abstract class MixinTransferDestination {
 
@@ -44,14 +50,21 @@ public abstract class MixinTransferDestination {
     @Shadow private Channel channel;
 
     /**
-     * Substitutes only the native transfer packet and retains the caller's original send completion behavior.
+     * Substitutes only the native transfer packet and retains the caller's original send completion
+     * behavior.
+     *
      * @param packet outgoing packet after all public send overloads converge
      * @return original packet or an equivalent transfer selecting the configured RakNet endpoint
      */
     @ModifyVariable(method = "sendPacket", at = @At("HEAD"), argsOnly = true)
-    private Packet<?> raknetify$selectTransferDestination(Packet<?> packet) {
-        if (!(packet instanceof ClientboundTransferPacket transfer)) return packet;
-        TransferDestinations.Endpoint selected = TransferSupport.select(this.channel, transfer.host(), transfer.port());
-        return selected == null ? packet : TransferPacketUtil.replace(transfer, selected.host(), selected.port());
+    private Packet<?> raknetify$selectTransferDestination(final Packet<?> packet) {
+        if (!(packet instanceof ClientboundTransferPacket transfer)) {
+            return packet;
+        }
+        TransferDestinations.Endpoint selected =
+                TransferSupport.select(this.channel, transfer.host(), transfer.port());
+        return selected == null
+                ? packet
+                : TransferPacketUtil.replace(transfer, selected.host(), selected.port());
     }
 }

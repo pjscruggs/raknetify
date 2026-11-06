@@ -24,9 +24,10 @@
 
 package com.ishland.raknetify.fabric.mixin;
 
-import com.llamalad7.mixinextras.MixinExtrasBootstrap;
 import com.ishland.raknetify.fabric.common.util.MinecraftVersions;
 import com.ishland.raknetify.minecraft.ModPlatform;
+import com.llamalad7.mixinextras.MixinExtrasBootstrap;
+
 import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
@@ -34,9 +35,7 @@ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 import java.util.List;
 import java.util.Set;
 
-/**
- * Selects Mixin hooks whose target APIs exist in the running Minecraft version.
- */
+/** Selects Mixin hooks whose target APIs exist in the running Minecraft version. */
 public class RaknetifyFabricMixinPlugin implements IMixinConfigPlugin {
 
     /**
@@ -45,7 +44,7 @@ public class RaknetifyFabricMixinPlugin implements IMixinConfigPlugin {
      * @param mixinPackage configured mixin package, unused because initialization is shared
      */
     @Override
-    public void onLoad(String mixinPackage) {
+    public void onLoad(final String mixinPackage) {
         System.setProperty("raknetserver.maxPacketLoss", String.valueOf(Integer.MAX_VALUE));
         MixinExtrasBootstrap.init();
     }
@@ -68,17 +67,25 @@ public class RaknetifyFabricMixinPlugin implements IMixinConfigPlugin {
      * @return whether the candidate hook is supported by this runtime
      */
     @Override
-    public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+    public boolean shouldApplyMixin(final String targetClassName, final String mixinClassName) {
         return switch (mixinClassName.substring("com.ishland.raknetify.fabric.mixin.".length())) {
-            // Snapshot vanilla sends compression during construction. Fabric API removed its duplicate path.
-            // The required redirect in MixinServerLoginNetworkHandler covers that constructor instead.
-            case "compat.fabricapi.MixinServerLoginNetworkAddon" -> !MinecraftVersions.IS_26_4_SNAPSHOT
-                    && ModPlatform.get().isModLoaded("fabric-networking-api-v1");
-            case "compat.qsl.MixinServerLoginNetworkAddon" -> ModPlatform.get().isModLoaded("quilt_networking");
-            case "compat.packetfixer.MixinSplitterHandler" -> ModPlatform.get().isModLoaded("packetfixer");
-            case "access.IDebugHudEntries", "compat.krypton.MixinServerLoginNetworkHandler" -> !MinecraftVersions.IS_26_4_SNAPSHOT;
-            case "client.hud.MixinDebugHudEntries26_4", "common.encryption.MixinClientConnection26_4",
-                    "compat.krypton.MixinServerLoginNetworkHandler26_4" -> MinecraftVersions.IS_26_4_SNAPSHOT;
+            // Snapshot vanilla sends compression during construction. Fabric API removed its
+            // duplicate path.
+            // The required redirect in MixinServerLoginNetworkHandler covers that constructor
+            // instead.
+            case "compat.fabricapi.MixinServerLoginNetworkAddon" ->
+                    !MinecraftVersions.IS_26_4_SNAPSHOT
+                            && ModPlatform.get().isModLoaded("fabric-networking-api-v1");
+            case "compat.qsl.MixinServerLoginNetworkAddon" ->
+                    ModPlatform.get().isModLoaded("quilt_networking");
+            case "compat.packetfixer.MixinSplitterHandler" ->
+                    ModPlatform.get().isModLoaded("packetfixer");
+            case "access.IDebugHudEntries", "compat.krypton.MixinServerLoginNetworkHandler" ->
+                    !MinecraftVersions.IS_26_4_SNAPSHOT;
+            case "client.hud.MixinDebugHudEntries26_4",
+                    "common.encryption.MixinClientConnection26_4",
+                    "compat.krypton.MixinServerLoginNetworkHandler26_4" ->
+                    MinecraftVersions.IS_26_4_SNAPSHOT;
             default -> true;
         };
     }
@@ -90,9 +97,7 @@ public class RaknetifyFabricMixinPlugin implements IMixinConfigPlugin {
      * @param otherTargets targets selected by other loaded configurations
      */
     @Override
-    public void acceptTargets(Set<String> myTargets, Set<String> otherTargets) {
-
-    }
+    public void acceptTargets(final Set<String> myTargets, final Set<String> otherTargets) {}
 
     /**
      * Uses the mixins listed in the configuration without adding dynamic entries.
@@ -113,9 +118,11 @@ public class RaknetifyFabricMixinPlugin implements IMixinConfigPlugin {
      * @param mixinInfo metadata describing the selected mixin
      */
     @Override
-    public void preApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
-
-    }
+    public void preApply(
+            final String targetClassName,
+            final ClassNode targetClass,
+            final String mixinClassName,
+            final IMixinInfo mixinInfo) {}
 
     /**
      * Leaves the transformed target unchanged after Mixin applies the declared injections.
@@ -126,7 +133,9 @@ public class RaknetifyFabricMixinPlugin implements IMixinConfigPlugin {
      * @param mixinInfo metadata describing the applied mixin
      */
     @Override
-    public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
-
-    }
+    public void postApply(
+            final String targetClassName,
+            final ClassNode targetClass,
+            final String mixinClassName,
+            final IMixinInfo mixinInfo) {}
 }

@@ -25,12 +25,12 @@
 package com.ishland.raknetify.fabric.mixin.access;
 
 import net.minecraft.world.level.Level;
+
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
-/**
- * Exposes the logical-side flag used to install client-only hunger behavior.
- */
+/** Exposes the logical-side flag used to install client-only hunger behavior. */
+@FunctionalInterface
 @Mixin(Level.class)
 public interface IWorld {
 
@@ -41,5 +41,4 @@ public interface IWorld {
      */
     @Accessor("isClientSide")
     boolean raknetify$isClient();
-
 }

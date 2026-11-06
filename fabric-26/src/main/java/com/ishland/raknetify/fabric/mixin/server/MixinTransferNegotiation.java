@@ -24,14 +24,16 @@
 
 package com.ishland.raknetify.fabric.mixin.server;
 
-import com.ishland.raknetify.common.connection.TransferSupport;
 import com.ishland.raknetify.common.connection.TransferQueryAnswer;
+import com.ishland.raknetify.common.connection.TransferSupport;
 import com.ishland.raknetify.fabric.common.connection.TransferQuery;
 import com.ishland.raknetify.fabric.mixin.access.IClientConnection;
+
 import net.minecraft.network.Connection;
-import net.minecraft.network.protocol.login.ServerboundCustomQueryAnswerPacket;
 import net.minecraft.network.protocol.login.ClientboundCustomQueryPacket;
+import net.minecraft.network.protocol.login.ServerboundCustomQueryAnswerPacket;
 import net.minecraft.server.network.ServerLoginPacketListenerImpl;
+
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -44,33 +46,52 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(value = ServerLoginPacketListenerImpl.class, priority = 1100)
 public abstract class MixinTransferNegotiation {
 
-    /** Native connection retains the support flag across login, configuration and play listeners. */
+    /**
+     * Native connection retains the support flag across login, configuration and play listeners.
+     */
     @Shadow @Final private Connection connection;
+
     /** Query ownership is private to this listener and cannot authorize admission. */
-    @Unique private final TransferSupport.Negotiation raknetify$transfer = new TransferSupport.Negotiation();
+    @Unique
+    private final TransferSupport.Negotiation raknetify$transfer =
+            new TransferSupport.Negotiation();
 
     /**
-     * Leaves the vanilla verification state and timeout intact while waiting for one optional capability reply.
+     * Leaves the vanilla verification state and timeout intact while waiting for one optional
+     * capability reply.
+     *
      * @param callback cancels only this verification attempt, not the outer login tick
      */
     @Inject(method = "verifyLoginAndFinishConnectionSetup", at = @At("HEAD"), cancellable = true)
-    private void raknetify$queryTransferSupport(CallbackInfo callback) {
-        if (!TransferSupport.enabled()) return;
-        if (this.raknetify$transfer.start()) {
-            this.connection.send(new ClientboundCustomQueryPacket(this.raknetify$transfer.transactionId(), new TransferQuery()));
+    private void raknetify$queryTransferSupport(final CallbackInfo callback) {
+        if (!TransferSupport.enabled()) {
+            return;
         }
-        if (this.raknetify$transfer.waiting()) callback.cancel();
+        if (this.raknetify$transfer.start()) {
+            this.connection.send(
+                    new ClientboundCustomQueryPacket(
+                            this.raknetify$transfer.transactionId(), new TransferQuery()));
+        }
+        if (this.raknetify$transfer.waiting()) {
+            callback.cancel();
+        }
     }
 
     /**
-     * Consumes the owned reply before vanilla or Fabric API treats its transaction ID as unexpected.
+     * Consumes the owned reply before vanilla or Fabric API treats its transaction ID as
+     * unexpected.
+     *
      * @param packet native response carrying the original wire-level handled flag
      * @param callback cancels dispatch only when the pending transaction belongs to this feature
      */
     @Inject(method = "handleCustomQueryPacket", at = @At("HEAD"), cancellable = true)
-    private void raknetify$receiveTransferSupport(ServerboundCustomQueryAnswerPacket packet, CallbackInfo callback) {
-        if (this.raknetify$transfer.answer(packet.transactionId(), ((TransferQueryAnswer) (Object) packet).raknetify$isTransferSupported(),
-                ((IClientConnection) this.connection).getChannel())) callback.cancel();
+    private void raknetify$receiveTransferSupport(
+            final ServerboundCustomQueryAnswerPacket packet, final CallbackInfo callback) {
+        if (this.raknetify$transfer.answer(
+                packet.transactionId(),
+                ((TransferQueryAnswer) (Object) packet).raknetify$isTransferSupported(),
+                ((IClientConnection) this.connection).getChannel())) {
+            callback.cancel();
+        }
     }
-
 }

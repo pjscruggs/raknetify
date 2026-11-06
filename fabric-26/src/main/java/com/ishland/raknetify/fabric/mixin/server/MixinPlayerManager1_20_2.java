@@ -26,20 +26,22 @@ package com.ishland.raknetify.fabric.mixin.server;
 
 import com.ishland.raknetify.common.connection.RakNetSimpleMultiChannelCodec;
 import com.ishland.raknetify.fabric.mixin.access.IClientConnection;
+
 import io.netty.channel.Channel;
+
 import net.minecraft.network.Connection;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.players.PlayerList;
+
 import network.ycc.raknet.RakNet;
+
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/**
- * Records RakNet logins and starts multichannel delivery after the modern player-join sequence.
- */
+/** Records RakNet logins and starts multichannel delivery after the modern player-join sequence. */
 @Mixin(PlayerList.class)
 public class MixinPlayerManager1_20_2 {
 
@@ -52,14 +54,23 @@ public class MixinPlayerManager1_20_2 {
      * @param ci injection callback, left uncancelled so vanilla join processing is unchanged
      */
     @Inject(method = "placeNewPlayer", at = @At("HEAD"))
-    private void onJoin(Connection connection, ServerPlayer player, CommonListenerCookie clientData, CallbackInfo ci) {
-        if (((IClientConnection) connection).getChannel().config() instanceof RakNet.Config config) {
-            System.out.println(String.format("Raknetify: %s logged in via RakNet, mtu %d", player.getName().getString(), config.getMTU()));
+    private void onJoin(
+            final Connection connection,
+            final ServerPlayer player,
+            final CommonListenerCookie clientData,
+            final CallbackInfo ci) {
+        if (((IClientConnection) connection).getChannel().config()
+                instanceof RakNet.Config config) {
+            System.out.println(
+                    String.format(
+                            "Raknetify: %s logged in via RakNet, mtu %d",
+                            player.getName().getString(), config.getMTU()));
         }
     }
 
     /**
-     * Requests multichannel negotiation after vanilla finishes sending the player's initial join state.
+     * Requests multichannel negotiation after vanilla finishes sending the player's initial join
+     * state.
      *
      * @param connection player's initialized Minecraft connection
      * @param player server player entering the world
@@ -67,14 +78,19 @@ public class MixinPlayerManager1_20_2 {
      * @param ci injection callback, left uncancelled so vanilla join processing is unchanged
      */
     @Inject(method = "placeNewPlayer", at = @At("RETURN"))
-    private void postJoin(Connection connection, ServerPlayer player, CommonListenerCookie clientData, CallbackInfo ci) {
+    private void postJoin(
+            final Connection connection,
+            final ServerPlayer player,
+            final CommonListenerCookie clientData,
+            final CallbackInfo ci) {
         final Channel channel = ((IClientConnection) connection).getChannel();
         if (channel == null) {
             //noinspection RedundantStringFormatCall
-            System.err.println("Raknetify: Warning: %s don't have valid channel when logged in, not sending sync packet".formatted(this));
+            System.err.println(
+                    "Raknetify: Warning: %s don't have valid channel when logged in, not sending sync packet"
+                            .formatted(this));
             return;
         }
         channel.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL);
     }
-
 }
