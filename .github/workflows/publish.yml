@@ -7,10 +7,10 @@ on:
         required: true
         type: string
       loader:
-        description: Loader to publish
+        description: Mod loader or server plugin to publish
         type: choice
-        default: all
-        options: [all, fabric, forge, neoforge]
+        default: all-mods
+        options: [all-mods, fabric, forge, neoforge, spigot]
       destination:
         description: Publication destination
         type: choice
@@ -100,4 +100,5 @@ jobs:
           "-PreleaseDirectory=$GITHUB_WORKSPACE/release-input"
           "-PchangelogFile=$GITHUB_WORKSPACE/release-notes.txt"
           "-PnativeManifest=$GITHUB_WORKSPACE/tested-source/native-loaders.json"
+          "-PspigotManifest=$GITHUB_WORKSPACE/tested-source/spigot-servers.json"
           "-Ploader=$LOADER" "-Pdestination=$DESTINATION" "-PpublishDryRun=$PREVIEW"

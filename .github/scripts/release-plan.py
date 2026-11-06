@@ -24,10 +24,11 @@ def validate_run(run, repository):
 
 def publication_matrix(loader, destination):
     """Select independent upload jobs so a failed destination can be retried without replaying successful jobs."""
-    loaders = ['fabric', 'forge', 'neoforge'] if loader == 'all' else [loader]
+    loaders = ['fabric', 'forge', 'neoforge'] if loader in ('all', 'all-mods') else [loader]
     destinations = ['modrinth', 'curseforge'] if destination == 'both' else [destination]
-    assert all(item in ('fabric', 'forge', 'neoforge') for item in loaders), 'Unknown loader'
+    assert all(item in ('fabric', 'forge', 'neoforge', 'spigot') for item in loaders), 'Unknown loader'
     assert all(item in ('modrinth', 'curseforge') for item in destinations), 'Unknown destination'
+    assert not ('spigot' in loaders and 'curseforge' in destinations), 'Spigot requires a separate CurseForge Bukkit project'
     return {'include': [{'loader': item, 'destination': target} for item in loaders for target in destinations]}
 
 

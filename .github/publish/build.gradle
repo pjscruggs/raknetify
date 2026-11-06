@@ -11,7 +11,8 @@ def destination = providers.gradleProperty('destination').get()
 validateTarget(loader, destination)
 def compatibility = new JsonSlurper().parse(new File(releaseDirectory, 'compatibility.json'))
 def nativeLoaders = new JsonSlurper().parse(file(providers.gradleProperty('nativeManifest').getOrElse('../../native-loaders.json')))
-def supportedGames = loader == 'fabric' ? compatibility.gameVersions : [nativeLoaders[loader].minecraft]
+def supportedGames = supportedGames(loader, compatibility, nativeLoaders,
+        file(providers.gradleProperty('spigotManifest').getOrElse('../../spigot-servers.json')))
 def artifact = new File(releaseDirectory, "raknetify2-${loader}-${compatibility.version}.jar")
 def notes = providers.fileContents(layout.projectDirectory.file(providers.gradleProperty('changelogFile').get())).asText
 def preview = providers.gradleProperty('publishDryRun').map { it.toBoolean() }.getOrElse(true)
@@ -25,7 +26,7 @@ publishMods {
     displayName = "Raknetify2 ${compatibility.version} (${loader})"
     changelog = notes
     type = ALPHA
-    modLoaders.add(loader)
+    modLoaders.addAll(loader == 'spigot' ? ['spigot', 'paper'] : [loader])
     dryRun = preview
     // An uncertain upload must be reconciled before retrying, because creation is not an idempotent API operation.
     maxRetries = 0
@@ -35,7 +36,7 @@ publishMods {
             accessToken = providers.environmentVariable('MODRINTH_TOKEN')
             projectId = 'eWU77Xdo'
             minecraftVersions.addAll(supportedGames)
-            environment = CLIENT_AND_SERVER
+            environment = loader == 'spigot' ? DEDICATED_SERVER_ONLY : CLIENT_AND_SERVER
         }
     }
     if (destination == 'curseforge') {
@@ -59,6 +60,23 @@ publishMods {
  * @throws GradleException if either selection is outside the supported publication targets
  */
 static void validateTarget(String loader, String destination) {
-    if (!(loader in ['fabric', 'forge', 'neoforge'])) throw new GradleException('Unsupported publication loader')
+    if (!(loader in ['fabric', 'forge', 'neoforge', 'spigot'])) throw new GradleException('Unsupported publication loader')
     if (!(destination in ['modrinth', 'curseforge'])) throw new GradleException('Unsupported publication destination')
+    if (loader == 'spigot' && destination == 'curseforge') {
+        throw new GradleException('Spigot requires a separate CurseForge Bukkit project')
+    }
+}
+
+/**
+ * Reads platform support from the exact source revision that produced the release artifacts.
+ * @param loader distribution selected for publication
+ * @param compatibility generated universal Fabric compatibility metadata
+ * @param nativeLoaders tested Forge and NeoForge version manifest
+ * @param spigotManifest tested server version manifest, needed only for plugin publication
+ * @return game versions to advertise for this artifact
+ */
+static List supportedGames(String loader, Map compatibility, Map nativeLoaders, File spigotManifest) {
+    if (loader == 'fabric') return compatibility.gameVersions as List
+    if (loader == 'spigot') return [new JsonSlurper().parse(spigotManifest).minecraft]
+    return [nativeLoaders[loader].minecraft]
 }

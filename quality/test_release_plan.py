@@ -142,6 +142,19 @@ class ReleasePlanTests(unittest.TestCase):
                 with self.assertRaisesRegex(AssertionError, 'metadata version'):
                     self.guard.verify_artifacts(self.folder)
 
+    def test_spigot_publication_does_not_target_a_mod_project(self):
+        """Publish server plugins with Modrinth metadata and reject uploading them to the CurseForge mod project."""
+        self.assertEqual({'include': [{'loader': 'spigot', 'destination': 'modrinth'}]},
+                         self.guard.publication_matrix('spigot', 'modrinth'))
+        for destination in ('curseforge', 'both'):
+            with self.assertRaisesRegex(AssertionError, 'Bukkit project'):
+                self.guard.publication_matrix('spigot', destination)
+
+    def test_all_mods_excludes_server_plugins(self):
+        """Keep the explicit bulk-mod selection compatible with older releases that do not contain server plugins."""
+        self.assertEqual(self.guard.publication_matrix('all', 'both'),
+                         self.guard.publication_matrix('all-mods', 'both'))
+
 
 if __name__ == '__main__':
     unittest.main()
