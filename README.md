@@ -28,6 +28,26 @@ Install Raknetify2 in place of Raknetify. Do not install both. Normal server add
 
 Install the matching plugin on Velocity or BungeeCord and the Fabric mod on each connecting client. Allow UDP on the proxy's listening port. Clients use the `raknet;` prefix with the proxy address. Backend servers do not need Raknetify2 for this setup.
 
+## Automatic transfers
+
+Fabric servers can select RakNet automatically when transferring players to configured destinations. Create `config/raknetify2-transfers.json` on the server that sends the transfer:
+
+```json
+{
+  "destinations": [
+    {
+      "host": "play.example.com",
+      "tcpPort": 25565,
+      "udpPort": 25570
+    }
+  ]
+}
+```
+
+Restart the server after editing this file. Transfer players to the ordinary hostname and TCP port. Clients that advertise support for automatic RakNet transfers use the configured UDP port. Other clients and unmatched destinations keep the original transfer address.
+
+The destination must already accept RakNet on that UDP port. This file does not open a listener or configure a firewall. Hostnames and TCP ports must match an entry exactly, apart from hostname capitalization and equivalent IP spelling.
+
 ## License and credits
 
 Raknetify2 is an independently maintained fork of [Raknetify](https://github.com/RelativityMC/raknetify), originally developed by ishland. It retains Raknetify's MIT license and original copyright notices. The networking implementation builds on ishland's Raknetify and [netty-raknet](https://github.com/RelativityMC/netty-raknet).
