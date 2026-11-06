@@ -170,6 +170,8 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
             @Override
             protected void initChannel(final Channel channel) {
                 ((RakNet.Config) channel.config()).setMaxQueuedBytes(Constants.MAX_QUEUED_SIZE);
+                // Metrics are transport control traffic handled before application encryption.
+                channel.pipeline().addLast("metrics", new MetricsSynchronizationHandler());
                 channel.pipeline().addLast("game", new UserDataCodec(0xFD));
                 channel.pipeline().addLast("probe", RaknetEncryptionProbe.this);
             }

@@ -24,19 +24,77 @@
 
 package com.ishland.raknetify.common.connection;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.ishland.raknetify.common.Constants;
+
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.embedded.EmbeddedChannel;
 
+import network.ycc.raknet.frame.FrameData;
+
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+
+import java.security.GeneralSecurityException;
+
+import javax.crypto.KeyGenerator;
 
 /**
  * Exercises cipher replacement when prior pipeline setup installed only one encryption direction.
  */
 class EncryptionPipelineTest {
+    /**
+     * Transport metrics are consumed before the cipher while unencrypted game traffic still fails.
+     *
+     * @throws GeneralSecurityException if the test runtime cannot create an AES key
+     */
+    @Test
+    void metricsDoNotBypassGameAuthentication() throws GeneralSecurityException {
+        var metrics = new MetricsSynchronizationHandler();
+        var encryption =
+                new MultiChannellingEncryption(
+                        KeyGenerator.getInstance("AES").generateKey(), false);
+        var channel = new EmbeddedChannel(metrics, encryption);
+        try {
+            FrameData control = zeroFrame(Constants.RAKNET_METRICS_SYNC_PACKET_ID);
+            assertFalse(channel.writeInbound(control));
+            assertEquals(0, control.refCnt());
+            assertTrue(metrics.isRemoteSupported());
+            assertTrue(channel.isOpen());
+            FrameData game = zeroFrame(Constants.RAKNET_GAME_PACKET_ID);
+            assertThrows(GeneralSecurityException.class, () -> channel.writeInbound(game));
+            assertEquals(0, game.refCnt());
+            assertFalse(channel.isOpen());
+        } finally {
+            channel.finishAndReleaseAll();
+        }
+    }
+
+    /**
+     * Creates a zero-valued metrics-sized payload under the selected outer identifier.
+     *
+     * @param packetId transport or application identifier whose pipeline handling is tested
+     * @return reference-counted frame transferred to the test channel by its caller
+     */
+    private static FrameData zeroFrame(final int packetId) {
+        ByteBuf payload = Unpooled.buffer(33).writeZero(33);
+        try {
+            return FrameData.create(UnpooledByteBufAllocator.DEFAULT, packetId, payload);
+        } finally {
+            payload.release();
+        }
+    }
+
     /**
      * An absent decrypt handler must not prevent removing encrypt or an earlier frame cipher.
      *
