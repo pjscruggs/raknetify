@@ -171,8 +171,9 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
                 if (Constants.DEBUG) System.out.println("Raknetify: [MultiChannellingDataCodec] Stopped multichannel");
                 this.isMultichannelEnabled = false;
                 super.write(ctx, msg, promise);
+            } else {
+                promise.setSuccess();
             }
-            promise.setSuccess();
             return; // discard sync request when multichannel is not active
         }
 
@@ -241,7 +242,8 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
 
     /**
      * Creates a frame using the first applicable channel rule without releasing the input buffer.
-     * Before negotiation, classification still permits dropping packets but delivery stays ordered.
+     * Packets sent before negotiation begins stay ordered on channel zero. Writes held behind the
+     * negotiation marker already need their final routes so later writes cannot overtake them.
      *
      * @param ctx allocator for the new frame
      * @param buf readable Minecraft payload with its packet ID at the reader index
@@ -254,7 +256,7 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
                 return null; // the void
             }
             final FrameData frameData = FrameData.create(ctx.alloc(), packetId, buf);
-            if (isMultichannelEnabled) {
+            if (isMultichannelEnabled || queuePendingWrites) {
                 if (packetChannelOverride >= 0)
                     frameData.setOrderChannel(packetChannelOverride);
                 else if (packetChannelOverride == -1)
