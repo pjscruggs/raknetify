@@ -89,6 +89,40 @@ jobs:
           --krypton-lock .github/krypton-versions.json
           --encryption-legacy transport-test-legacy/build/libs/*.jar
           --encryption-modern transport-test-modern/build/libs/*.jar
+      - name: PacketFixer version compatibility
+        run: >-
+          python3 .github/scripts/server-smoke.py
+          --jar fabric-universal/build/libs/*.jar
+          --work-dir "$RUNNER_TEMP/raknetify-smoke/packetfixer"
+          --java-17 "${{ steps.java17.outputs.path }}/bin/java"
+          --java-21 "${{ steps.java21.outputs.path }}/bin/java"
+          --packetfixer-lock .github/packetfixer-versions.json
+          --encryption-legacy transport-test-legacy/build/libs/*.jar
+          --encryption-modern transport-test-modern/build/libs/*.jar
+      - name: PacketFixer and Krypton together
+        run: >-
+          python3 .github/scripts/server-smoke.py
+          --jar fabric-universal/build/libs/*.jar
+          --work-dir "$RUNNER_TEMP/raknetify-smoke/packetfixer-krypton"
+          --java-17 "${{ steps.java17.outputs.path }}/bin/java"
+          --java-21 "${{ steps.java21.outputs.path }}/bin/java"
+          --versions 1.18 1.20.5 1.21.11 26.1 26.2 26.3
+          --packetfixer-lock .github/packetfixer-versions.json
+          --krypton-lock .github/krypton-versions.json
+          --encryption-legacy transport-test-legacy/build/libs/*.jar
+          --encryption-modern transport-test-modern/build/libs/*.jar
+      - name: PacketFixer with Polymer and Krypton
+        run: >-
+          python3 .github/scripts/server-smoke.py
+          --jar fabric-universal/build/libs/*.jar
+          --work-dir "$RUNNER_TEMP/raknetify-smoke/packetfixer-polymer-krypton"
+          --java-21 "${{ steps.java21.outputs.path }}/bin/java"
+          --versions 1.21.11 26.3
+          --packetfixer-lock .github/packetfixer-versions.json
+          --polymer-lock .github/polymer-versions.json
+          --krypton-lock .github/krypton-versions.json
+          --encryption-legacy transport-test-legacy/build/libs/*.jar
+          --encryption-modern transport-test-modern/build/libs/*.jar
       - name: capture server smoke logs
         if: always()
         uses: actions/upload-artifact@v4

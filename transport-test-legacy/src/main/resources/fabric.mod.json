@@ -11,5 +11,10 @@
     "raknetify": "*",
     "minecraft": ">=1.18 <26",
     "java": ">=17"
+  },
+  "entrypoints": {
+    "main": [
+      "com.ishland.raknetify.test.PacketLimitsWitness"
+    ]
   }
 }

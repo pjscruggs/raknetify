@@ -104,6 +104,14 @@ def install_mods(folder, dependencies):
         (folder / 'mods' / dependency['filename']).write_bytes(data)
 
 
+def prepare_packetfixer(folder, dependencies):
+    """Install pinned PacketFixer and explicitly raise strings, which older releases keep at vanilla size."""
+    install_mods(folder, dependencies)
+    config = folder / 'config'
+    config.mkdir(parents=True, exist_ok=True)
+    (config / 'packetfixer.properties').write_text('allSizesUnlimited=true\nstringSize=65536\n')
+
+
 def prepare_polymer(folder, dependencies):
     """Install hash-pinned matching mods and enable Polymer's HTTP hosting on the Minecraft TCP port."""
     install_mods(folder, dependencies)
@@ -128,13 +136,15 @@ def check_polymer_http(port):
             time.sleep(1)
 
 
-def start_server(folder, log, events, java, encryption=False):
+def start_server(folder, log, events, java, encryption=False, packetfixer=False):
     """Start one isolated server and return its process and output-reader thread.
 
     Output is flushed to the log and copied into the readiness queue. The caller owns
     process shutdown and must join the reader before inspecting the complete log.
     """
     test_flags = ['-Draknetify.test.encryption=true'] if encryption else []
+    if packetfixer:
+        test_flags.append('-Draknetify.test.packetLimits=true')
     process = subprocess.Popen([java, *test_flags, '-Xms256M', '-Xmx1G', '-jar', 'fabric-server-launch.jar', 'nogui'],
                                cwd=folder, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace')
@@ -191,13 +201,14 @@ def stop_server(process, reader):
     reader.join(timeout=10)
 
 
-def check_log(log, version, krypton=False):
+def check_log(log, version, krypton=False, packetfixer=False):
     """Require the correct nested runtime and reject known mixin, linkage, and buffer-leak failures."""
     text = log.read_text()
     runtime = 'modern' if version.startswith('26.') else 'legacy'
     assert re.search(r'\braknetify_runtime\s+\S+\.' + runtime + r'\b', text), runtime
-    if krypton:
-        assert re.search(r'\bkrypton\s+\S+', text), 'Krypton was not loaded'
+    for mod, enabled in (('krypton', krypton), ('packetfixer', packetfixer)):
+        if enabled:
+            assert re.search(r'\b' + mod + r'\s+\S+', text), mod + ' was not loaded'
     for failure in ('Critical injection failure', 'Mixin apply failed', 'NoClassDefFoundError', 'LEAK:'):
         assert failure not in text, failure
 
@@ -210,23 +221,22 @@ def server_metadata(folder, version):
     return metadata
 
 
-def check_server(folder, version, native, java, probe_dir, polymer=False, krypton=False, encryption=False):
+def check_server(folder, version, native, java, probe_dir, polymer=False, krypton=False, encryption=False, packetfixer=False, port=25871):
     """Run one transport configuration through startup, network probes, and clean shutdown.
 
     The supplied folder is an isolated smoke-test installation. Its properties and
     EULA acceptance are written here, and native and NIO runs use different worlds.
     """
-    port = 25871
     (folder / 'eula.txt').write_text('eula=true\n')
     (folder / 'server.properties').write_text(
-        'server-ip=127.0.0.1\nserver-port=25871\nenforce-secure-profile=false\n'
+        f'server-ip=127.0.0.1\nserver-port={port}\nenforce-secure-profile=false\n'
         'online-mode=' + str(encryption).lower() + '\n'
         'view-distance=2\nsimulation-distance=2\nspawn-chunk-radius=0\n'
         'level-type=minecraft:flat\nmax-players=2\n'
         'use-native-transport=' + str(native).lower() + '\nlevel-name=world-' + str(native).lower() + '\n')
     log = folder / ('native.log' if native else 'nio.log')
     events = queue.Queue()
-    process, reader = start_server(folder, log, events, java, encryption)
+    process, reader = start_server(folder, log, events, java, encryption, packetfixer)
     try:
         await_ready(process, events)
         metadata = server_metadata(folder, version)
@@ -234,7 +244,7 @@ def check_server(folder, version, native, java, probe_dir, polymer=False, krypto
         check_udp(port)
         check_connected_udp(port, metadata, java, probe_dir)
         if encryption:
-            check_encryption(port, metadata, java, probe_dir)
+            check_encryption(port, metadata, java, probe_dir, packetfixer)
         if polymer:
             check_polymer_http(port)
         java_path = Path(shutil.which(java) or java).resolve()
@@ -247,31 +257,36 @@ def check_server(folder, version, native, java, probe_dir, polymer=False, krypto
         process.stdin.flush()
         assert process.wait(timeout=45) == 0
         reader.join(timeout=10)
-        check_log(log, version, krypton)
-        report_success(version, transport, log, polymer, krypton, encryption)
+        check_log(log, version, krypton, packetfixer)
+        report_success(version, transport, log, polymer, krypton, encryption, packetfixer)
     finally:
         stop_server(process, reader)
 
 
-def report_success(version, transport, log, polymer, krypton, encryption):
+def report_success(version, transport, log, polymer, krypton, encryption, packetfixer):
     """Report only the checks selected for this run, including the server-side encryption witness."""
     checks = 'startup, TCP and connected RakNet status, shutdown'
     if polymer:
         checks += ', Polymer HTTP resource-pack download'
     if krypton:
         checks += ', Krypton loaded'
+    if packetfixer:
+        assert 'PASS native compression above eight MiB' in log.read_text()
+        assert 'PASS native string above 32767 characters' in log.read_text()
+        checks += ', PacketFixer native size limits'
     if encryption:
         assert 'PASS native encrypted challenge exchange' in log.read_text()
         checks += ', native RSA and bidirectional encryption'
     print('PASS', version, transport, checks, flush=True)
 
 
-def check_encryption(port, metadata, java, probe_dir):
+def check_encryption(port, metadata, java, probe_dir, packetfixer):
     """Require the native key exchange and encrypted challenge in both directions without account lookup."""
     classpath = os.pathsep.join(str(probe_dir.resolve() / part) for part in ('classes', 'lib/*'))
     output = subprocess.check_output(
         [java, '-cp', classpath, 'com.ishland.raknetify.common.connection.RaknetEncryptionProbe',
-         str(port), str(metadata['protocol_version'])], text=True, timeout=30)
+         str(port), str(metadata['protocol_version']), str(8 * 1024 * 1024 + 64 if packetfixer else 8)],
+        text=True, timeout=45)
     assert 'PASS native RSA and bidirectional RakNet encryption' in output, output
 
 
@@ -290,13 +305,15 @@ def arguments():
     parser.add_argument('--probe-dir', type=Path, default=Path('common/build/transport-probe'))
     parser.add_argument('--polymer-lock', type=Path)
     parser.add_argument('--krypton-lock', type=Path)
+    parser.add_argument('--packetfixer-lock', type=Path)
     parser.add_argument('--versions', nargs='+')
+    parser.add_argument('--port', type=int, default=25871)
     parser.add_argument('--encryption-legacy', type=Path)
     parser.add_argument('--encryption-modern', type=Path)
     return parser.parse_args()
 
 
-def prepare_server(args, version, polymer, krypton):
+def prepare_server(args, version, polymer, krypton, packetfixer):
     """Prepare an isolated runtime with only the explicitly selected pinned dependency sets."""
     folder = args.work_dir / version
     (folder / 'mods').mkdir(parents=True, exist_ok=True)
@@ -305,6 +322,8 @@ def prepare_server(args, version, polymer, krypton):
         prepare_polymer(folder, polymer[version])
     if krypton:
         install_mods(folder, krypton[version])
+    if packetfixer:
+        prepare_packetfixer(folder, packetfixer[version])
     fixture = encryption_fixture(args, version)
     if fixture:
         shutil.copy2(fixture, folder / 'mods' / 'encryption-test.jar')
@@ -330,13 +349,14 @@ def main():
     args = arguments()
     polymer = json.loads(args.polymer_lock.read_text()) if args.polymer_lock else {}
     krypton = json.loads(args.krypton_lock.read_text()) if args.krypton_lock else {}
+    packetfixer = json.loads(args.packetfixer_lock.read_text()) if args.packetfixer_lock else {}
     supported = json.loads((Path(__file__).resolve().parents[2] / 'supported-versions.json').read_text())
-    versions = args.versions or list(krypton) or ['1.18.2', '1.21.1'] + supported['modern']['gameVersions']
+    versions = args.versions or list(packetfixer) or list(krypton) or ['1.18.2', '1.21.1'] + supported['modern']['gameVersions']
     for version in versions:
-        folder = prepare_server(args, version, polymer, krypton)
+        folder = prepare_server(args, version, polymer, krypton, packetfixer)
         java = select_java(args, version)
         for native in (True, False):
-            check_server(folder, version, native, java, args.probe_dir, bool(polymer), bool(krypton), bool(encryption_fixture(args, version)))
+            check_server(folder, version, native, java, args.probe_dir, bool(polymer), bool(krypton), bool(encryption_fixture(args, version)), bool(packetfixer), args.port)
 
 
 if __name__ == '__main__':
