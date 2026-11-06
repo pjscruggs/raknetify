@@ -54,12 +54,26 @@ def verify_mod_version(path, loader, version):
         if loader == 'fabric':
             metadata = json.loads(archive.read('fabric.mod.json'))
             assert metadata['id'] == 'raknetify', 'Wrong Fabric mod'
+        elif loader == 'spigot':
+            metadata = spigot_metadata(archive)
         else:
             filename = 'mods.toml' if loader == 'forge' else 'neoforge.mods.toml'
             metadata = next(item for item in tomllib.loads(archive.read('META-INF/' + filename).decode())['mods']
                             if item['modId'] == 'raknetify')
         assert metadata['version'] == version, 'JAR metadata version does not match the release'
         assert not any(name.startswith('com/ishland/raknetify/test/') for name in archive.namelist()), 'Test fixture in release'
+
+
+def spigot_metadata(archive):
+    """Read the generated Bukkit metadata strictly and reject ambiguous versions or another plugin entry point."""
+    lines = archive.read('plugin.yml').decode('utf-8').splitlines()
+    assert 'name: Raknetify2' in lines, 'Wrong Spigot plugin'
+    assert 'main: com.ishland.raknetify.spigot.RaknetifySpigotPlugin' in lines, 'Wrong Spigot entry point'
+    versions = [line for line in lines if line.startswith('version:')]
+    assert len(versions) == 1, 'Ambiguous Spigot version'
+    match = re.fullmatch(r"version: '([^']+)'", versions[0])
+    assert match, 'Malformed Spigot version'
+    return {'version': match.group(1)}
 
 
 def verify_artifacts(folder):
@@ -72,6 +86,11 @@ def verify_artifacts(folder):
         name = 'raknetify2-' + loader + '-' + version + '.jar'
         assert name in checked, 'Missing release loader: ' + loader
         verify_mod_version(folder / name, loader, version)
+    plugins = [name for name in checked if name.startswith('raknetify2-spigot-')]
+    if plugins:
+        expected = 'raknetify2-spigot-' + version + '.jar'
+        assert plugins == [expected], 'Unexpected Spigot artifact'
+        verify_mod_version(folder / expected, 'spigot', version)
     return version
 
 

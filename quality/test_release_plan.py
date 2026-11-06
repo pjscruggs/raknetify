@@ -127,6 +127,21 @@ class ReleasePlanTests(unittest.TestCase):
                          self.guard.publication_matrix('forge', 'curseforge'))
         self.assertEqual(6, len(self.guard.publication_matrix('all', 'both')['include']))
 
+    def test_checks_spigot_embedded_version_when_present(self):
+        """Allow older mod-only releases but reject a mislabeled plugin added to a newer verified bundle."""
+        self.make_bundle()
+        path = self.folder / ('raknetify2-spigot-' + self.version + '.jar')
+        for embedded in (self.version, 'old'):
+            with zipfile.ZipFile(path, 'w') as archive:
+                archive.writestr('plugin.yml', "name: Raknetify2\nversion: '" + embedded
+                                 + "'\nmain: com.ishland.raknetify.spigot.RaknetifySpigotPlugin\n")
+            self.checksums()
+            if embedded == self.version:
+                self.assertEqual(self.version, self.guard.verify_artifacts(self.folder))
+            else:
+                with self.assertRaisesRegex(AssertionError, 'metadata version'):
+                    self.guard.verify_artifacts(self.folder)
+
 
 if __name__ == '__main__':
     unittest.main()
