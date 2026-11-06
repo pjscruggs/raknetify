@@ -123,6 +123,7 @@ def run(args, version, metadata, lock):
         assert '\t- raknetify ' in text, 'Raknetify was not loaded'
         assert 'PASS native gameplay ordering 12' in text
         assert 'PASS native entity lifecycle ordering 4' in text
+        check_transfer_witness(version, text)
         if not args.ordering_only:
             assert text.count('PASS connect address ') == 18
             assert text.count('PASS ping address ') == 18
@@ -132,6 +133,13 @@ def run(args, version, metadata, lock):
     if args.ordering_only:
         scope = 'native gameplay packet ordering under reversed delivery'
     print('PASS', version, scope, flush=True)
+
+
+def check_transfer_witness(version, text):
+    """Require actual query handling and send-overload checks on every version with transfer packets."""
+    if version.startswith('26.') or tuple(map(int, version.split('.'))) >= (1, 20, 5):
+        assert 'PASS native transfer capability and send overloads' in text
+        print('PASS', version, 'native transfer capability and send overloads', flush=True)
 
 
 def supported_versions():

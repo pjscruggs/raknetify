@@ -136,7 +136,7 @@ def check_polymer_http(port):
             time.sleep(1)
 
 
-def start_server(folder, log, events, java, encryption=False, packetfixer=False):
+def start_server(folder, log, events, java, encryption=False, packetfixer=False, transfers=False):
     """Start one isolated server and return its process and output-reader thread.
 
     Output is flushed to the log and copied into the readiness queue. The caller owns
@@ -145,6 +145,8 @@ def start_server(folder, log, events, java, encryption=False, packetfixer=False)
     test_flags = ['-Draknetify.test.encryption=true'] if encryption else []
     if packetfixer:
         test_flags.append('-Draknetify.test.packetLimits=true')
+    if transfers:
+        test_flags.append('-Draknetify.test.transfers=true')
     process = subprocess.Popen([java, '-Draknetify.saveChannelMappings=true', *test_flags, '-Xms256M', '-Xmx1G', '-jar', 'fabric-server-launch.jar', 'nogui'],
                                cwd=folder, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace')

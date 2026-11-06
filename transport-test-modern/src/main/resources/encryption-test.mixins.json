@@ -2,7 +2,9 @@
   "required": true,
   "package": "com.ishland.raknetify.test.mixin",
   "compatibilityLevel": "JAVA_25",
+  "plugin": "com.ishland.raknetify.test.mixin.FixtureMixinPlugin",
   "mixins": [
+    "TransferLoginMixin",
     "EncryptionLoginMixin"
   ],
   "injectors": {

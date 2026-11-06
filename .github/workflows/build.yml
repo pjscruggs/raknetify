@@ -137,6 +137,23 @@ jobs:
           --work-dir "$RUNNER_TEMP/raknetify-smoke/ordering"
           --java-17 "${{ steps.java17.outputs.path }}/bin/java"
           --java-21 "${{ steps.java21.outputs.path }}/bin/java"
+      - name: Native transfer negotiation
+        run: >-
+          python3 .github/scripts/transfer-smoke.py --discard-runtime
+          --jar fabric-universal/build/libs/*.jar
+          --encryption-legacy transport-test-legacy/build/libs/*.jar
+          --encryption-modern transport-test-modern/build/libs/*.jar
+          --work-dir "$RUNNER_TEMP/raknetify-smoke/transfers"
+          --java-21 "${{ steps.java21.outputs.path }}/bin/java"
+          --companion-lock .github/polymer-versions.json
+      - name: Transfer clients with Fabric API and Polymer
+        run: >-
+          python3 .github/scripts/client-address-check.py --ordering-only
+          --jar fabric-universal/build/libs/*.jar
+          --fixture transport-test-client/build/libs/*.jar
+          --lock .github/polymer-versions.json
+          --work-dir "$RUNNER_TEMP/raknetify-smoke/transfer-clients"
+          --java-21 "${{ steps.java21.outputs.path }}/bin/java"
       - name: Fast IP Ping client addresses
         run: >-
           python3 .github/scripts/client-address-check.py
