@@ -29,9 +29,39 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Verifies complete login-start wire layouts at each native protocol boundary used by admission probes. */
 class LoginProbeTest {
+    /**
+     * Independent zlib bytes validate compressed admission replies and reject truncation or threshold violations.
+     * @throws Exception if valid protocol vectors cannot be decoded
+     */
+    @Test
+    void nativeLoginCompression() throws Exception {
+        byte[] plain = {0, 2, 123, 125};
+        LoginCompression compressed = new LoginCompression();
+        assertTrue(compressed.configure(new byte[]{3, 2}));
+        byte[] vector = java.util.HexFormat.of().parseHex("04789c6360aaae0500017d00fb");
+        assertArrayEquals(plain, compressed.decode(vector));
+        assertThrows(IllegalArgumentException.class, () -> compressed.decode(new byte[]{0, 0, 2, 123, 125}));
+        assertThrows(Exception.class, () -> compressed.decode(java.util.Arrays.copyOf(vector, vector.length - 1)));
+        assertThrows(IllegalArgumentException.class, () -> compressed.configure(new byte[]{3, 2}));
+        ByteBuf encoded = compressed.encode(io.netty.buffer.Unpooled.wrappedBuffer(plain));
+        try {
+            byte[] wire = new byte[encoded.readableBytes()];
+            encoded.readBytes(wire);
+            assertArrayEquals(plain, compressed.decode(wire));
+        } finally {
+            encoded.release();
+        }
+        LoginCompression uncompressed = new LoginCompression();
+        uncompressed.configure(new byte[]{3, (byte) 0x80, 2});
+        assertArrayEquals(plain, uncompressed.decode(new byte[]{0, 0, 2, 123, 125}));
+    }
+
     /** Optional login negotiation must retain its transaction ID while ordinary disconnects remain untouched. */
     @Test
     void declinesOnlyOptionalQueries() {

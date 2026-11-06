@@ -119,11 +119,13 @@ public final class RaknetProxyProbe {
      * @throws IllegalStateException if more than sixteen optional login queries precede admission
      */
     private static byte[] loginResponse(Channel channel, LinkedBlockingQueue<byte[]> packets) throws Exception {
+        LoginCompression compression = new LoginCompression();
         for (int count = 0; count < 16; count++) {
-            byte[] response = next(packets);
+            byte[] response = compression.decode(next(packets));
+            if (compression.configure(response)) continue;
             ByteBuf answer = declineQuery(response);
             if (answer == null) return response;
-            channel.writeAndFlush(answer).sync();
+            channel.writeAndFlush(compression.encode(answer)).sync();
         }
         throw new IllegalStateException("Too many optional login queries");
     }
@@ -266,7 +268,8 @@ public final class RaknetProxyProbe {
     private static String textPacket(byte[] bytes) {
         ByteBuf buffer = Unpooled.wrappedBuffer(bytes);
         try {
-            if (RaknetStatusProbe.readVarint(buffer) != 0) throw new IllegalArgumentException("Wrong response ID");
+            int packetId = RaknetStatusProbe.readVarint(buffer);
+            if (packetId != 0) throw new IllegalArgumentException("Wrong response ID: " + packetId);
             int length = RaknetStatusProbe.readVarint(buffer);
             if (length != buffer.readableBytes()) throw new IllegalArgumentException("Incorrect string boundary");
             return buffer.readCharSequence(length, StandardCharsets.UTF_8).toString();
