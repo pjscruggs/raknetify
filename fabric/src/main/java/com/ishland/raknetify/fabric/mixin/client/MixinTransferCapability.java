@@ -25,10 +25,12 @@
 package com.ishland.raknetify.fabric.mixin.client;
 
 import com.ishland.raknetify.common.connection.TransferSupport;
+
 import net.minecraft.client.network.ClientLoginNetworkHandler;
 import net.minecraft.network.ClientConnection;
 import net.minecraft.network.packet.c2s.login.LoginQueryResponseC2SPacket;
 import net.minecraft.network.packet.s2c.login.LoginQueryRequestS2CPacket;
+
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -44,13 +46,19 @@ public abstract class MixinTransferCapability {
     @Shadow @Final private ClientConnection connection;
 
     /**
-     * Sends a handled empty reply for version one and leaves every other login query to its normal handler.
-     * @param packet decoded native query, including unknown payload identifiers preserved by Minecraft
+     * Sends a handled empty reply for version one and leaves every other login query to its normal
+     * handler.
+     *
+     * @param packet decoded native query, including unknown payload identifiers preserved by
+     *     Minecraft
      * @param callback cancels the fallback unhandled response after sending our single reply
      */
     @Inject(method = "onQueryRequest", at = @At("HEAD"), cancellable = true)
-    private void raknetify$answerTransferQuery(LoginQueryRequestS2CPacket packet, CallbackInfo callback) {
-        if (!TransferSupport.QUERY_ID.equals(packet.payload().id().toString())) return;
+    private void raknetify$answerTransferQuery(
+            final LoginQueryRequestS2CPacket packet, final CallbackInfo callback) {
+        if (!TransferSupport.QUERY_ID.equals(packet.payload().id().toString())) {
+            return;
+        }
         this.connection.send(new LoginQueryResponseC2SPacket(packet.queryId(), buffer -> {}));
         callback.cancel();
     }

@@ -26,52 +26,47 @@ package com.ishland.raknetify.fabric.mixin.client;
 
 import com.ishland.raknetify.fabric.mixin.access.IClientConnection;
 import com.llamalad7.mixinextras.injector.v2.WrapWithCondition;
+
 import io.netty.channel.Channel;
+
 import net.minecraft.client.network.MultiplayerServerListPinger;
 import net.minecraft.client.network.ServerAddress;
 import net.minecraft.client.network.ServerInfo;
 import net.minecraft.network.ClientConnection;
 import net.minecraft.network.NetworkingBackend;
 import net.minecraft.network.listener.ClientQueryPacketListener;
+
 import network.ycc.raknet.RakNet;
+
 import org.spongepowered.asm.mixin.Dynamic;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.net.InetSocketAddress;
 
-/**
- * Shows transport RTT in the server list and prevents TCP fallback probing for RakNet entries.
- */
+/** Shows transport RTT in the server list and prevents TCP fallback probing for RakNet entries. */
 @Mixin(targets = "net/minecraft/client/network/MultiplayerServerListPinger$1")
 public abstract class MixinMultiplayerServerListPinger1 implements ClientQueryPacketListener {
 
-    /**
-     * Status connection captured by vanilla's anonymous response listener.
-     */
-    @Shadow
-    @Final
-    ClientConnection field_3774; // synthetic
+    /** Status connection captured by vanilla's anonymous response listener. */
+    @Shadow @Final ClientConnection field_3774; // synthetic
 
-    /**
-     * Server-list record receiving the measured RakNet ping.
-     */
-    @Shadow
-    @Final
-    ServerInfo field_3776; // synthetic
+    /** Server-list record receiving the measured RakNet ping. */
+    @Shadow @Final ServerInfo field_3776; // synthetic
 
     /**
      * Publishes the RakNet RTT in milliseconds after a valid server-status response.
      *
      * @param ci return callback after vanilla processes the status response
      */
-    @Inject(method = "onResponse(Lnet/minecraft/network/packet/s2c/query/QueryResponseS2CPacket;)V", at = @At("RETURN"))
-    private void setPingImmediately(CallbackInfo ci) {
+    @Inject(
+            method = "onResponse(Lnet/minecraft/network/packet/s2c/query/QueryResponseS2CPacket;)V",
+            at = @At("RETURN"))
+    private void setPingImmediately(final CallbackInfo ci) {
         final Channel channel = ((IClientConnection) field_3774).getChannel();
         if (channel.config() instanceof RakNet.Config config) {
             field_3776.ping = config.getRTTNanos() / 1_000_000;
@@ -89,8 +84,21 @@ public abstract class MixinMultiplayerServerListPinger1 implements ClientQueryPa
      */
     // Keep the intermediary callback name independent of its version-specific reason parameter.
     @Dynamic
-    @WrapWithCondition(remap = false, method = {"method_10839", "onDisconnected"}, at = @At(remap = true, value = "INVOKE", target = "Lnet/minecraft/client/network/MultiplayerServerListPinger;method_3001(Ljava/net/InetSocketAddress;Lnet/minecraft/client/network/ServerAddress;Lnet/minecraft/client/network/ServerInfo;)V"), require = 0)
-    private boolean noPingRaknet(MultiplayerServerListPinger instance, InetSocketAddress socketAddress, ServerAddress address, ServerInfo serverInfo) {
+    @WrapWithCondition(
+            remap = false,
+            method = {"method_10839", "onDisconnected"},
+            at =
+                    @At(
+                            remap = true,
+                            value = "INVOKE",
+                            target =
+                                    "Lnet/minecraft/client/network/MultiplayerServerListPinger;method_3001(Ljava/net/InetSocketAddress;Lnet/minecraft/client/network/ServerAddress;Lnet/minecraft/client/network/ServerInfo;)V"),
+            require = 0)
+    private boolean noPingRaknet(
+            final MultiplayerServerListPinger instance,
+            final InetSocketAddress socketAddress,
+            final ServerAddress address,
+            final ServerInfo serverInfo) {
         final Channel channel = ((IClientConnection) field_3774).getChannel();
         return !(channel.config() instanceof RakNet.Config);
     }
@@ -105,8 +113,20 @@ public abstract class MixinMultiplayerServerListPinger1 implements ClientQueryPa
      * @param backend vanilla event-loop backend for the fallback connection
      * @return false for RakNet status connections, true to preserve TCP fallback
      */
-    @WrapWithCondition(method = "onDisconnected", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/MultiplayerServerListPinger;ping(Ljava/net/InetSocketAddress;Lnet/minecraft/client/network/ServerAddress;Lnet/minecraft/client/network/ServerInfo;Lnet/minecraft/network/NetworkingBackend;)V"), require = 0)
-    private boolean noPingRaknet(MultiplayerServerListPinger instance, InetSocketAddress socketAddress, ServerAddress address, ServerInfo serverInfo, NetworkingBackend backend) {
+    @WrapWithCondition(
+            method = "onDisconnected",
+            at =
+                    @At(
+                            value = "INVOKE",
+                            target =
+                                    "Lnet/minecraft/client/network/MultiplayerServerListPinger;ping(Ljava/net/InetSocketAddress;Lnet/minecraft/client/network/ServerAddress;Lnet/minecraft/client/network/ServerInfo;Lnet/minecraft/network/NetworkingBackend;)V"),
+            require = 0)
+    private boolean noPingRaknet(
+            final MultiplayerServerListPinger instance,
+            final InetSocketAddress socketAddress,
+            final ServerAddress address,
+            final ServerInfo serverInfo,
+            final NetworkingBackend backend) {
         final Channel channel = ((IClientConnection) field_3774).getChannel();
         return !(channel.config() instanceof RakNet.Config);
     }
@@ -121,10 +141,21 @@ public abstract class MixinMultiplayerServerListPinger1 implements ClientQueryPa
      */
     // Keep the intermediary callback name independent of its version-specific reason parameter.
     @Dynamic
-    @WrapWithCondition(remap = false, method = "method_10839", at = @At(remap = true, value = "INVOKE", target = "Lnet/minecraft/client/network/MultiplayerServerListPinger;method_3001(Ljava/net/InetSocketAddress;Lnet/minecraft/client/network/ServerInfo;)V"), require = 0)
-    private boolean noPingRaknet(MultiplayerServerListPinger instance, InetSocketAddress address, ServerInfo info) {
+    @WrapWithCondition(
+            remap = false,
+            method = "method_10839",
+            at =
+                    @At(
+                            remap = true,
+                            value = "INVOKE",
+                            target =
+                                    "Lnet/minecraft/client/network/MultiplayerServerListPinger;method_3001(Ljava/net/InetSocketAddress;Lnet/minecraft/client/network/ServerInfo;)V"),
+            require = 0)
+    private boolean noPingRaknet(
+            final MultiplayerServerListPinger instance,
+            final InetSocketAddress address,
+            final ServerInfo info) {
         final Channel channel = ((IClientConnection) field_3774).getChannel();
         return !(channel.config() instanceof RakNet.Config);
     }
-
 }

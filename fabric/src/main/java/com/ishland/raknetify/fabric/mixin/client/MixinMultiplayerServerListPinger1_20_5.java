@@ -28,12 +28,12 @@ import com.ishland.raknetify.common.util.PrefixUtil;
 import com.ishland.raknetify.fabric.common.connection.RakNetClientConnectionUtil;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+
 import net.minecraft.client.network.MultiplayerServerListPinger;
 import net.minecraft.client.network.ServerInfo;
 import net.minecraft.network.ClientConnection;
 import net.minecraft.util.profiler.MultiValueDebugSampleLogImpl;
-import net.minecraft.util.profiler.log.DebugSampleLog;
-import net.minecraft.util.profiler.log.MultiValueDebugSampleLog;
+
 import org.spongepowered.asm.mixin.Dynamic;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -41,13 +41,15 @@ import org.spongepowered.asm.mixin.injection.At;
 import java.net.InetSocketAddress;
 
 /**
- * Selects RakNet for server-list probes using the connection-factory signature available in this version.
+ * Selects RakNet for server-list probes using the connection-factory signature available in this
+ * version.
  */
 @Mixin(MultiplayerServerListPinger.class)
 public class MixinMultiplayerServerListPinger1_20_5 {
 
     /**
-     * Chooses the server-list probe transport from the saved address prefix without changing normal TCP entries.
+     * Chooses the server-list probe transport from the saved address prefix without changing normal
+     * TCP entries.
      *
      * @param address resolved remote server address
      * @param useEpoll vanilla preference for native Linux transport
@@ -59,10 +61,26 @@ public class MixinMultiplayerServerListPinger1_20_5 {
      */
     // The two literal selectors cover named development and intermediary production runtimes.
     @Dynamic
-    @WrapOperation(remap = false, method = {"add", "method_3003"}, at = @At(value = "INVOKE", remap = true, target = "Lnet/minecraft/network/ClientConnection;method_10753(Ljava/net/InetSocketAddress;ZLnet/minecraft/util/profiler/MultiValueDebugSampleLogImpl;)Lnet/minecraft/network/ClientConnection;"))
-    private ClientConnection redirectConnect(InetSocketAddress address, boolean useEpoll, MultiValueDebugSampleLogImpl log, Operation<ClientConnection> original, ServerInfo entry, Runnable runnable) {
+    @WrapOperation(
+            remap = false,
+            method = {"add", "method_3003"},
+            at =
+                    @At(
+                            value = "INVOKE",
+                            remap = true,
+                            target =
+                                    "Lnet/minecraft/network/ClientConnection;method_10753(Ljava/net/InetSocketAddress;ZLnet/minecraft/util/profiler/MultiValueDebugSampleLogImpl;)Lnet/minecraft/network/ClientConnection;"))
+    private ClientConnection redirectConnect(
+            final InetSocketAddress address,
+            final boolean useEpoll,
+            final MultiValueDebugSampleLogImpl log,
+            final Operation<ClientConnection> original,
+            final ServerInfo entry,
+            final Runnable runnable) {
         final PrefixUtil.Info info = PrefixUtil.getInfo(entry.address);
-        return info.useRakNet() ? RakNetClientConnectionUtil.connect(address, useEpoll, info.largeMTU(), original, true) : original.call(address, useEpoll, null);
+        return info.useRakNet()
+                ? RakNetClientConnectionUtil.connect(
+                        address, useEpoll, info.largeMTU(), original, true)
+                : original.call(address, useEpoll, null);
     }
-
 }

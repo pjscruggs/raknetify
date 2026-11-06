@@ -24,14 +24,16 @@
 
 package com.ishland.raknetify.fabric.mixin.client;
 
-import com.ishland.raknetify.fabric.common.connection.RakNetClientConnectionUtil;
 import com.ishland.raknetify.common.util.PrefixUtil;
+import com.ishland.raknetify.fabric.common.connection.RakNetClientConnectionUtil;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+
 import io.netty.channel.ChannelFuture;
+
 import net.minecraft.client.network.ServerAddress;
 import net.minecraft.network.ClientConnection;
-import net.minecraft.network.NetworkingBackend;
+
 import org.spongepowered.asm.mixin.Dynamic;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -46,7 +48,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import java.net.InetSocketAddress;
 
 /**
- * Carries a saved server's RakNet selection into the connection thread after stripping its hostname prefix.
+ * Carries a saved server's RakNet selection into the connection thread after stripping its hostname
+ * prefix.
  */
 @Mixin(targets = "net/minecraft/client/gui/screen/multiplayer/ConnectScreen$1")
 public class MixinConnectionScreen1 extends Thread {
@@ -54,30 +57,22 @@ public class MixinConnectionScreen1 extends Thread {
     /**
      * Address captured by the vanilla connection thread, replaced with its unprefixed equivalent.
      */
-    @Mutable
-    @Shadow
-    @Final
-    ServerAddress field_33737;
+    @Mutable @Shadow @Final ServerAddress field_33737;
+
+    /** Whether the original server address selected RakNet for this connection attempt. */
+    @Unique private boolean isRaknet;
+
+    /** Whether the original server address selected the opt-in larger MTU. */
+    @Unique private boolean raknetLargeMTU;
 
     /**
-     * Whether the original server address selected RakNet for this connection attempt.
-     */
-    @Unique
-    private boolean isRaknet = false;
-
-    /**
-     * Whether the original server address selected the opt-in larger MTU.
-     */
-    @Unique
-    private boolean raknetLargeMTU = false;
-
-    /**
-     * Captures transport flags and removes the prefix before the connection thread resolves the hostname.
+     * Captures transport flags and removes the prefix before the connection thread resolves the
+     * hostname.
      *
      * @param ci constructor-return callback after vanilla captures the target address
      */
     @Inject(method = "<init>*", at = @At("RETURN"), remap = false)
-    private void onInit(CallbackInfo ci) {
+    private void onInit(final CallbackInfo ci) {
         final PrefixUtil.Info info = PrefixUtil.getInfo(this.field_33737.getAddress());
         if (info.useRakNet()) {
             this.isRaknet = true;
@@ -95,9 +90,22 @@ public class MixinConnectionScreen1 extends Thread {
      * @return Minecraft connection for the selected transport
      */
     @Dynamic
-    @WrapOperation(method = "run()V", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/ClientConnection;method_10753(Ljava/net/InetSocketAddress;Z)Lnet/minecraft/network/ClientConnection;"), require = 0)
-    private ClientConnection connectRaknet(InetSocketAddress address, boolean useEpoll, Operation<ClientConnection> original) {
-        return this.isRaknet ? RakNetClientConnectionUtil.connect(address, useEpoll, this.raknetLargeMTU, original, false) : original.call(address, useEpoll);
+    @WrapOperation(
+            method = "run()V",
+            at =
+                    @At(
+                            value = "INVOKE",
+                            target =
+                                    "Lnet/minecraft/network/ClientConnection;method_10753(Ljava/net/InetSocketAddress;Z)Lnet/minecraft/network/ClientConnection;"),
+            require = 0)
+    private ClientConnection connectRaknet(
+            final InetSocketAddress address,
+            final boolean useEpoll,
+            final Operation<ClientConnection> original) {
+        return this.isRaknet
+                ? RakNetClientConnectionUtil.connect(
+                        address, useEpoll, this.raknetLargeMTU, original, false)
+                : original.call(address, useEpoll);
     }
 
     /**
@@ -110,9 +118,23 @@ public class MixinConnectionScreen1 extends Thread {
      * @return channel future for the selected transport
      */
     @Dynamic
-    @WrapOperation(method = "run()V", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/ClientConnection;method_52271(Ljava/net/InetSocketAddress;ZLnet/minecraft/network/ClientConnection;)Lio/netty/channel/ChannelFuture;"), require = 0)
-    private ChannelFuture connectRaknet(InetSocketAddress address, boolean useEpoll, ClientConnection connection, Operation<ChannelFuture> original) {
-        return this.isRaknet ? RakNetClientConnectionUtil.connect(address, useEpoll, this.raknetLargeMTU, original, connection) : original.call(address, useEpoll, connection);
+    @WrapOperation(
+            method = "run()V",
+            at =
+                    @At(
+                            value = "INVOKE",
+                            target =
+                                    "Lnet/minecraft/network/ClientConnection;method_52271(Ljava/net/InetSocketAddress;ZLnet/minecraft/network/ClientConnection;)Lio/netty/channel/ChannelFuture;"),
+            require = 0)
+    private ChannelFuture connectRaknet(
+            final InetSocketAddress address,
+            final boolean useEpoll,
+            final ClientConnection connection,
+            final Operation<ChannelFuture> original) {
+        return this.isRaknet
+                ? RakNetClientConnectionUtil.connect(
+                        address, useEpoll, this.raknetLargeMTU, original, connection)
+                : original.call(address, useEpoll, connection);
     }
 
     /**
@@ -124,9 +146,22 @@ public class MixinConnectionScreen1 extends Thread {
      * @param original intercepted vanilla connection factory
      * @return channel future for the selected transport
      */
-    @WrapOperation(method = "run()V", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/ClientConnection;connect(Ljava/net/InetSocketAddress;Lnet/minecraft/network/NetworkingBackend;Lnet/minecraft/network/ClientConnection;)Lio/netty/channel/ChannelFuture;"), require = 0)
-    private ChannelFuture connectRaknet(InetSocketAddress address, @Coerce Object backend, ClientConnection connection, Operation<ChannelFuture> original) {
-        return this.isRaknet ? RakNetClientConnectionUtil.connect(address, backend, this.raknetLargeMTU, original, connection) : original.call(address, backend, connection);
+    @WrapOperation(
+            method = "run()V",
+            at =
+                    @At(
+                            value = "INVOKE",
+                            target =
+                                    "Lnet/minecraft/network/ClientConnection;connect(Ljava/net/InetSocketAddress;Lnet/minecraft/network/NetworkingBackend;Lnet/minecraft/network/ClientConnection;)Lio/netty/channel/ChannelFuture;"),
+            require = 0)
+    private ChannelFuture connectRaknet(
+            final InetSocketAddress address,
+            @Coerce final Object backend,
+            final ClientConnection connection,
+            final Operation<ChannelFuture> original) {
+        return this.isRaknet
+                ? RakNetClientConnectionUtil.connect(
+                        address, backend, this.raknetLargeMTU, original, connection)
+                : original.call(address, backend, connection);
     }
-
 }

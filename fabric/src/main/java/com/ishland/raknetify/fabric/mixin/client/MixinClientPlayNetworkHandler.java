@@ -27,38 +27,47 @@ package com.ishland.raknetify.fabric.mixin.client;
 import com.ishland.raknetify.common.connection.RakNetSimpleMultiChannelCodec;
 import com.ishland.raknetify.fabric.common.util.MultiVersionUtil;
 import com.ishland.raknetify.fabric.mixin.access.IClientConnection;
+
 import io.netty.channel.Channel;
+
 import net.minecraft.client.network.ClientPlayNetworkHandler;
-import net.minecraft.network.ClientConnection;
 import net.minecraft.network.packet.s2c.play.GameJoinS2CPacket;
-import org.spongepowered.asm.mixin.Final;
+
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Starts the client's multichannel negotiation after Minecraft has processed the initial join packet.
+ * Starts the client's multichannel negotiation after Minecraft has processed the initial join
+ * packet.
  */
 @Mixin(ClientPlayNetworkHandler.class)
 public class MixinClientPlayNetworkHandler {
 
     /**
-     * Schedules the negotiation marker on the channel event loop once client join state is initialized.
+     * Schedules the negotiation marker on the channel event loop once client join state is
+     * initialized.
      *
      * @param packet initial game-join packet, already processed by vanilla
      * @param ci return injection callback, unused because negotiation follows vanilla processing
      */
     @Inject(method = "onGameJoin", at = @At("RETURN"))
-    private void postGameJoin(GameJoinS2CPacket packet, CallbackInfo ci) {
-        final Channel channel = ((IClientConnection) MultiVersionUtil.ClientPlayNetworkHandler$connection.get((ClientPlayNetworkHandler) (Object) this)).getChannel();
+    private void postGameJoin(final GameJoinS2CPacket packet, final CallbackInfo ci) {
+        final Channel channel =
+                ((IClientConnection)
+                                MultiVersionUtil.ClientPlayNetworkHandler$connection.get(
+                                        (ClientPlayNetworkHandler) (Object) this))
+                        .getChannel();
         if (channel == null) {
             //noinspection RedundantStringFormatCall
-            System.err.println("Raknetify: Warning: %s don't have valid channel when logged in, not sending sync packet".formatted(this));
+            System.err.println(
+                    "Raknetify: Warning: %s don't have valid channel when logged in, not sending sync packet"
+                            .formatted(this));
             return;
         }
-        channel.eventLoop().execute(() -> channel.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL));
+        channel.eventLoop()
+                .execute(() ->
+                        channel.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL));
     }
-
 }

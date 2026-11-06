@@ -24,24 +24,23 @@
 
 package com.ishland.raknetify.fabric.mixin.client;
 
-import com.ishland.raknetify.fabric.common.connection.RakNetClientConnectionUtil;
 import com.ishland.raknetify.common.util.PrefixUtil;
+import com.ishland.raknetify.fabric.common.connection.RakNetClientConnectionUtil;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+
 import net.minecraft.client.network.MultiplayerServerListPinger;
 import net.minecraft.client.network.ServerAddress;
 import net.minecraft.client.network.ServerInfo;
 import net.minecraft.network.ClientConnection;
+
 import org.spongepowered.asm.mixin.Dynamic;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Redirect;
 
 import java.net.InetSocketAddress;
 
-/**
- * Removes transport selection syntax before Minecraft resolves a server-list address.
- */
+/** Removes transport selection syntax before Minecraft resolves a server-list address. */
 @Mixin(MultiplayerServerListPinger.class)
 public abstract class MixinMultiplayerServerListPinger {
 
@@ -54,14 +53,24 @@ public abstract class MixinMultiplayerServerListPinger {
      */
     // The two literal selectors cover named development and intermediary production runtimes.
     @Dynamic
-    @WrapOperation(remap = false, method = {"add", "method_3003"}, at = @At(value = "INVOKE", remap = true, target = "Lnet/minecraft/client/network/ServerAddress;parse(Ljava/lang/String;)Lnet/minecraft/client/network/ServerAddress;"))
-    private ServerAddress modifyRaknetAddress(String address, Operation<ServerAddress> original) {
+    @WrapOperation(
+            remap = false,
+            method = {"add", "method_3003"},
+            at =
+                    @At(
+                            value = "INVOKE",
+                            remap = true,
+                            target =
+                                    "Lnet/minecraft/client/network/ServerAddress;parse(Ljava/lang/String;)Lnet/minecraft/client/network/ServerAddress;"))
+    private ServerAddress modifyRaknetAddress(
+            final String address, final Operation<ServerAddress> original) {
         final PrefixUtil.Info info = PrefixUtil.getInfo(address);
         return original.call(info.stripped());
     }
 
     /**
-     * Chooses the server-list probe transport from the saved address prefix without changing normal TCP entries.
+     * Chooses the server-list probe transport from the saved address prefix without changing normal
+     * TCP entries.
      *
      * @param address resolved remote server address
      * @param useEpoll vanilla preference for native Linux transport
@@ -72,10 +81,26 @@ public abstract class MixinMultiplayerServerListPinger {
      */
     // The two literal selectors cover named development and intermediary production runtimes.
     @Dynamic
-    @WrapOperation(remap = false, method = {"add", "method_3003"}, at = @At(value = "INVOKE", remap = true, target = "Lnet/minecraft/network/ClientConnection;method_10753(Ljava/net/InetSocketAddress;Z)Lnet/minecraft/network/ClientConnection;"), require = 0)
-    private ClientConnection redirectConnect(InetSocketAddress address, boolean useEpoll, Operation<ClientConnection> original, ServerInfo entry, Runnable runnable) {
+    @WrapOperation(
+            remap = false,
+            method = {"add", "method_3003"},
+            at =
+                    @At(
+                            value = "INVOKE",
+                            remap = true,
+                            target =
+                                    "Lnet/minecraft/network/ClientConnection;method_10753(Ljava/net/InetSocketAddress;Z)Lnet/minecraft/network/ClientConnection;"),
+            require = 0)
+    private ClientConnection redirectConnect(
+            final InetSocketAddress address,
+            final boolean useEpoll,
+            final Operation<ClientConnection> original,
+            final ServerInfo entry,
+            final Runnable runnable) {
         final PrefixUtil.Info info = PrefixUtil.getInfo(entry.address);
-        return info.useRakNet() ? RakNetClientConnectionUtil.connect(address, useEpoll, info.largeMTU(), original, false) : original.call(address, useEpoll);
+        return info.useRakNet()
+                ? RakNetClientConnectionUtil.connect(
+                        address, useEpoll, info.largeMTU(), original, false)
+                : original.call(address, useEpoll);
     }
-
 }

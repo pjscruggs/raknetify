@@ -25,7 +25,9 @@
 package com.ishland.raknetify.fabric.mixin.client.hud;
 
 import com.ishland.raknetify.fabric.common.client.DebugHudUtil;
+
 import net.minecraft.client.gui.hud.DebugHud;
+
 import org.spongepowered.asm.mixin.Dynamic;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -48,8 +50,7 @@ public class MixinDebugHud1_21_8 {
     // This intermediary name belongs to versions before the current compile target.
     @Dynamic
     @Inject(method = "method_1835", remap = false, at = @At("RETURN"))
-    private void getLeftText(CallbackInfoReturnable<List<String>> cir) {
+    private void getLeftText(final CallbackInfoReturnable<List<String>> cir) {
         DebugHudUtil.getDebugString(cir.getReturnValue()::add);
     }
-
 }
