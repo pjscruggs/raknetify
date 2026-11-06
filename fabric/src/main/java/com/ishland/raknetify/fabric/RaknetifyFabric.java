@@ -27,18 +27,20 @@ package com.ishland.raknetify.fabric;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.ishland.raknetify.common.data.ProtocolMultiChannelMappings;
+import com.ishland.raknetify.common.util.NetworkInterfaceListener;
 import com.ishland.raknetify.fabric.common.client.DebugHudUtil1_21_9;
 import com.ishland.raknetify.fabric.common.connection.RakNetMultiChannel;
-import com.ishland.raknetify.common.util.NetworkInterfaceListener;
 import com.ishland.raknetify.fabric.common.util.FieldSignatureParser;
 import com.ishland.raknetify.fabric.common.util.MultiVersionUtil;
 import com.ishland.raknetify.fabric.mixin.RaknetifyFabricMixinPlugin;
 import com.ishland.raknetify.fabric.mixin.access.INetworkState1_20_4;
 import com.ishland.raknetify.fabric.mixin.access.INetworkStateInternalPacketHandler;
 import com.ishland.raknetify.fabric.mixin.access.IPacketCodecDispatcher;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.util.ResourceLeakDetector;
 import io.netty.util.internal.SystemPropertyUtil;
+
 import it.unimi.dsi.fastutil.ints.AbstractInt2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2IntArrayMap;
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
@@ -46,6 +48,7 @@ import it.unimi.dsi.fastutil.ints.Int2ObjectArrayMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
+
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
@@ -64,6 +67,7 @@ import net.minecraft.network.packet.PingPackets;
 import net.minecraft.network.packet.PlayPackets;
 import net.minecraft.network.state.NetworkState;
 import net.minecraft.network.state.PlayStateFactories;
+
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.FieldNode;
 import org.slf4j.Logger;
@@ -86,26 +90,20 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-/**
- * Initializes Fabric transport support and optionally generates proxy packet-ID routing tables.
- */
+/** Initializes Fabric transport support and optionally generates proxy packet-ID routing tables. */
 public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
 
-    /**
-     * Whether startup should merge this protocol's generated routes into channelMappings.json.
-     */
-    private static final boolean SAVE_CHANNEL_MAPPINGS = Boolean.getBoolean("raknetify.saveChannelMappings");
-    /**
-     * Whether mapping-generation startup should exit immediately after saving its output.
-     */
-    private static final boolean EXIT_AFTER_SAVE_CHANNEL_MAPPINGS = Boolean.getBoolean("raknetify.saveChannelMappings.exit");
+    /** Whether startup should merge this protocol's generated routes into channelMappings.json. */
+    private static final boolean SAVE_CHANNEL_MAPPINGS =
+            Boolean.getBoolean("raknetify.saveChannelMappings");
 
-    /**
-     * Leaves prelaunch unchanged because transport setup waits for Minecraft initialization.
-     */
+    /** Whether mapping-generation startup should exit immediately after saving its output. */
+    private static final boolean EXIT_AFTER_SAVE_CHANNEL_MAPPINGS =
+            Boolean.getBoolean("raknetify.saveChannelMappings.exit");
+
+    /** Leaves prelaunch unchanged because transport setup waits for Minecraft initialization. */
     @Override
-    public void onPreLaunch() {
-    }
+    public void onPreLaunch() {}
 
     /**
      * Initializes routing, client diagnostics, and the configured Netty leak-detection level.
@@ -115,51 +113,70 @@ public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
     public void onInitialize() {
         MultiVersionUtil.init();
 
-        if (FabricLoader.getInstance().isDevelopmentEnvironment())
+        if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
             auditMixins();
+        }
 
         com.ishland.raknetify.fabric.common.util.PacketChannelEntrypoints.initialize();
-        com.ishland.raknetify.common.connection.TransferSupport.initialize(FabricLoader.getInstance().getConfigDir());
+        com.ishland.raknetify.common.connection.TransferSupport.initialize(
+                FabricLoader.getInstance().getConfigDir());
         handleMappings();
 
-        if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT && RaknetifyFabricMixinPlugin.AFTER_1_21_8) {
+        if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT
+                && RaknetifyFabricMixinPlugin.AFTER_1_21_8) {
             DebugHudUtil1_21_9.init();
         }
 
         // If new property name is present, use it
-        String levelStr = SystemPropertyUtil.get("io.netty.leakDetection.level", ResourceLeakDetector.Level.SIMPLE.name());
+        String levelStr =
+                SystemPropertyUtil.get(
+                        "io.netty.leakDetection.level", ResourceLeakDetector.Level.SIMPLE.name());
         ResourceLeakDetector.Level level = ResourceLeakDetector.Level.SIMPLE;
         try {
             level = ResourceLeakDetector.Level.valueOf(levelStr.trim().toUpperCase(Locale.ENGLISH));
-        } catch (IllegalArgumentException ignored) {
+        } catch (IllegalArgumentException invalidLevel) {
+            System.err.println(
+                    "Raknetify2: Invalid io.netty.leakDetection.level value: "
+                            + levelStr
+                            + ". Using SIMPLE.");
         }
         System.out.println("Raknetify: Using leak detector level %s".formatted(level));
         ResourceLeakDetector.setLevel(level);
     }
 
     /**
-     * Inspects registered play packet IDs and maps them to class-based channel policies.
-     * Codec bindings exist only to inspect registration order and must never encode or decode
-     * with their intentionally absent registry context.
+     * Inspects registered play packet IDs and maps them to class-based channel policies. Codec
+     * bindings exist only to inspect registration order and must never encode or decode with their
+     * intentionally absent registry context.
      *
      * @throws RuntimeException if a legacy protocol factory cannot be invoked
      */
     private static void handleMappings() {
         RakNetMultiChannel.init();
-//        RakNetMultiChannel.iterateKnownPackets();
+        //        RakNetMultiChannel.iterateKnownPackets();
         NetworkInterfaceListener.init();
 
         Int2IntArrayMap s2c = new Int2IntArrayMap();
         Int2IntArrayMap c2s = new Int2IntArrayMap();
         if (!RaknetifyFabricMixinPlugin.AFTER_1_20_4) {
-            for (Map.Entry<NetworkSide, ?> entry : ((INetworkState1_20_4) (Object) NetworkPhase.PLAY).getPacketHandlers().entrySet()) {
+            for (Map.Entry<NetworkSide, ?> entry :
+                    ((INetworkState1_20_4) (Object) NetworkPhase.PLAY)
+                            .getPacketHandlers()
+                            .entrySet()) {
                 final Object value = entry.getValue();
-                final Object2IntMap<Class<? extends Packet<?>>> packetIds = getPacketIdsFromPacketHandler(value);
-                for (Object2IntMap.Entry<Class<? extends Packet<?>>> type : packetIds.object2IntEntrySet()) {
-                    if (entry.getKey() == NetworkSide.CLIENTBOUND)
-                        s2c.put(type.getIntValue(), RakNetMultiChannel.getPacketChannelOverride(type.getKey(), false));
-                    else if (entry.getKey() == NetworkSide.SERVERBOUND)
-                        c2s.put(type.getIntValue(), RakNetMultiChannel.getPacketChannelOverride(type.getKey(), false));
+                final Object2IntMap<Class<? extends Packet<?>>> packetIds =
+                        getPacketIdsFromPacketHandler(value);
+                for (Object2IntMap.Entry<Class<? extends Packet<?>>> type :
+                        packetIds.object2IntEntrySet()) {
+                    if (entry.getKey() == NetworkSide.CLIENTBOUND) {
+                        s2c.put(
+                                type.getIntValue(),
+                                RakNetMultiChannel.getPacketChannelOverride(type.getKey(), false));
+                    } else if (entry.getKey() == NetworkSide.SERVERBOUND) {
+                        c2s.put(
+                                type.getIntValue(),
+                                RakNetMultiChannel.getPacketChannelOverride(type.getKey(), false));
+                    }
                 }
             }
         } else {
@@ -167,36 +184,97 @@ public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
             final List<PacketType<Packet<? super ServerPlayPacketListener>>> s2cPacketTypes;
             if (!RaknetifyFabricMixinPlugin.AFTER_1_21_4) {
                 try {
-                    c2sPacketTypes = ((IPacketCodecDispatcher<ByteBuf, Packet<? super ServerPlayPacketListener>, PacketType<Packet<? super ServerPlayPacketListener>>>)
-                            ((NetworkState<ServerPlayPacketListener>) MultiVersionUtil.NetworkState$Factory$bind1_20_5.invoke(MultiVersionUtil.PlayStateFactories$C2S1_20_5.get(), RegistryByteBuf.makeFactory(null))).codec()).getPacketTypes()
-                            .stream().map(byteBufPacketPacketTypePacketType -> byteBufPacketPacketTypePacketType.id()).toList();
+                    c2sPacketTypes =
+                            ((IPacketCodecDispatcher<
+                                                    ByteBuf,
+                                                    Packet<? super ServerPlayPacketListener>,
+                                                    PacketType<
+                                                            Packet<
+                                                                    ? super
+                                                                            ServerPlayPacketListener>>>)
+                                            ((NetworkState<ServerPlayPacketListener>)
+                                                            MultiVersionUtil
+                                                                    .NetworkState$Factory$bind1_20_5
+                                                                    .invoke(
+                                                                            MultiVersionUtil
+                                                                                    .PlayStateFactories$C2S1_20_5
+                                                                                    .get(),
+                                                                            RegistryByteBuf
+                                                                                    .makeFactory(
+                                                                                            null)))
+                                                    .codec())
+                                    .getPacketTypes().stream()
+                                            .map(byteBufPacketPacketTypePacketType ->
+                                                    byteBufPacketPacketTypePacketType.id())
+                                            .toList();
                 } catch (Throwable e) {
                     throw new RuntimeException(e);
                 }
                 try {
-                    s2cPacketTypes = ((IPacketCodecDispatcher<ByteBuf, Packet<? super ServerPlayPacketListener>, PacketType<Packet<? super ServerPlayPacketListener>>>)
-                            ((NetworkState<ClientPlayPacketListener>) MultiVersionUtil.NetworkState$Factory$bind1_20_5.invoke(MultiVersionUtil.PlayStateFactories$S2C1_20_5.get(), RegistryByteBuf.makeFactory(null))).codec()).getPacketTypes()
-                            .stream().map(byteBufPacketPacketTypePacketType -> byteBufPacketPacketTypePacketType.id()).toList();
+                    s2cPacketTypes =
+                            ((IPacketCodecDispatcher<
+                                                    ByteBuf,
+                                                    Packet<? super ServerPlayPacketListener>,
+                                                    PacketType<
+                                                            Packet<
+                                                                    ? super
+                                                                            ServerPlayPacketListener>>>)
+                                            ((NetworkState<ClientPlayPacketListener>)
+                                                            MultiVersionUtil
+                                                                    .NetworkState$Factory$bind1_20_5
+                                                                    .invoke(
+                                                                            MultiVersionUtil
+                                                                                    .PlayStateFactories$S2C1_20_5
+                                                                                    .get(),
+                                                                            RegistryByteBuf
+                                                                                    .makeFactory(
+                                                                                            null)))
+                                                    .codec())
+                                    .getPacketTypes().stream()
+                                            .map(byteBufPacketPacketTypePacketType ->
+                                                    byteBufPacketPacketTypePacketType.id())
+                                            .toList();
                 } catch (Throwable e) {
                     throw new RuntimeException(e);
                 }
             } else {
-                c2sPacketTypes = ((IPacketCodecDispatcher<ByteBuf, Packet<? super ServerPlayPacketListener>, PacketType<Packet<? super ServerPlayPacketListener>>>)
-                        PlayStateFactories.C2S.bind(RegistryByteBuf.makeFactory(null), null).codec()).getPacketTypes()
-                        .stream().map(byteBufPacketPacketTypePacketType -> byteBufPacketPacketTypePacketType.id()).toList();
-                s2cPacketTypes = ((IPacketCodecDispatcher<ByteBuf, Packet<? super ServerPlayPacketListener>, PacketType<Packet<? super ServerPlayPacketListener>>>)
-                        PlayStateFactories.S2C.bind(RegistryByteBuf.makeFactory(null)).codec()).getPacketTypes()
-                        .stream().map(byteBufPacketPacketTypePacketType -> byteBufPacketPacketTypePacketType.id()).toList();
+                c2sPacketTypes =
+                        ((IPacketCodecDispatcher<
+                                                ByteBuf,
+                                                Packet<? super ServerPlayPacketListener>,
+                                                PacketType<
+                                                        Packet<? super ServerPlayPacketListener>>>)
+                                        PlayStateFactories.C2S
+                                                .bind(RegistryByteBuf.makeFactory(null), null)
+                                                .codec())
+                                .getPacketTypes().stream()
+                                        .map(byteBufPacketPacketTypePacketType ->
+                                                byteBufPacketPacketTypePacketType.id())
+                                        .toList();
+                s2cPacketTypes =
+                        ((IPacketCodecDispatcher<
+                                                ByteBuf,
+                                                Packet<? super ServerPlayPacketListener>,
+                                                PacketType<
+                                                        Packet<? super ServerPlayPacketListener>>>)
+                                        PlayStateFactories.S2C
+                                                .bind(RegistryByteBuf.makeFactory(null))
+                                                .codec())
+                                .getPacketTypes().stream()
+                                        .map(byteBufPacketPacketTypePacketType ->
+                                                byteBufPacketPacketTypePacketType.id())
+                                        .toList();
             }
 
             Map<PacketType<?>, Class<?>> vanillaPacketTypes = collectPacketClasses();
 
             recordPacketChannels(s2cPacketTypes, vanillaPacketTypes, s2c);
             recordPacketChannels(c2sPacketTypes, vanillaPacketTypes, c2s);
-
         }
 
-        if (SAVE_CHANNEL_MAPPINGS) saveMappings(c2s, s2c);
+        if (SAVE_CHANNEL_MAPPINGS) {
+            saveMappings(c2s, s2c);
+        }
     }
 
     /**
@@ -206,35 +284,41 @@ public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
      * @return live map from packet implementation classes to their wire IDs
      * @throws IllegalStateException if the runtime handler has neither supported layout
      */
-    public static Object2IntMap<Class<? extends Packet<?>>> getPacketIdsFromPacketHandler(Object value) {
+    public static Object2IntMap<Class<? extends Packet<?>>> getPacketIdsFromPacketHandler(
+            final Object value) {
         Object2IntMap<Class<? extends Packet<?>>> packetIds;
         if (value instanceof INetworkStateInternalPacketHandler) {
             packetIds = ((INetworkStateInternalPacketHandler) value).getPacketIds();
         } else if (MultiVersionUtil.clazzNetworkStatePacketHandler.isInstance(value)) {
-            packetIds = ((INetworkStateInternalPacketHandler) MultiVersionUtil.NetworkStatePacketHandler$backingHandler1_20_2.get(value)).getPacketIds();
+            packetIds =
+                    ((INetworkStateInternalPacketHandler)
+                                    MultiVersionUtil.NetworkStatePacketHandler$backingHandler1_20_2
+                                            .get(value))
+                            .getPacketIds();
         } else {
             throw new IllegalStateException("Unknown packet handler type: " + value.getClass());
         }
         return packetIds;
     }
 
-
     /**
-     * Merges the running protocol's routes into the mapping file and sorts entries for reproducible output.
+     * Merges the running protocol's routes into the mapping file and sorts entries for reproducible
+     * output.
      *
      * @param c2s serverbound packet IDs and their selected ordering channels
      * @param s2c clientbound packet IDs and their selected ordering channels
      */
-    private static void saveMappings(Int2IntArrayMap c2s, Int2IntArrayMap s2c) {
+    private static void saveMappings(final Int2IntArrayMap c2s, final Int2IntArrayMap s2c) {
         auditMixins();
-        final Gson gson = new GsonBuilder()
-                .setPrettyPrinting()
-                .create();
+        final Gson gson = new GsonBuilder().setPrettyPrinting().create();
         ProtocolMultiChannelMappings mappings = new ProtocolMultiChannelMappings();
         // Preserve proxy mappings for versions no longer supported by Fabric.
-        for (int protocol : new int[]{755, 756}) {
-            final ProtocolMultiChannelMappings.VersionMapping retained = ProtocolMultiChannelMappings.INSTANCE.mappings.get(protocol);
-            if (retained != null) mappings.mappings.put(protocol, retained);
+        for (int protocol : new int[] {755, 756}) {
+            final ProtocolMultiChannelMappings.VersionMapping retained =
+                    ProtocolMultiChannelMappings.INSTANCE.mappings.get(protocol);
+            if (retained != null) {
+                mappings.mappings.put(protocol, retained);
+            }
         }
         Path path = Path.of("channelMappings.json");
         try {
@@ -242,49 +326,79 @@ public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
         } catch (IOException e) {
             System.out.println("Error reading previously generated mappings: " + e.toString());
         }
-        final ProtocolMultiChannelMappings.VersionMapping versionMapping = new ProtocolMultiChannelMappings.VersionMapping();
+        final ProtocolMultiChannelMappings.VersionMapping versionMapping =
+                new ProtocolMultiChannelMappings.VersionMapping();
         versionMapping.c2s = c2s;
         versionMapping.s2c = s2c;
         mappings.mappings.put(SharedConstants.getProtocolVersion(), versionMapping);
 
         // reproducible mappings
-        mappings.mappings = mappings.mappings.int2ObjectEntrySet()
-                .stream()
-                .map(entry -> {
-                    final ProtocolMultiChannelMappings.VersionMapping value = entry.getValue();
-                    value.s2c = value.s2c.int2IntEntrySet().stream()
-                            .sorted(Comparator.comparingInt(Int2IntMap.Entry::getIntKey))
-                            .collect(Collectors.toMap(Int2IntMap.Entry::getIntKey, Int2IntMap.Entry::getIntValue, (o, o2) -> {
-                                throw new RuntimeException("Unresolvable conflicts");
-                            }, Int2IntArrayMap::new));
-                    value.c2s = value.c2s.int2IntEntrySet().stream()
-                            .sorted(Comparator.comparingInt(Int2IntMap.Entry::getIntKey))
-                            .collect(Collectors.toMap(Int2IntMap.Entry::getIntKey, Int2IntMap.Entry::getIntValue, (o, o2) -> {
-                                throw new RuntimeException("Unresolvable conflicts");
-                            }, Int2IntArrayMap::new));
-                    return new AbstractInt2ObjectMap.BasicEntry<>(
-                            entry.getIntKey(),
-                            value
-                    );
-                })
-                .sorted(Comparator.comparingInt(Int2ObjectMap.Entry::getIntKey))
-                .collect(Collectors.toMap(Int2ObjectMap.Entry::getIntKey, Int2ObjectMap.Entry::getValue, (o, o2) -> {
-                    throw new RuntimeException("Unresolvable conflicts");
-                }, Int2ObjectArrayMap::new));
+        mappings.mappings =
+                mappings.mappings.int2ObjectEntrySet().stream()
+                        .map(entry -> {
+                            final ProtocolMultiChannelMappings.VersionMapping value =
+                                    entry.getValue();
+                            value.s2c =
+                                    value.s2c.int2IntEntrySet().stream()
+                                            .sorted(
+                                                    Comparator.comparingInt(
+                                                            Int2IntMap.Entry::getIntKey))
+                                            .collect(
+                                                    Collectors.toMap(
+                                                            Int2IntMap.Entry::getIntKey,
+                                                            Int2IntMap.Entry::getIntValue,
+                                                            (o, o2) -> {
+                                                                throw new RuntimeException(
+                                                                        "Unresolvable conflicts");
+                                                            },
+                                                            Int2IntArrayMap::new));
+                            value.c2s =
+                                    value.c2s.int2IntEntrySet().stream()
+                                            .sorted(
+                                                    Comparator.comparingInt(
+                                                            Int2IntMap.Entry::getIntKey))
+                                            .collect(
+                                                    Collectors.toMap(
+                                                            Int2IntMap.Entry::getIntKey,
+                                                            Int2IntMap.Entry::getIntValue,
+                                                            (o, o2) -> {
+                                                                throw new RuntimeException(
+                                                                        "Unresolvable conflicts");
+                                                            },
+                                                            Int2IntArrayMap::new));
+                            return new AbstractInt2ObjectMap.BasicEntry<>(entry.getIntKey(), value);
+                        })
+                        .sorted(Comparator.comparingInt(Int2ObjectMap.Entry::getIntKey))
+                        .collect(
+                                Collectors.toMap(
+                                        Int2ObjectMap.Entry::getIntKey,
+                                        Int2ObjectMap.Entry::getValue,
+                                        (o, o2) -> {
+                                            throw new RuntimeException("Unresolvable conflicts");
+                                        },
+                                        Int2ObjectArrayMap::new));
 
         try {
-            Files.writeString(path, gson.toJson(mappings), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            Files.writeString(
+                    path,
+                    gson.toJson(mappings),
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.TRUNCATE_EXISTING);
         } catch (IOException e) {
             System.out.println("Error writing generated mappings: " + e.toString());
         }
-        if (EXIT_AFTER_SAVE_CHANNEL_MAPPINGS) System.exit(0);
+        if (EXIT_AFTER_SAVE_CHANNEL_MAPPINGS) {
+            System.exit(0);
+        }
     }
 
     /**
      * Links registered packet types to implementation classes using their generic field signatures.
      *
-     * @return packet-type lookup used to apply class-based channel rules in codec registration order
+     * @return packet-type lookup used to apply class-based channel rules in codec registration
+     *     order
      * @throws RuntimeException if a registry class or its public packet fields cannot be inspected
+     * @throws IllegalStateException if a packet signature refers to an unavailable class
      */
     private static Map<PacketType<?>, Class<?>> collectPacketClasses() {
         /**
@@ -293,20 +407,28 @@ public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
          * @param fieldNode bytecode field including its generic signature
          * @param clazz registry class used to read the corresponding static packet type
          */
-        record FieldNodeClazzPair(FieldNode fieldNode, Class<?> clazz) {
-        }
+        record FieldNodeClazzPair(FieldNode fieldNode, Class<?> clazz) {}
 
         Map<PacketType<?>, Class<?>> vanillaPacketTypes = new Object2ObjectOpenHashMap<>();
-        for (FieldNodeClazzPair fieldNodeClazzPair : Stream.of(PlayPackets.class, CommonPackets.class, CookiePackets.class, PingPackets.class)
-                .flatMap(clazz -> {
-                    try {
-                        return MixinService.getService().getBytecodeProvider().getClassNode(Type.getInternalName(clazz)).fields.stream()
-                                .map(fieldNode -> new FieldNodeClazzPair(fieldNode, clazz));
-                    } catch (ClassNotFoundException | IOException e) {
-                        throw new RuntimeException(e);
-                    }
-                })
-                .toList()) {
+        for (FieldNodeClazzPair fieldNodeClazzPair :
+                Stream.of(
+                                PlayPackets.class,
+                                CommonPackets.class,
+                                CookiePackets.class,
+                                PingPackets.class)
+                        .flatMap(clazz -> {
+                            try {
+                                return MixinService.getService()
+                                        .getBytecodeProvider()
+                                        .getClassNode(Type.getInternalName(clazz))
+                                        .fields
+                                        .stream()
+                                        .map(fieldNode -> new FieldNodeClazzPair(fieldNode, clazz));
+                            } catch (ClassNotFoundException | IOException e) {
+                                throw new RuntimeException(e);
+                            }
+                        })
+                        .toList()) {
             final FieldNode field = fieldNodeClazzPair.fieldNode();
             final List<Type> parameterGenerics = FieldSignatureParser.parse(field.signature);
             for (Type type : parameterGenerics) {
@@ -315,13 +437,20 @@ public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
                     if (Packet.class.isAssignableFrom(clazz)) {
                         final PacketType<?> actualType;
                         try {
-                            actualType = (PacketType<?>) fieldNodeClazzPair.clazz().getField(field.name).get(null);
+                            actualType =
+                                    (PacketType<?>)
+                                            fieldNodeClazzPair
+                                                    .clazz()
+                                                    .getField(field.name)
+                                                    .get(null);
                         } catch (IllegalAccessException | NoSuchFieldException e) {
                             throw new RuntimeException(e);
                         }
                         vanillaPacketTypes.put(actualType, clazz);
                     }
-                } catch (ClassNotFoundException ignored) {
+                } catch (ClassNotFoundException missingType) {
+                    throw new IllegalStateException(
+                            "Cannot resolve packet type " + type.getClassName(), missingType);
                 }
             }
         }
@@ -335,9 +464,10 @@ public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
      * @param packetClasses implementation classes recovered from the protocol registries
      * @param channels destination map updated only for packet types with a known implementation
      */
-    private static void recordPacketChannels(List<? extends PacketType<?>> packetTypes,
-                                             Map<PacketType<?>, Class<?>> packetClasses,
-                                             Int2IntArrayMap channels) {
+    private static void recordPacketChannels(
+            final List<? extends PacketType<?>> packetTypes,
+            final Map<PacketType<?>, Class<?>> packetClasses,
+            final Int2IntArrayMap channels) {
         for (int i = 0; i < packetTypes.size(); i++) {
             PacketType<?> packetType = packetTypes.get(i);
             final Class<?> clazz = packetClasses.get(packetType);
@@ -357,21 +487,29 @@ public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
     private static void auditMixins() {
         Logger auditLogger = LoggerFactory.getLogger("Raknetify Mixin Audit");
         try {
-            final Class<?> transformerClazz = Class.forName("org.spongepowered.asm.mixin.transformer.MixinTransformer");
-            if (transformerClazz.isInstance(MixinEnvironment.getCurrentEnvironment().getActiveTransformer())) {
+            final Class<?> transformerClazz =
+                    Class.forName("org.spongepowered.asm.mixin.transformer.MixinTransformer");
+            if (transformerClazz.isInstance(
+                    MixinEnvironment.getCurrentEnvironment().getActiveTransformer())) {
                 final Field processorField = transformerClazz.getDeclaredField("processor");
                 processorField.setAccessible(true);
-                final Object processor = processorField.get(MixinEnvironment.getCurrentEnvironment().getActiveTransformer());
-                final Class<?> processorClazz = Class.forName("org.spongepowered.asm.mixin.transformer.MixinProcessor");
+                final Object processor =
+                        processorField.get(
+                                MixinEnvironment.getCurrentEnvironment().getActiveTransformer());
+                final Class<?> processorClazz =
+                        Class.forName("org.spongepowered.asm.mixin.transformer.MixinProcessor");
                 final Field configsField = processorClazz.getDeclaredField("configs");
                 configsField.setAccessible(true);
                 final List<?> configs = (List<?>) configsField.get(processor);
-                final Class<?> configClazz = Class.forName("org.spongepowered.asm.mixin.transformer.MixinConfig");
-                final Method getUnhandledTargetsMethod = configClazz.getDeclaredMethod("getUnhandledTargets");
+                final Class<?> configClazz =
+                        Class.forName("org.spongepowered.asm.mixin.transformer.MixinConfig");
+                final Method getUnhandledTargetsMethod =
+                        configClazz.getDeclaredMethod("getUnhandledTargets");
                 getUnhandledTargetsMethod.setAccessible(true);
                 Set<String> unhandled = new HashSet<>();
                 for (Object config : configs) {
-                    final Set<String> unhandledTargets = (Set<String>) getUnhandledTargetsMethod.invoke(config);
+                    final Set<String> unhandledTargets =
+                            (Set<String>) getUnhandledTargetsMethod.invoke(config);
                     unhandled.addAll(unhandledTargets);
                 }
                 for (String s : unhandled) {
@@ -379,7 +517,8 @@ public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
                     MixinService.getService().getClassProvider().findClass(s, false);
                 }
                 for (Object config : configs) {
-                    for (String unhandledTarget : (Set<String>) getUnhandledTargetsMethod.invoke(config)) {
+                    for (String unhandledTarget :
+                            (Set<String>) getUnhandledTargetsMethod.invoke(config)) {
                         auditLogger.error("{} is already classloaded", unhandledTarget);
                     }
                 }
@@ -388,5 +527,4 @@ public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
             throw new RuntimeException("Failed to audit mixins", t);
         }
     }
-
 }
