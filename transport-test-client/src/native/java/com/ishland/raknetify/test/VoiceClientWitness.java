@@ -30,14 +30,20 @@ import de.maxhenkel.voicechat.api.events.ClientVoicechatConnectionEvent;
 import de.maxhenkel.voicechat.api.events.Event;
 import de.maxhenkel.voicechat.api.events.EventRegistration;
 
-/** Requires the real voice client's authenticated UDP connection without opening a microphone in tests. */
+/**
+ * Requires the real voice client's authenticated UDP connection without opening a microphone in
+ * tests.
+ */
 @ForgeVoicechatPlugin
 public final class VoiceClientWitness implements VoicechatPlugin {
-    /** Published by the voice connection event after both authentication and nonce checks succeed. */
+    /**
+     * Published by the voice connection event after both authentication and nonce checks succeed.
+     */
     private static volatile boolean connected;
 
     /**
      * Identifies the isolated witness independently of the production socket provider.
+     *
      * @return fixture-only plugin identifier
      */
     @Override
@@ -46,42 +52,56 @@ public final class VoiceClientWitness implements VoicechatPlugin {
     }
 
     /**
-     * Observes the ordinary connection event and cancels microphone startup before capture can begin.
+     * Observes the ordinary connection event and cancels microphone startup before capture can
+     * begin.
+     *
      * @param registration real voice plugin registry
-     * @throws IllegalStateException if the pinned voice release lacks its microphone cancellation event
+     * @throws IllegalStateException if the pinned voice release lacks its microphone cancellation
+     *     event
      */
     @Override
-    public void registerEvents(EventRegistration registration) {
-        registration.registerEvent(ClientVoicechatConnectionEvent.class, VoiceClientWitness::changed);
+    public void registerEvents(final EventRegistration registration) {
+        registration.registerEvent(
+                ClientVoicechatConnectionEvent.class, VoiceClientWitness::changed);
         try {
             // This internal event is pinned by the fixture, not used by the production integration.
-            var event = Class.forName("de.maxhenkel.voicechat.api.internal.events.StartMicEvent").asSubclass(Event.class);
+            var event =
+                    Class.forName("de.maxhenkel.voicechat.api.internal.events.StartMicEvent")
+                            .asSubclass(Event.class);
             registration.registerEvent(event, VoiceClientWitness::cancelMicrophone);
         } catch (ClassNotFoundException failure) {
-            throw new IllegalStateException("Cannot prevent microphone startup in the voice fixture", failure);
+            throw new IllegalStateException(
+                    "Cannot prevent microphone startup in the voice fixture", failure);
         }
     }
 
     /**
      * Fails the fixture rather than allowing audio capture if cancellation stops being supported.
+     *
      * @param event microphone pre-start callback
      * @throws IllegalStateException if the pinned event cannot prevent microphone capture
      */
-    private static void cancelMicrophone(Event event) {
-        if (!event.cancel()) throw new IllegalStateException("Voice fixture could not cancel microphone startup");
+    private static void cancelMicrophone(final Event event) {
+        if (!event.cancel()) {
+            throw new IllegalStateException("Voice fixture could not cancel microphone startup");
+        }
     }
 
     /**
      * Records only the event emitted after the native encrypted voice handshake completes.
+     *
      * @param event native client connection transition
      */
-    private static void changed(ClientVoicechatConnectionEvent event) {
+    private static void changed(final ClientVoicechatConnectionEvent event) {
         connected = event.isConnected();
-        if (connected) System.out.println("PASS native authenticated voice connection");
+        if (connected) {
+            System.out.println("PASS native authenticated voice connection");
+        }
     }
 
     /**
      * Keeps the gameplay witness alive until the independent voice handshake also completes.
+     *
      * @return whether the real voice client currently has an authenticated connection
      */
     static boolean connected() {

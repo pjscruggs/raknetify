@@ -28,15 +28,17 @@ import com.ishland.raknetify.minecraft.ModPlatform;
 
 import java.nio.file.Path;
 
-/** Reads the native loader's game metadata without introducing a Fabric dependency into its tests. */
+/**
+ * Reads the native loader's game metadata without introducing a Fabric dependency into its tests.
+ */
 final class FixtureRuntime {
 
     /** Prevents construction of the native fixture's metadata adapter. */
-    private FixtureRuntime() {
-    }
+    private FixtureRuntime() {}
 
     /**
      * Selects the namespace declared by the installed native loader's game metadata.
+     *
      * @return whether packet and member names are unobfuscated
      */
     static boolean modern() {
@@ -45,22 +47,26 @@ final class FixtureRuntime {
 
     /**
      * Compares numeric release components before any snapshot suffix.
+     *
      * @param version first Minecraft release containing the protocol feature
      * @return whether the runtime's numeric release is at least the requested release
      */
-    static boolean atLeast(String version) {
+    static boolean atLeast(final String version) {
         String[] current = ModPlatform.get().minecraftVersion().split("[-+]")[0].split("\\.");
         String[] required = version.split("\\.");
         for (int index = 0; index < Math.max(current.length, required.length); index++) {
             int actual = index < current.length ? Integer.parseInt(current[index]) : 0;
             int minimum = index < required.length ? Integer.parseInt(required[index]) : 0;
-            if (actual != minimum) return actual > minimum;
+            if (actual != minimum) {
+                return actual > minimum;
+            }
         }
         return true;
     }
 
     /**
      * Derives fixture storage from the loader's isolated configuration location.
+     *
      * @return game directory surrounding the configuration directory
      */
     static Path gameDirectory() {

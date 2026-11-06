@@ -36,13 +36,21 @@ import java.net.InetSocketAddress;
 import java.util.Arrays;
 import java.util.Optional;
 
-/** Exercises the real client address classes with both mods transformed by Fabric before graphics start. */
+/**
+ * Exercises the real client address classes with both mods transformed by Fabric before graphics
+ * start.
+ */
 public final class ClientAddressTest implements PreLaunchEntrypoint {
 
-    /** Runs only in an explicitly requested fixture process and exits before starting the game window. */
+    /**
+     * Runs only in an explicitly requested fixture process and exits before starting the game
+     * window.
+     */
     @Override
     public void onPreLaunch() {
-        if (!Boolean.getBoolean("raknetify.test.addresses")) return;
+        if (!Boolean.getBoolean("raknetify.test.addresses")) {
+            return;
+        }
         try {
             if (!Boolean.getBoolean("raknetify.test.baseline")) {
                 LegacyMixinContractTest.verify();
@@ -52,8 +60,11 @@ public final class ClientAddressTest implements PreLaunchEntrypoint {
             }
             if (!Boolean.getBoolean("raknetify.test.orderingOnly")) {
                 AddressChecks checks = new AddressChecks();
-                if (Boolean.getBoolean("raknetify.test.baseline")) checks.verifyBaseline();
-                else checks.verify();
+                if (Boolean.getBoolean("raknetify.test.baseline")) {
+                    checks.verifyBaseline();
+                } else {
+                    checks.verify();
+                }
             }
             System.out.println("PASS native client address compatibility");
             System.exit(0);
@@ -63,24 +74,43 @@ public final class ClientAddressTest implements PreLaunchEntrypoint {
         }
     }
 
-    /** Resolves namespace differences while leaving all address behavior to the installed client classes. */
+    /**
+     * Resolves namespace differences while leaving all address behavior to the installed client
+     * classes.
+     */
     private static final class AddressChecks {
 
         /** Whether the runtime uses unobfuscated Minecraft names. */
-        private final boolean modern = FabricLoader.getInstance().getModContainer("minecraft").orElseThrow()
-                .getMetadata().getVersion().getFriendlyString().startsWith("26.");
+        private final boolean modern =
+                FabricLoader.getInstance()
+                        .getModContainer("minecraft")
+                        .orElseThrow()
+                        .getMetadata()
+                        .getVersion()
+                        .getFriendlyString()
+                        .startsWith("26.");
 
         /** Native address class with Raknetify's prefix-preserving parser applied. */
-        private final Class<?> address = type("net.minecraft.class_639", "net.minecraft.client.multiplayer.resolver.ServerAddress");
+        private final Class<?> address =
+                type(
+                        "net.minecraft.class_639",
+                        "net.minecraft.client.multiplayer.resolver.ServerAddress");
 
         /** Native resolver interface receiving Fast IP Ping's literal-address patch. */
-        private final Class<?> resolver = type("net.minecraft.class_6369", "net.minecraft.client.multiplayer.resolver.ServerAddressResolver");
+        private final Class<?> resolver =
+                type(
+                        "net.minecraft.class_6369",
+                        "net.minecraft.client.multiplayer.resolver.ServerAddressResolver");
 
         /** Native resolved-address interface used to extract the original socket destination. */
-        private final Class<?> resolved = type("net.minecraft.class_6368", "net.minecraft.client.multiplayer.resolver.ResolvedServerAddress");
+        private final Class<?> resolved =
+                type(
+                        "net.minecraft.class_6368",
+                        "net.minecraft.client.multiplayer.resolver.ResolvedServerAddress");
 
         /** Native parser shared by server-list and direct-connection inputs. */
-        private final Method parse = address.getMethod(modern ? "parseString" : "method_2950", String.class);
+        private final Method parse =
+                address.getMethod(modern ? "parseString" : "method_2950", String.class);
 
         /** Native hostname accessor after parsing and transport-prefix removal. */
         private final Method host = address.getMethod(modern ? "getHost" : "method_2952");
@@ -89,27 +119,43 @@ public final class ClientAddressTest implements PreLaunchEntrypoint {
         private final Method port = address.getMethod(modern ? "getPort" : "method_2954");
 
         /** Native resolver implementation selected by Minecraft. */
-        private final Object defaultResolver = resolver.getField(modern ? "SYSTEM" : "field_33744").get(null);
+        private final Object defaultResolver =
+                resolver.getField(modern ? "SYSTEM" : "field_33744").get(null);
 
-        /** Native connection thread whose constructor removes the transport prefix before DNS resolution. */
-        private final Class<?> connector = type("net.minecraft.class_412$1", "net.minecraft.client.gui.screens.ConnectScreen$1");
+        /**
+         * Native connection thread whose constructor removes the transport prefix before DNS
+         * resolution.
+         */
+        private final Class<?> connector =
+                type(
+                        "net.minecraft.class_412$1",
+                        "net.minecraft.client.gui.screens.ConnectScreen$1");
 
         /**
          * Initializes reflective handles for the active native address contract.
          *
          * @throws ReflectiveOperationException if a required accessor or resolver field is absent
          */
-        private AddressChecks() throws ReflectiveOperationException {
-        }
+        private AddressChecks() throws ReflectiveOperationException {}
 
         /**
-         * Checks ordinary TCP and both RakNet prefixes through ping and connection hooks without external DNS.
+         * Checks ordinary TCP and both RakNet prefixes through ping and connection hooks without
+         * external DNS.
          *
-         * @throws ReflectiveOperationException if a native constructor or address hook cannot be exercised
+         * @throws ReflectiveOperationException if a native constructor or address hook cannot be
+         *     exercised
          */
         private void verify() throws ReflectiveOperationException {
-            for (String prefix : new String[]{"", "raknet;", "raknetl;"}) {
-                for (String destination : new String[]{"192.0.2.1:25570", "[2001:db8::1]:25571", "fixture.test:25572", "192.0.2.1", "[2001:db8::1]", "fixture.test"}) {
+            for (String prefix : new String[] {"", "raknet;", "raknetl;"}) {
+                for (String destination :
+                        new String[] {
+                            "192.0.2.1:25570",
+                            "[2001:db8::1]:25571",
+                            "fixture.test:25572",
+                            "192.0.2.1",
+                            "[2001:db8::1]",
+                            "fixture.test"
+                        }) {
                     Object parsed = parse.invoke(null, prefix + destination);
                     checkConnection(parsed, prefix, destination);
                     checkPing(prefix + destination, destination);
@@ -118,110 +164,175 @@ public final class ClientAddressTest implements PreLaunchEntrypoint {
         }
 
         /**
-         * Checks Fast IP Ping alone to distinguish an upstream failure from interaction with Raknetify.
+         * Checks Fast IP Ping alone to distinguish an upstream failure from interaction with
+         * Raknetify.
          *
          * @throws ReflectiveOperationException if the native resolver cannot be exercised
          */
         private void verifyBaseline() throws ReflectiveOperationException {
-            require(!FabricLoader.getInstance().isModLoaded("raknetify"), "Baseline requires Raknetify to be absent");
-            for (String destination : new String[]{"192.0.2.1:25570", "[2001:db8::1]:25571", "fixture.test:25572"}) {
+            require(
+                    !FabricLoader.getInstance().isModLoaded("raknetify"),
+                    "Baseline requires Raknetify to be absent");
+            for (String destination :
+                    new String[] {"192.0.2.1:25570", "[2001:db8::1]:25571", "fixture.test:25572"}) {
                 checkResolved(parse.invoke(null, destination), destination);
             }
             System.out.println("PASS standalone resolver baseline");
         }
 
         /**
-         * Constructs the actual connection thread without starting it and checks its captured address and flags.
+         * Constructs the actual connection thread without starting it and checks its captured
+         * address and flags.
          *
          * @param parsed native parsed address retaining the user's original prefix
          * @param prefix expected transport-selection prefix
          * @param destination expected destination without transport syntax
-         * @throws ReflectiveOperationException if a native connection-thread constructor or captured field changed
+         * @throws ReflectiveOperationException if a native connection-thread constructor or
+         *     captured field changed
          */
-        private void checkConnection(Object parsed, String prefix, String destination) throws ReflectiveOperationException {
+        private void checkConnection(
+                final Object parsed, final String prefix, final String destination)
+                throws ReflectiveOperationException {
             Constructor<?> constructor = connector.getDeclaredConstructors()[0];
             constructor.setAccessible(true);
             Object[] arguments = new Object[constructor.getParameterCount()];
-            for (int i = 0; i < arguments.length; i++) arguments[i] = argument(constructor.getParameterTypes()[i], parsed);
+            for (int i = 0; i < arguments.length; i++) {
+                arguments[i] = argument(constructor.getParameterTypes()[i], parsed);
+            }
             Object thread = constructor.newInstance(arguments);
-            Field captured = Arrays.stream(connector.getDeclaredFields()).filter(f -> f.getType() == address).findFirst().orElseThrow();
+            Field captured =
+                    Arrays.stream(connector.getDeclaredFields())
+                            .filter(f -> f.getType() == address)
+                            .findFirst()
+                            .orElseThrow();
             captured.setAccessible(true);
-            require(booleanField(thread, "isRaknet") == !prefix.isEmpty(), "Wrong connection transport");
-            require(booleanField(thread, "raknetLargeMTU") == prefix.equals("raknetl;"), "Wrong MTU selection");
+            require(
+                    booleanField(thread, "isRaknet") == !prefix.isEmpty(),
+                    "Wrong connection transport");
+            require(
+                    booleanField(thread, "raknetLargeMTU") == "raknetl;".equals(prefix),
+                    "Wrong MTU selection");
             checkResolved(captured.get(thread), destination);
             System.out.println("PASS connect address " + prefix + destination);
         }
 
         /**
-         * Invokes the transformed server-list parsing hook with the native parser as its original operation.
+         * Invokes the transformed server-list parsing hook with the native parser as its original
+         * operation.
          *
          * @param input saved server-list address, including any transport prefix
          * @param destination expected address passed to the resolver
-         * @throws ReflectiveOperationException if the transformed ping hook or native parser cannot be invoked
+         * @throws ReflectiveOperationException if the transformed ping hook or native parser cannot
+         *     be invoked
          */
-        private void checkPing(String input, String destination) throws ReflectiveOperationException {
-            Class<?> pinger = type("net.minecraft.class_644", "net.minecraft.client.multiplayer.ServerStatusPinger");
-            Method hook = Arrays.stream(pinger.getDeclaredMethods()).filter(m -> m.getName().contains("modifyRaknetAddress")).findFirst().orElseThrow();
+        private void checkPing(final String input, final String destination)
+                throws ReflectiveOperationException {
+            Class<?> pinger =
+                    type(
+                            "net.minecraft.class_644",
+                            "net.minecraft.client.multiplayer.ServerStatusPinger");
+            Method hook =
+                    Arrays.stream(pinger.getDeclaredMethods())
+                            .filter(m -> m.getName().contains("modifyRaknetAddress"))
+                            .findFirst()
+                            .orElseThrow();
             hook.setAccessible(true);
             Class<?> operation = hook.getParameterTypes()[1];
-            Object original = Proxy.newProxyInstance(operation.getClassLoader(), new Class<?>[]{operation},
-                    (proxy, method, args) -> parse.invoke(null, ((Object[]) args[0])[0]));
-            Object result = hook.invoke(pinger.getDeclaredConstructor().newInstance(), input, original);
+            Object original =
+                    Proxy.newProxyInstance(
+                            operation.getClassLoader(),
+                            new Class<?>[] {operation},
+                            (proxy, method, args) -> parse.invoke(null, ((Object[]) args[0])[0]));
+            Object result =
+                    hook.invoke(pinger.getDeclaredConstructor().newInstance(), input, original);
             checkResolved(result, destination);
             System.out.println("PASS ping address " + input);
         }
 
         /**
-         * Requires exact destination bytes and port, with literal hostnames already populated before reverse lookup.
+         * Requires exact destination bytes and port, with literal hostnames already populated
+         * before reverse lookup.
          *
          * @param input unprefixed native address from a production client hook
          * @param destination original unprefixed text used to establish expected bytes and port
-         * @throws ReflectiveOperationException if a native resolver or socket-address accessor changed
+         * @throws ReflectiveOperationException if a native resolver or socket-address accessor
+         *     changed
          */
-        private void checkResolved(Object input, String destination) throws ReflectiveOperationException {
+        private void checkResolved(final Object input, final String destination)
+                throws ReflectiveOperationException {
             Object expected = parse.invoke(null, destination);
             require(host.invoke(input).equals(host.invoke(expected)), "Hostname changed");
-            Optional<?> result = (Optional<?>) resolver.getMethod("resolve", address).invoke(defaultResolver, input);
+            Optional<?> result =
+                    (Optional<?>)
+                            resolver.getMethod("resolve", address).invoke(defaultResolver, input);
             Object value = result.orElseThrow();
-            InetSocketAddress socket = (InetSocketAddress) resolved.getMethod(modern ? "asInetSocketAddress" : "method_36902").invoke(value);
+            InetSocketAddress socket =
+                    (InetSocketAddress)
+                            resolved.getMethod(modern ? "asInetSocketAddress" : "method_36902")
+                                    .invoke(value);
             int explicitPort = java.net.URI.create("minecraft://" + destination).getPort();
             int expectedPort = explicitPort < 0 ? 25565 : explicitPort;
             require((int) port.invoke(input) == expectedPort, "Parsed port changed");
             require(socket.getPort() == expectedPort, "Resolved port changed");
             String expectedHost = (String) host.invoke(expected);
             InetAddress actual = socket.getAddress();
-            byte[] expectedBytes = expectedHost.contains(":")
-                    ? java.util.HexFormat.of().parseHex("20010db8000000000000000000000001")
-                    : new byte[]{(byte) 192, 0, 2, (byte) (expectedHost.equals("fixture.test") ? 2 : 1)};
-            require(Arrays.equals(actual.getAddress(), expectedBytes), "Destination address bytes changed");
-            require(!actual.toString().startsWith("/"), "Literal address still permits reverse DNS");
-            if (expectedHost.equals("fixture.test")) {
+            byte[] expectedBytes =
+                    expectedHost.contains(":")
+                            ? java.util.HexFormat.of().parseHex("20010db8000000000000000000000001")
+                            : new byte[] {
+                                (byte) 192,
+                                0,
+                                2,
+                                (byte) ("fixture.test".equals(expectedHost) ? 2 : 1)
+                            };
+            require(
+                    Arrays.equals(actual.getAddress(), expectedBytes),
+                    "Destination address bytes changed");
+            require(
+                    !actual.toString().startsWith("/"),
+                    "Literal address still permits reverse DNS");
+            if ("fixture.test".equals(expectedHost)) {
                 require(actual.getHostName().equals(expectedHost), "Named host was replaced");
             } else {
-                require(actual.getHostName().equals(actual.getHostAddress()), "Literal hostname was not pinned");
+                require(
+                        actual.getHostName().equals(actual.getHostAddress()),
+                        "Literal hostname was not pinned");
             }
         }
 
         /**
-         * Supplies only the captured address and inert constructor values without creating a client session.
+         * Supplies only the captured address and inert constructor values without creating a client
+         * session.
          *
          * @param type constructor parameter type
          * @param parsed captured native address
          * @return argument accepted by the vanilla thread constructor
          * @throws ReflectiveOperationException if the inert parent screen cannot be constructed
          */
-        private Object argument(Class<?> type, Object parsed) throws ReflectiveOperationException {
+        private Object argument(final Class<?> type, final Object parsed)
+                throws ReflectiveOperationException {
             if (type == connector.getEnclosingClass()) {
-                // The enclosing screen is only captured, never run. Avoid its graphics-dependent constructor.
+                // The enclosing screen is only captured, never run. Avoid its graphics-dependent
+                // constructor.
                 Class<?> allocator = Class.forName("sun.misc.Unsafe");
                 Field instance = allocator.getDeclaredField("theUnsafe");
                 instance.setAccessible(true);
-                return allocator.getMethod("allocateInstance", Class.class).invoke(instance.get(null), type);
+                return allocator
+                        .getMethod("allocateInstance", Class.class)
+                        .invoke(instance.get(null), type);
             }
-            if (type == address) return parsed;
-            if (type == String.class) return "Address test";
-            if (type == boolean.class) return false;
-            if (type == int.class) return 0;
+            if (type == address) {
+                return parsed;
+            }
+            if (type == String.class) {
+                return "Address test";
+            }
+            if (type == boolean.class) {
+                return false;
+            }
+            if (type == int.class) {
+                return 0;
+            }
             return null;
         }
 
@@ -233,8 +344,13 @@ public final class ClientAddressTest implements PreLaunchEntrypoint {
          * @return selected flag value
          * @throws ReflectiveOperationException if the injected flag cannot be read
          */
-        private boolean booleanField(Object target, String suffix) throws ReflectiveOperationException {
-            Field field = Arrays.stream(connector.getDeclaredFields()).filter(f -> f.getName().endsWith(suffix)).findFirst().orElseThrow();
+        private boolean booleanField(final Object target, final String suffix)
+                throws ReflectiveOperationException {
+            Field field =
+                    Arrays.stream(connector.getDeclaredFields())
+                            .filter(f -> f.getName().endsWith(suffix))
+                            .findFirst()
+                            .orElseThrow();
             field.setAccessible(true);
             return field.getBoolean(target);
         }
@@ -247,7 +363,7 @@ public final class ClientAddressTest implements PreLaunchEntrypoint {
          * @return transformed runtime class
          * @throws IllegalStateException if the expected native class is missing
          */
-        private Class<?> type(String intermediary, String official) {
+        private Class<?> type(final String intermediary, final String official) {
             try {
                 return Class.forName(modern ? official : intermediary);
             } catch (ClassNotFoundException failure) {
@@ -256,14 +372,17 @@ public final class ClientAddressTest implements PreLaunchEntrypoint {
         }
 
         /**
-         * Fails the fixture process on a behavior mismatch without depending on enabled Java assertions.
+         * Fails the fixture process on a behavior mismatch without depending on enabled Java
+         * assertions.
          *
          * @param condition required compatibility property
          * @param message diagnostic explaining the violated property
          * @throws IllegalStateException if the compatibility property does not hold
          */
-        private static void require(boolean condition, String message) {
-            if (!condition) throw new IllegalStateException(message);
+        private static void require(final boolean condition, final String message) {
+            if (!condition) {
+                throw new IllegalStateException(message);
+            }
         }
     }
 }

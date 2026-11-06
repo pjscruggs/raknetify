@@ -26,25 +26,34 @@ package com.ishland.raknetify.test;
 
 import com.ishland.raknetify.minecraft.ModPlatform;
 
-/** Runs the shared packet contracts after the native loader completes ordinary mod initialization. */
+/**
+ * Runs the shared packet contracts after the native loader completes ordinary mod initialization.
+ */
 public final class NativeClientTests {
 
     /** Prevents creating a fixture outside the native loader lifecycle. */
-    private NativeClientTests() {
-    }
+    private NativeClientTests() {}
 
-    /** Executes the installed game's packet and transport checks, then terminates this isolated test client. */
+    /**
+     * Executes the installed game's packet and transport checks, then terminates this isolated test
+     * client.
+     */
     public static void run() {
         try {
-            if (!ModPlatform.get().isClient()) throw new IllegalStateException("Client fixture loaded on server");
+            if (!ModPlatform.get().isClient()) {
+                throw new IllegalStateException("Client fixture loaded on server");
+            }
             ThreadedChannelCloseWitness.verify();
             System.out.println("PASS native threaded transport closure");
             GameplayOrderingTest.verify();
             SignedChatTest.verify();
             TransferNativeTest.verify();
             System.out.println("PASS native loader client contracts");
-            if (Boolean.getBoolean("raknetify.test.join")) NativeConnectionTest.arm();
-            else System.exit(0);
+            if (Boolean.getBoolean("raknetify.test.join")) {
+                NativeConnectionTest.arm();
+            } else {
+                System.exit(0);
+            }
         } catch (Throwable failure) {
             failure.printStackTrace();
             System.exit(1);

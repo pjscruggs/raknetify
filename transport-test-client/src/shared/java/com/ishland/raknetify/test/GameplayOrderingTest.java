@@ -25,9 +25,11 @@
 package com.ishland.raknetify.test;
 
 import com.ishland.raknetify.common.connection.RakNetSimpleMultiChannelCodec;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.embedded.EmbeddedChannel;
+
 import network.ycc.raknet.frame.Frame;
 import network.ycc.raknet.frame.FrameData;
 import network.ycc.raknet.packet.FramedPacket;
@@ -37,41 +39,47 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Checks native packet routing under deterministic reversal of inventory and interaction traffic. */
+/**
+ * Checks native packet routing under deterministic reversal of inventory and interaction traffic.
+ */
 final class GameplayOrderingTest {
 
-    /** Stable legacy and modern names for actions that read or change the player's held item and movement state. */
+    /**
+     * Stable legacy and modern names for actions that read or change the player's held item and
+     * movement state.
+     */
     private static final String[][] GAMEPLAY_PACKETS = {
-            {"class_2873", "ServerboundSetCreativeModeSlotPacket"},
-            {"class_2868", "ServerboundSetCarriedItemPacket"},
-            {"class_2828$class_2829", "ServerboundMovePlayerPacket$Pos"},
-            {"class_2885", "ServerboundUseItemOnPacket"},
-            {"class_2846", "ServerboundPlayerActionPacket"},
-            {"class_2886", "ServerboundUseItemPacket"},
-            {"class_2813", "ServerboundContainerClickPacket"},
-            {"class_2815", "ServerboundContainerClosePacket"},
-            {"class_2848", "ServerboundPlayerCommandPacket"},
-            {"class_2851", "ServerboundPlayerInputPacket"},
-            {"class_2842", "ServerboundPlayerAbilitiesPacket"},
-            {"class_2824", "ServerboundInteractPacket"}
+        {"class_2873", "ServerboundSetCreativeModeSlotPacket"},
+        {"class_2868", "ServerboundSetCarriedItemPacket"},
+        {"class_2828$class_2829", "ServerboundMovePlayerPacket$Pos"},
+        {"class_2885", "ServerboundUseItemOnPacket"},
+        {"class_2846", "ServerboundPlayerActionPacket"},
+        {"class_2886", "ServerboundUseItemPacket"},
+        {"class_2813", "ServerboundContainerClickPacket"},
+        {"class_2815", "ServerboundContainerClosePacket"},
+        {"class_2848", "ServerboundPlayerCommandPacket"},
+        {"class_2851", "ServerboundPlayerInputPacket"},
+        {"class_2842", "ServerboundPlayerAbilitiesPacket"},
+        {"class_2824", "ServerboundInteractPacket"}
     };
 
     /** Entity creation, metadata, pickup and removal must share one ordered lifecycle. */
     private static final String[][] ENTITY_PACKETS = {
-            {"class_2604", "ClientboundAddEntityPacket"},
-            {"class_2739", "ClientboundSetEntityDataPacket"},
-            {"class_2775", "ClientboundTakeItemEntityPacket"},
-            {"class_2716", "ClientboundRemoveEntitiesPacket"}
+        {"class_2604", "ClientboundAddEntityPacket"},
+        {"class_2739", "ClientboundSetEntityDataPacket"},
+        {"class_2775", "ClientboundTakeItemEntityPacket"},
+        {"class_2716", "ClientboundRemoveEntitiesPacket"}
     };
 
     /** Prevents construction of this isolated runtime witness. */
-    private GameplayOrderingTest() {
-    }
+    private GameplayOrderingTest() {}
 
     /**
-     * Uses the installed native packet table and real frame reorderer to restore an entirely reversed batch.
+     * Uses the installed native packet table and real frame reorderer to restore an entirely
+     * reversed batch.
      *
-     * @throws ReflectiveOperationException if a supported version no longer exposes a required packet class
+     * @throws ReflectiveOperationException if a supported version no longer exposes a required
+     *     packet class
      */
     static void verify() throws ReflectiveOperationException {
         verifyGroup(GAMEPLAY_PACKETS, "gameplay");
@@ -85,7 +93,8 @@ final class GameplayOrderingTest {
      * @param label diagnostic group name written to the fixture log
      * @throws ReflectiveOperationException if a native packet or classifier is unavailable
      */
-    static void verifyGroup(String[][] packets, String label) throws ReflectiveOperationException {
+    static void verifyGroup(final String[][] packets, final String label)
+            throws ReflectiveOperationException {
         int[] routes = nativeRoutes(packets);
         RakNetSimpleMultiChannelCodec codec = new RakNetSimpleMultiChannelCodec(253);
         codec.addHandler((buffer, silent) -> routes[buffer.getUnsignedByte(buffer.readerIndex())]);
@@ -96,8 +105,12 @@ final class GameplayOrderingTest {
             sender.writeOutbound(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL);
             ((FrameData) sender.readOutbound()).release();
             encode(sender, routes, frames);
-            while (!frames.isEmpty()) receiver.writeInbound(frames.remove(frames.size() - 1));
-            for (int i = 0; i < packets.length; i++) checkNext(receiver, i);
+            while (!frames.isEmpty()) {
+                receiver.writeInbound(frames.remove(frames.size() - 1));
+            }
+            for (int i = 0; i < packets.length; i++) {
+                checkNext(receiver, i);
+            }
             require(receiver.readInbound() == null, "Duplicate gameplay packet");
             System.out.println("PASS native " + label + " ordering " + packets.length);
         } finally {
@@ -114,33 +127,42 @@ final class GameplayOrderingTest {
      * @return actual channel assignments for this runtime's equivalent gameplay packets
      * @throws ReflectiveOperationException if packet lookup or the routing entry point fails
      */
-    static int[] nativeRoutes(String[][] packets) throws ReflectiveOperationException {
+    static int[] nativeRoutes(final String[][] packets) throws ReflectiveOperationException {
         boolean modern = FixtureRuntime.modern();
-        Method route = Class.forName("com.ishland.raknetify.fabric.common.connection.RakNetMultiChannel")
-                .getMethod("getPacketChannelOverride", Class.class, boolean.class);
+        Method route =
+                Class.forName("com.ishland.raknetify.fabric.common.connection.RakNetMultiChannel")
+                        .getMethod("getPacketChannelOverride", Class.class, boolean.class);
         int[] routes = new int[packets.length];
         for (int i = 0; i < packets.length; i++) {
-            String name = modern ? "net.minecraft.network.protocol.game." + packets[i][1] : "net.minecraft." + packets[i][0];
-            Class<?> packet = Class.forName(name, false, GameplayOrderingTest.class.getClassLoader());
+            String name =
+                    modern
+                            ? "net.minecraft.network.protocol.game." + packets[i][1]
+                            : "net.minecraft." + packets[i][0];
+            Class<?> packet =
+                    Class.forName(name, false, GameplayOrderingTest.class.getClassLoader());
             routes[i] = (int) route.invoke(null, packet, false);
         }
         return routes;
     }
 
     /**
-     * Encodes each action through the real classifier and assigns independent per-channel sequence numbers.
+     * Encodes each action through the real classifier and assigns independent per-channel sequence
+     * numbers.
      *
      * @param sender production codec configured with the native class-derived routes
      * @param routes channel assignments used to check the encoded frame
      * @param frames owned frames collected for delivery in reverse order
      */
-    private static void encode(EmbeddedChannel sender, int[] routes, List<Frame> frames) {
+    private static void encode(
+            final EmbeddedChannel sender, final int[] routes, final List<Frame> frames) {
         int[] sequence = new int[8];
         for (int i = 0; i < routes.length; i++) {
             sender.writeOutbound(Unpooled.buffer(1).writeByte(i));
             FrameData data = sender.readOutbound();
             try {
-                require(data.getReliability() == FramedPacket.Reliability.RELIABLE_ORDERED, "Unordered gameplay packet");
+                require(
+                        data.getReliability() == FramedPacket.Reliability.RELIABLE_ORDERED,
+                        "Unordered gameplay packet");
                 require(data.getOrderChannel() == routes[i], "Classifier lost native channel");
                 frames.add(Frame.createOrdered(data, sequence[data.getOrderChannel()]++, 0));
             } finally {
@@ -155,7 +177,7 @@ final class GameplayOrderingTest {
      * @param receiver real RakNet reorderer after every reversed frame has arrived
      * @param expected original action index, also encoded in the test packet payload
      */
-    private static void checkNext(EmbeddedChannel receiver, int expected) {
+    private static void checkNext(final EmbeddedChannel receiver, final int expected) {
         FrameData data = receiver.readInbound();
         require(data != null, "Missing gameplay packet " + expected);
         try {
@@ -163,7 +185,9 @@ final class GameplayOrderingTest {
             try {
                 bytes.skipBytes(1);
                 int actual = bytes.readUnsignedByte();
-                require(actual == expected, "Gameplay order changed: expected " + expected + " but received " + actual);
+                require(
+                        actual == expected,
+                        "Gameplay order changed: expected " + expected + " but received " + actual);
             } finally {
                 bytes.release();
             }
@@ -179,7 +203,9 @@ final class GameplayOrderingTest {
      * @param message failure detail retained in the CI log
      * @throws AssertionError if the transport violates the checked invariant
      */
-    private static void require(boolean condition, String message) {
-        if (!condition) throw new AssertionError(message);
+    private static void require(final boolean condition, final String message) {
+        if (!condition) {
+            throw new AssertionError(message);
+        }
     }
 }

@@ -33,31 +33,43 @@ import java.nio.file.Path;
 final class FixtureRuntime {
 
     /** Prevents construction of the fixture's metadata adapter. */
-    private FixtureRuntime() {
-    }
+    private FixtureRuntime() {}
 
     /**
      * Selects the namespace used by the installed Fabric game.
+     *
      * @return whether packet and member names are unobfuscated
      */
     static boolean modern() {
-        return FabricLoader.getInstance().getModContainer("minecraft").orElseThrow()
-                .getMetadata().getVersion().getFriendlyString().startsWith("26.");
+        return FabricLoader.getInstance()
+                .getModContainer("minecraft")
+                .orElseThrow()
+                .getMetadata()
+                .getVersion()
+                .getFriendlyString()
+                .startsWith("26.");
     }
 
     /**
      * Checks when a protocol feature became available using Fabric's version semantics.
+     *
      * @param version first Minecraft release containing the feature
      * @return whether the installed runtime supports that protocol feature
      * @throws Exception if the fixed test version cannot be parsed
      */
-    static boolean atLeast(String version) throws Exception {
-        return VersionPredicate.parse(">=" + version).test(FabricLoader.getInstance()
-                .getModContainer("minecraft").orElseThrow().getMetadata().getVersion());
+    static boolean atLeast(final String version) throws Exception {
+        return VersionPredicate.parse(">=" + version)
+                .test(
+                        FabricLoader.getInstance()
+                                .getModContainer("minecraft")
+                                .orElseThrow()
+                                .getMetadata()
+                                .getVersion());
     }
 
     /**
      * Locates writable fixture state without touching an installed player's game directory.
+     *
      * @return isolated game directory chosen by the test launcher
      */
     static Path gameDirectory() {

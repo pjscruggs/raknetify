@@ -27,6 +27,7 @@ package com.ishland.raknetify.test;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.Version;
 import net.fabricmc.loader.api.metadata.version.VersionPredicate;
+
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
@@ -39,25 +40,37 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Checks actual transformed Minecraft bytecode so literal compatibility selectors cannot silently stop injecting. */
+/**
+ * Checks actual transformed Minecraft bytecode so literal compatibility selectors cannot silently
+ * stop injecting.
+ */
 final class LegacyMixinContractTest {
 
-    /** Version predicates select API transitions independently of the mixin plugin's implementation. */
-    private static final Version VERSION = FabricLoader.getInstance().getModContainer("minecraft").orElseThrow()
-            .getMetadata().getVersion();
+    /**
+     * Version predicates select API transitions independently of the mixin plugin's implementation.
+     */
+    private static final Version VERSION =
+            FabricLoader.getInstance()
+                    .getModContainer("minecraft")
+                    .orElseThrow()
+                    .getMetadata()
+                    .getVersion();
 
     /** Prevents construction of this isolated bytecode witness. */
-    private LegacyMixinContractTest() {
-    }
+    private LegacyMixinContractTest() {}
 
     /**
      * Loads each affected native target and requires executable calls to its transport hooks.
      * Merely merging a handler method does not pass. The negative control removes call sites from
      * an in-memory copy and must be rejected by the same validator.
-     * @throws Exception if transformation fails, an expected call is absent or the control is accepted
+     *
+     * @throws Exception if transformation fails, an expected call is absent or the control is
+     *     accepted
      */
     static void verify() throws Exception {
-        if (VERSION.getFriendlyString().startsWith("26.")) return;
+        if (VERSION.getFriendlyString().startsWith("26.")) {
+            return;
+        }
         requireCalls("class_2535", "redirectGroup", "redirectChannel");
         requireCalls("class_644", "modifyRaknetAddress", "redirectConnect");
         requireCalls("class_644$1", "noPingRaknet");
@@ -69,41 +82,59 @@ final class LegacyMixinContractTest {
 
     /**
      * Checks hooks whose owning classes or methods changed during the supported legacy range.
+     *
      * @throws Exception if an applicable target, accessor field or transformed hook is missing
      */
     private static void verifyVersionedTargets() throws Exception {
-        if (matches("<=1.21.8")) requireCalls("class_340", "getLeftText");
+        if (matches("<=1.21.8")) {
+            requireCalls("class_340", "getLeftText");
+        }
         if (matches("<=1.20.1")) {
             requireCalls("class_3324", "onJoin", "postJoin");
             requireCalls("class_3244", "stopTimeoutPlayersOnKeepAlive", "redirectPingStoring");
         }
-        if (matches(">=1.20.5")) requireCalls("class_2535", "raknetify$selectTransferDestination");
-        if (matches("<=1.20.4")) verifyPacketAccessor();
+        if (matches(">=1.20.5")) {
+            requireCalls("class_2535", "raknetify$selectTransferDestination");
+        }
+        if (matches("<=1.20.4")) {
+            verifyPacketAccessor();
+        }
     }
 
     /**
      * Requires the generated packet-map accessor to read the real registry field.
+     *
      * @throws Exception if the old registry cannot load or its export cannot be read
      * @throws AssertionError if the accessor is detached from its native field
      */
     private static void verifyPacketAccessor() throws Exception {
         ClassNode target = transformed("class_2539$class_4532");
         for (MethodNode method : target.methods) {
-            if (!method.name.equals("getPacketIds")) continue;
+            if (!"getPacketIds".equals(method.name)) {
+                continue;
+            }
             for (AbstractInsnNode instruction : method.instructions) {
-                if (instruction instanceof FieldInsnNode field && field.name.equals("field_20596")) return;
+                if (instruction instanceof FieldInsnNode field
+                        && "field_20596".equals(field.name)) {
+                    return;
+                }
             }
         }
         throw new AssertionError("Legacy packet registry accessor does not read field_20596");
     }
 
     /**
-     * Checks the subscription cleanup on runtimes that still contain the removed sample-tracker class.
+     * Checks the subscription cleanup on runtimes that still contain the removed sample-tracker
+     * class.
+     *
      * @throws Exception if a present tracker cannot transform or its cleanup hook is unreferenced
      */
     private static void verifyQueueWhenPresent() throws Exception {
         try {
-            Class.forName("net.minecraft.class_9188", false, LegacyMixinContractTest.class.getClassLoader());
+            Class.forName(
+                    "net.minecraft.class_9188",
+                    false,
+                    LegacyMixinContractTest.class.getClassLoader());
         } catch (ClassNotFoundException absent) {
             return;
         }
@@ -111,23 +142,28 @@ final class LegacyMixinContractTest {
     }
 
     /**
-     * Evaluates a Fabric version predicate without depending on the production mixin-selection helper.
+     * Evaluates a Fabric version predicate without depending on the production mixin-selection
+     * helper.
+     *
      * @param predicate supported API interval to check
      * @return whether this native runtime belongs to the interval
      * @throws Exception if the fixture contains a malformed version predicate
      */
-    private static boolean matches(String predicate) throws Exception {
+    private static boolean matches(final String predicate) throws Exception {
         return VersionPredicate.parse(predicate).test(VERSION);
     }
 
     /**
-     * Loads a class without initializing game state and reads the bytecode exported after Mixin applies.
+     * Loads a class without initializing game state and reads the bytecode exported after Mixin
+     * applies.
+     *
      * @param name intermediary class name relative to net.minecraft
      * @return transformed class, including injected method bodies and their actual call sites
      * @throws Exception if the runtime class or its fresh Mixin export is unavailable
      */
-    private static ClassNode transformed(String name) throws Exception {
-        Class.forName("net.minecraft." + name, false, LegacyMixinContractTest.class.getClassLoader());
+    private static ClassNode transformed(final String name) throws Exception {
+        Class.forName(
+                "net.minecraft." + name, false, LegacyMixinContractTest.class.getClassLoader());
         Path path = Path.of(".mixin.out", "class", "net", "minecraft", name + ".class");
         ClassNode node = new ClassNode();
         new ClassReader(Files.readAllBytes(path)).accept(node, 0);
@@ -136,11 +172,12 @@ final class LegacyMixinContractTest {
 
     /**
      * Checks every expected hook and proves that a disconnected handler fails the same assertion.
+     *
      * @param target intermediary class whose transformed method bodies must contain the hooks
      * @param hooks stable source handler names retained inside Mixin's generated unique names
      * @throws Exception if loading or reading the transformed target fails
      */
-    private static void requireCalls(String target, String... hooks) throws Exception {
+    private static void requireCalls(final String target, final String... hooks) throws Exception {
         ClassNode node = transformed(target);
         for (String hook : hooks) {
             requireCall(node, hook);
@@ -153,17 +190,23 @@ final class LegacyMixinContractTest {
 
     /**
      * Finds calls to a merged hook, excluding self-recursion and references to unrelated owners.
+     *
      * @param node actual transformed target or a deliberately broken control copy
      * @param hook source handler name identifying the injected method
      * @return executable call sites that invoke a hook merged into this target
      */
-    private static List<MethodInsnNode> calls(ClassNode node, String hook) {
+    private static List<MethodInsnNode> calls(final ClassNode node, final String hook) {
         List<MethodInsnNode> result = new ArrayList<>();
         for (MethodNode method : node.methods) {
-            if (method.name.contains(hook)) continue;
+            if (method.name.contains(hook)) {
+                continue;
+            }
             for (AbstractInsnNode instruction : method.instructions) {
-                if (instruction instanceof MethodInsnNode call && call.owner.equals(node.name)
-                        && call.name.contains(hook)) result.add(call);
+                if (instruction instanceof MethodInsnNode call
+                        && call.owner.equals(node.name)
+                        && call.name.contains(hook)) {
+                    result.add(call);
+                }
             }
         }
         return result;
@@ -171,35 +214,44 @@ final class LegacyMixinContractTest {
 
     /**
      * Rejects a missing call even when the injected handler declaration exists in the target class.
+     *
      * @param node transformed target to inspect
      * @param hook required transport handler
      * @throws AssertionError if the transformed target never invokes the required hook
      */
-    private static void requireCall(ClassNode node, String hook) {
-        if (calls(node, hook).isEmpty()) throw new AssertionError(node.name + " never calls " + hook);
+    private static void requireCall(final ClassNode node, final String hook) {
+        if (calls(node, hook).isEmpty()) {
+            throw new AssertionError(node.name + " never calls " + hook);
+        }
     }
 
     /**
-     * Disconnects a hook only in a bytecode-analysis copy, leaving loaded Minecraft classes untouched.
+     * Disconnects a hook only in a bytecode-analysis copy, leaving loaded Minecraft classes
+     * untouched.
+     *
      * @param node private control copy whose call sites will be removed
      * @param hook handler whose declaration remains while its callers are removed
      */
-    private static void removeCalls(ClassNode node, String hook) {
+    private static void removeCalls(final ClassNode node, final String hook) {
         List<MethodInsnNode> selected = calls(node, hook);
         for (MethodNode method : node.methods) {
             for (AbstractInsnNode instruction : method.instructions.toArray()) {
-                if (selected.contains(instruction)) method.instructions.remove(instruction);
+                if (selected.contains(instruction)) {
+                    method.instructions.remove(instruction);
+                }
             }
         }
     }
 
     /**
-     * Proves the validator detects a silently skipped injection instead of only finding its declaration.
+     * Proves the validator detects a silently skipped injection instead of only finding its
+     * declaration.
+     *
      * @param node control with the handler retained but its call sites removed
      * @param hook disconnected handler that must fail validation
      * @throws AssertionError if the negative control is incorrectly accepted
      */
-    private static void requireRejectedControl(ClassNode node, String hook) {
+    private static void requireRejectedControl(final ClassNode node, final String hook) {
         try {
             requireCall(node, hook);
         } catch (AssertionError expected) {

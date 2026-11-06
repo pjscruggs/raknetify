@@ -25,7 +25,9 @@
 package com.ishland.raknetify.test.mixin;
 
 import com.ishland.raknetify.test.NativeConnectionTest;
+
 import net.minecraft.client.Minecraft;
+
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -37,10 +39,11 @@ public abstract class NativeClientTickMixin {
 
     /**
      * Observes the real client state without cancelling or replacing the tick.
+     *
      * @param callback unused because the fixture never cancels normal gameplay processing
      */
     @Inject(method = "tick", at = @At("RETURN"))
-    private void testConnection(CallbackInfo callback) {
+    private void testConnection(final CallbackInfo callback) {
         NativeConnectionTest.tick((Minecraft) (Object) this);
     }
 }
