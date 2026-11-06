@@ -34,17 +34,19 @@ public final class NeoForgeClientTest {
 
     /**
      * Attaches the test callback to the separate fixture mod's lifecycle bus.
+     *
      * @param bus native loader bus associated with this fixture
      */
-    public NeoForgeClientTest(IEventBus bus) {
+    public NeoForgeClientTest(final IEventBus bus) {
         bus.addListener(this::complete);
     }
 
     /**
      * Runs the shared packet contracts once all common setup queues have completed.
+     *
      * @param event final mod lifecycle event
      */
-    private void complete(FMLLoadCompleteEvent event) {
+    private void complete(final FMLLoadCompleteEvent event) {
         event.enqueueWork(NativeClientTests::run);
     }
 }

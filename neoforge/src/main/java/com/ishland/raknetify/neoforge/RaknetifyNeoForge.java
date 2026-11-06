@@ -25,6 +25,7 @@
 package com.ishland.raknetify.neoforge;
 
 import com.ishland.raknetify.fabric.MinecraftRuntime;
+
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
@@ -35,17 +36,20 @@ public final class RaknetifyNeoForge {
 
     /**
      * Registers startup work on the mod lifecycle bus without eagerly loading game codecs.
+     *
      * @param bus lifecycle bus supplied by NeoForge for this mod
      */
-    public RaknetifyNeoForge(IEventBus bus) {
+    public RaknetifyNeoForge(final IEventBus bus) {
         bus.addListener(this::setup);
     }
 
     /**
-     * Runs routing initialization on the main setup thread after parallel mod construction finishes.
+     * Runs routing initialization on the main setup thread after parallel mod construction
+     * finishes.
+     *
      * @param event common setup event with the main-thread work queue
      */
-    private void setup(FMLCommonSetupEvent event) {
+    private void setup(final FMLCommonSetupEvent event) {
         event.enqueueWork(MinecraftRuntime::initialize);
     }
 }

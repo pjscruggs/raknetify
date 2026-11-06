@@ -25,30 +25,40 @@
 package com.ishland.raknetify.neoforge;
 
 import com.ishland.raknetify.minecraft.ModPlatform;
+
 import net.neoforged.fml.loading.FMLLoader;
 import net.neoforged.fml.loading.FMLPaths;
+
 import java.nio.file.Path;
 
 /** Reads NeoForge's early discovery state without forcing Minecraft class initialization. */
 public final class NeoForgePlatform implements ModPlatform {
 
     /** Constructs the loader service before game mixins are selected. */
-    public NeoForgePlatform() {
-    }
+    public NeoForgePlatform() {}
 
     /**
      * Reads the built-in Minecraft mod entry without loading game code.
+     *
      * @return Minecraft's version from NeoForge's built-in mod metadata
      */
     @Override
     public String minecraftVersion() {
-        return FMLLoader.getCurrent().getLoadingModList().getModFileById("minecraft")
-                .getMods().stream().filter(mod -> mod.getModId().equals("minecraft"))
-                .findFirst().orElseThrow().getVersion().toString();
+        return FMLLoader.getCurrent()
+                .getLoadingModList()
+                .getModFileById("minecraft")
+                .getMods()
+                .stream()
+                .filter(mod -> "minecraft".equals(mod.getModId()))
+                .findFirst()
+                .orElseThrow()
+                .getVersion()
+                .toString();
     }
 
     /**
      * Selects the physical distribution used for client-only initialization.
+     *
      * @return whether NeoForge is running its physical client distribution
      */
     @Override
@@ -58,6 +68,7 @@ public final class NeoForgePlatform implements ModPlatform {
 
     /**
      * Determines whether development-only mixin auditing is appropriate.
+     *
      * @return whether NeoForge is running a development launch
      */
     @Override
@@ -67,16 +78,18 @@ public final class NeoForgePlatform implements ModPlatform {
 
     /**
      * Queries the early mod inventory used while mixin configurations are loaded.
+     *
      * @param id NeoForge mod identifier
      * @return whether the mod was discovered for this launch
      */
     @Override
-    public boolean isModLoaded(String id) {
+    public boolean isModLoaded(final String id) {
         return FMLLoader.getCurrent().getLoadingModList().getModFileById(id) != null;
     }
 
     /**
      * Uses the instance configuration directory selected by the loader.
+     *
      * @return NeoForge's instance configuration directory
      */
     @Override
@@ -86,6 +99,5 @@ public final class NeoForgePlatform implements ModPlatform {
 
     /** Leaves registration to mods calling the optional PacketOrdering API during their setup. */
     @Override
-    public void initializePacketOrdering() {
-    }
+    public void initializePacketOrdering() {}
 }
