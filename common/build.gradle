@@ -54,7 +54,7 @@ tasks.register('benchmark', JavaExec) {
     classpath = sourceSets.benchmark.runtimeClasspath
     mainClass = 'org.openjdk.jmh.Main'
     doFirst { layout.buildDirectory.dir('reports').get().asFile.mkdirs() }
-    args '-f', '3', '-wi', '3', '-i', '5', '-w', '1s', '-r', '1s', '-prof', 'gc',
+    args '-foe', 'true', '-f', '3', '-wi', '3', '-i', '5', '-w', '1s', '-r', '1s', '-prof', 'gc',
             '-jvmArgsAppend', '-Xms256m -Xmx256m', '-rf', 'json',
             '-rff', layout.buildDirectory.file('reports/benchmark.json').get().asFile.absolutePath
 }
