@@ -49,8 +49,16 @@ public class ByteBufCopyDecoder extends ChannelInboundHandlerAdapter {
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         if (msg instanceof ByteBuf buf && !buf.hasMemoryAddress()) {
-            ctx.fireChannelRead(ctx.alloc().directBuffer(buf.readableBytes()).writeBytes(buf));
-            buf.release();
+            ByteBuf copy = null;
+            try {
+                copy = ctx.alloc().directBuffer(buf.readableBytes());
+                copy.writeBytes(buf);
+                ctx.fireChannelRead(copy);
+                copy = null;
+            } finally {
+                buf.release();
+                if (copy != null) copy.release();
+            }
             return;
         }
         super.channelRead(ctx, msg);
