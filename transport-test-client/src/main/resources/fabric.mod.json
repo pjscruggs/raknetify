@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "raknetify_client_test",
+  "version": "1.0.0",
+  "name": "Raknetify client address test fixture",
+  "environment": "client",
+  "entrypoints": {
+    "preLaunch": [
+      "com.ishland.raknetify.test.ClientAddressTest"
+    ]
+  },
+  "depends": {
+    "java": ">=17"
+  }
+}

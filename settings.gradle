@@ -31,3 +31,5 @@ include "common"
 
 include "transport-test-legacy"
 include "transport-test-modern"
+
+include "transport-test-client"
