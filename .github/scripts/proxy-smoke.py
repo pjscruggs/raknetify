@@ -26,7 +26,9 @@ def load_smoke():
 def download(item, target):
     """Cache only bytes matching the pinned external plugin or proxy digest."""
     if not target.exists():
-        with urllib.request.urlopen(item['url'], timeout=60) as response:
+        request = urllib.request.Request(item['url'], headers={
+            'User-Agent': 'Raknetify2-Compatibility/1.0 (https://github.com/pjscruggs/raknetify2)'})
+        with urllib.request.urlopen(request, timeout=60) as response:
             target.write_bytes(response.read())
     assert hashlib.sha512(target.read_bytes()).hexdigest() == item['sha512'], target
 
