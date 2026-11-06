@@ -53,13 +53,13 @@ public final class RaknetProxyProbe {
     /**
      * Queries a loopback proxy and fails if it omits or corrupts the requested response.
      *
-     * @param args port, protocol number and either status or reject
+     * @param args port, protocol number and status, reject, ban or ban-drop
      * @throws Exception if transport setup, response validation or bounded shutdown fails
      */
     public static void main(String[] args) throws Exception {
         int port = Integer.parseInt(args[0]);
         int protocol = Integer.parseInt(args[1]);
-        boolean reject = args[2].equals("reject");
+        String mode = args[2];
         LinkedBlockingQueue<byte[]> packets = new LinkedBlockingQueue<>(16);
         NioEventLoopGroup group = new NioEventLoopGroup(1);
         Channel channel = null;
@@ -67,8 +67,11 @@ public final class RaknetProxyProbe {
             channel = new Bootstrap().group(group).channel(RakNetClient.THREADED_CHANNEL)
                     .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5000)
                     .handler(initializer(packets)).connect("127.0.0.1", port).sync().channel();
-            channel.writeAndFlush(RaknetStatusProbe.handshake(port, protocol, reject ? 2 : 1)).sync();
-            if (reject) {
+            if (mode.equals("ban-drop")) installLoss(channel);
+            channel.writeAndFlush(RaknetStatusProbe.handshake(port, protocol, mode.equals("status") ? 1 : 2)).sync();
+            if (mode.startsWith("ban")) {
+                bannedLogin(channel, packets, protocol);
+            } else if (mode.equals("reject")) {
                 rejection(channel, packets);
             } else {
                 status(channel, packets);
@@ -77,6 +80,41 @@ public final class RaknetProxyProbe {
             if (channel != null) channel.close().sync();
             group.shutdownGracefully(0, 5, TimeUnit.SECONDS).sync();
         }
+    }
+
+    /**
+     * Drops exactly one fragmented application datagram before reliability processing can acknowledge it.
+     * @param channel connected threaded client whose parent owns the RakNet reliability pipeline
+     * @throws InterruptedException if installing the deterministic impairment is interrupted
+     */
+    private static void installLoss(Channel channel) throws InterruptedException {
+        Channel transport = channel.parent();
+        transport.eventLoop().submit(() -> transport.pipeline().addBefore(
+                network.ycc.raknet.pipeline.ReliabilityHandler.NAME, "fixture-loss", new DropFirstFragment())).sync();
+    }
+
+    /**
+     * Uses vanilla's banned-player login path and requires the complete server-supplied reason over RakNet.
+     * @param channel connected application channel
+     * @param packets decoded Minecraft packet queue
+     * @param protocol server protocol, used for the pre-1.20.2 optional UUID field
+     * @throws Exception if login framing or rejection delivery fails
+     * @throws IllegalArgumentException if the expected native ban reason is missing
+     */
+    private static void bannedLogin(Channel channel, LinkedBlockingQueue<byte[]> packets, int protocol) throws Exception {
+        ByteBuf hello = Unpooled.buffer();
+        hello.writeByte(0);
+        byte[] name = "DisconnectProbe".getBytes(StandardCharsets.UTF_8);
+        RaknetStatusProbe.writeVarint(hello, name.length);
+        hello.writeBytes(name);
+        if (protocol < 764) hello.writeBoolean(true);
+        hello.writeLong(0x1234567812345678L).writeLong(0x1234567812345678L);
+        channel.writeAndFlush(hello).sync();
+        String reason = textPacket(next(packets));
+        if (!reason.contains("Transport rejection fixture") || !reason.contains("END_OF_REASON")) {
+            throw new IllegalArgumentException("Missing or truncated native ban reason");
+        }
+        System.out.println("BAN_REASON_OK");
     }
 
     /**

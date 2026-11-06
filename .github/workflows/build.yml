@@ -66,6 +66,14 @@ jobs:
           --jar velocity/build/libs/*-all.jar
           --probe-dir common/build/transport-probe
           --work-dir "$RUNNER_TEMP/raknetify-smoke/fastmotd"
+      - name: Disconnect reasons under packet loss
+        run: >-
+          python3 .github/scripts/disconnect-smoke.py --discard-runtime
+          --jar fabric-universal/build/libs/*.jar
+          --probe-dir common/build/transport-probe
+          --work-dir "$RUNNER_TEMP/raknetify-smoke/disconnect"
+          --java-17 "${{ steps.java17.outputs.path }}/bin/java"
+          --java-21 "${{ steps.java21.outputs.path }}/bin/java"
       - name: Polymer shared-port compatibility
         run: >-
           python3 .github/scripts/server-smoke.py --discard-runtime
