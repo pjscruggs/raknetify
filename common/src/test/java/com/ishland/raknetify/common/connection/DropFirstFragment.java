@@ -26,21 +26,30 @@ package com.ishland.raknetify.common.connection;
 
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+
 import network.ycc.raknet.packet.FrameSet;
 
-/** Simulates loss of the first fragmented application datagram without acknowledging or altering later traffic. */
+/**
+ * Simulates loss of the first fragmented application datagram without acknowledging or altering
+ * later traffic.
+ */
 final class DropFirstFragment extends ChannelInboundHandlerAdapter {
 
-    /** A single loss is enough to expose a disconnect overtaking an outstanding reason on another channel. */
+    /**
+     * A single loss is enough to expose a disconnect overtaking an outstanding reason on another
+     * channel.
+     */
     private boolean dropped;
 
     /**
-     * Discards one complete datagram before its sequence number reaches RakNet's acknowledgement handler.
+     * Discards one complete datagram before its sequence number reaches RakNet's acknowledgement
+     * handler.
+     *
      * @param context parent transport pipeline context
      * @param message decoded datagram or unrelated connection/control traffic
      */
     @Override
-    public void channelRead(ChannelHandlerContext context, Object message) {
+    public void channelRead(final ChannelHandlerContext context, final Object message) {
         if (!this.dropped && message instanceof FrameSet set && containsFirstFragment(set)) {
             this.dropped = true;
             System.out.println("DROPPED_FIRST_REASON_DATAGRAM");
@@ -51,15 +60,21 @@ final class DropFirstFragment extends ChannelInboundHandlerAdapter {
     }
 
     /**
-     * Inspects retained frame views and releases every reference, including unrelated frames in the same datagram.
+     * Inspects retained frame views and releases every reference, including unrelated frames in the
+     * same datagram.
+     *
      * @param set incoming datagram whose contents remain owned by the caller
      * @return whether a channel-zero application's first fragment is present
      */
-    private static boolean containsFirstFragment(FrameSet set) {
+    private static boolean containsFirstFragment(final FrameSet set) {
         boolean[] found = {false};
         set.createFrames(frame -> {
             try {
-                if (frame.getOrderChannel() == 0 && frame.hasSplit() && frame.getSplitIndex() == 0) found[0] = true;
+                if (frame.getOrderChannel() == 0
+                        && frame.hasSplit()
+                        && frame.getSplitIndex() == 0) {
+                    found[0] = true;
+                }
             } finally {
                 frame.release();
             }

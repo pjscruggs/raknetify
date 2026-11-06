@@ -24,22 +24,27 @@
 
 package com.ishland.raknetify.common.connection;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
-import io.netty.channel.ChannelConfig;
-import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.channel.embedded.EmbeddedChannel;
-import network.ycc.raknet.config.DefaultConfig;
-import network.ycc.raknet.frame.FrameData;
-import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Checks transport-specific handler removal without opening sockets or relying on garbage collection. */
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import io.netty.channel.ChannelConfig;
+import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.embedded.EmbeddedChannel;
+
+import network.ycc.raknet.config.DefaultConfig;
+import network.ycc.raknet.frame.FrameData;
+
+import org.junit.jupiter.api.Test;
+
+/**
+ * Checks transport-specific handler removal without opening sockets or relying on garbage
+ * collection.
+ */
 class TcpHandlerCompatibilityTest {
 
     /** Name installed by Polymer's shared-port HTTP hosting integration. */
@@ -66,7 +71,9 @@ class TcpHandlerCompatibilityTest {
         assertEquals(0, frame.refCnt());
     }
 
-    /** Keeps the TCP detector installed and preserves the HTTP request bytes and their ownership. */
+    /**
+     * Keeps the TCP detector installed and preserves the HTTP request bytes and their ownership.
+     */
     @Test
     void tcpHttpDetectionRemainsInstalled() {
         EmbeddedChannel channel = new EmbeddedChannel();
@@ -86,7 +93,10 @@ class TcpHandlerCompatibilityTest {
         }
     }
 
-    /** Allows repeated initialization and servers without Polymer while retaining unrelated handlers. */
+    /**
+     * Allows repeated initialization and servers without Polymer while retaining unrelated
+     * handlers.
+     */
     @Test
     void missingDetectorAndRepeatedCallsAreHarmless() {
         EmbeddedChannel channel = new RaknetChannel();
@@ -105,11 +115,15 @@ class TcpHandlerCompatibilityTest {
     /** Supplies a real RakNet configuration to Netty's deterministic in-memory channel. */
     private static final class RaknetChannel extends EmbeddedChannel {
 
-        /** Lazily initialized because EmbeddedChannel asks for its configuration during construction. */
+        /**
+         * Lazily initialized because EmbeddedChannel asks for its configuration during
+         * construction.
+         */
         private ChannelConfig transportConfig;
 
         /**
-         * Selects the same configuration marker used by the production RakNet channel implementations.
+         * Selects the same configuration marker used by the production RakNet channel
+         * implementations.
          *
          * @return persistent RakNet configuration belonging to this channel
          */

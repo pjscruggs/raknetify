@@ -25,14 +25,18 @@
 package com.ishland.raknetify.common.connection;
 
 import com.ishland.raknetify.test.ThreadedChannelCloseWitness;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-/** Verifies that closing the physical UDP socket also completes its threaded application channel. */
+/**
+ * Verifies that closing the physical UDP socket also completes its threaded application channel.
+ */
 @Timeout(15)
 class ThreadedChannelCloseTest {
     /**
      * A lower transport can close before an application drain has requested its own close.
+     *
      * @throws Exception if socket registration, lifecycle completion or bounded cleanup fails
      */
     @Test

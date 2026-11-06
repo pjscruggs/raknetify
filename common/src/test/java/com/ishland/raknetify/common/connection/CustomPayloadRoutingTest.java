@@ -24,22 +24,26 @@
 
 package com.ishland.raknetify.common.connection;
 
-import com.ishland.raknetify.common.connection.multichannel.CustomPayloadChannel;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.ishland.raknetify.api.PacketOrdering;
+import com.ishland.raknetify.common.connection.multichannel.CustomPayloadChannel;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.embedded.EmbeddedChannel;
+
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
+
 import network.ycc.raknet.frame.FrameData;
 import network.ycc.raknet.packet.FramedPacket;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.charset.StandardCharsets;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Covers entity-dependent custom payloads through the shared Fabric and proxy routing path. */
 class CustomPayloadRoutingTest {
@@ -48,13 +52,14 @@ class CustomPayloadRoutingTest {
     private static final int CUSTOM_PAYLOAD_ID = 24;
 
     /**
-     * Keeps trajectory frames ordered with entity updates after negotiation and on channel zero before it.
+     * Keeps trajectory frames ordered with entity updates after negotiation and on channel zero
+     * before it.
      *
      * @param negotiated whether multichannel negotiation has completed
      */
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void trajectoryDeliveryRemainsReliableAndOrdered(boolean negotiated) {
+    void trajectoryDeliveryRemainsReliableAndOrdered(final boolean negotiated) {
         EmbeddedChannel channel = new EmbeddedChannel(proxyCodec());
         try {
             if (negotiated) {
@@ -75,7 +80,9 @@ class CustomPayloadRoutingTest {
         }
     }
 
-    /** Classifies a sliced payload without changing its index, bytes, or retained-reference count. */
+    /**
+     * Classifies a sliced payload without changing its index, bytes, or retained-reference count.
+     */
     @Test
     void classificationPreservesPacketOwnership() {
         ByteBuf packet = payload(CUSTOM_PAYLOAD_ID, "example:entity_path");
@@ -94,13 +101,14 @@ class CustomPayloadRoutingTest {
     }
 
     /**
-     * Leaves capability/configuration and unrelated custom payloads on their ordinary proxy channel.
+     * Leaves capability/configuration and unrelated custom payloads on their ordinary proxy
+     * channel.
      *
      * @param identifier payload identifier that must not inherit the trajectory override
      */
     @ParameterizedTest
     @ValueSource(strings = {"example:hello", "example:config", "other-mod:trajectory_v1"})
-    void unrelatedPayloadsKeepTheirFallback(String identifier) {
+    void unrelatedPayloadsKeepTheirFallback(final String identifier) {
         ByteBuf packet = payload(CUSTOM_PAYLOAD_ID, identifier);
         try {
             assertEquals(3, proxyCodec().getChannelOverride(packet, false));
@@ -109,13 +117,16 @@ class CustomPayloadRoutingTest {
         }
     }
 
-    /** Requires the proxy's packet-ID predicate before interpreting any bytes as a payload identifier. */
+    /**
+     * Requires the proxy's packet-ID predicate before interpreting any bytes as a payload
+     * identifier.
+     */
     @Test
     void ordinaryPacketsDoNotUsePayloadOverrides() {
         ByteBuf packet = payload(CUSTOM_PAYLOAD_ID + 1, "example:entity_path");
         try {
-            CustomPayloadChannel.OverrideHandler handler = new CustomPayloadChannel.OverrideHandler(
-                    id -> id == CUSTOM_PAYLOAD_ID);
+            CustomPayloadChannel.OverrideHandler handler =
+                    new CustomPayloadChannel.OverrideHandler(id -> id == CUSTOM_PAYLOAD_ID);
             assertEquals(0, handler.getChannelOverride(packet, false));
         } finally {
             packet.release();
@@ -133,7 +144,9 @@ class CustomPayloadRoutingTest {
         routes.put(CUSTOM_PAYLOAD_ID, 3);
         return new RakNetSimpleMultiChannelCodec(0xFD)
                 .addHandler(new CustomPayloadChannel.OverrideHandler(id -> id == CUSTOM_PAYLOAD_ID))
-                .addHandler(new RakNetSimpleMultiChannelCodec.PacketIdBasedOverrideHandler(routes, "test protocol"));
+                .addHandler(
+                        new RakNetSimpleMultiChannelCodec.PacketIdBasedOverrideHandler(
+                                routes, "test protocol"));
     }
 
     /**
@@ -143,9 +156,14 @@ class CustomPayloadRoutingTest {
      * @param identifier short namespaced identifier whose UTF-8 length fits one byte
      * @return owned buffer positioned at the Minecraft packet ID
      */
-    private static ByteBuf payload(int packetId, String identifier) {
+    private static ByteBuf payload(final int packetId, final String identifier) {
         byte[] encoded = identifier.getBytes(StandardCharsets.UTF_8);
-        return Unpooled.buffer().writeByte(99).writeByte(packetId).writeByte(encoded.length)
-                .writeBytes(encoded).writeByte(42).readerIndex(1);
+        return Unpooled.buffer()
+                .writeByte(99)
+                .writeByte(packetId)
+                .writeByte(encoded.length)
+                .writeBytes(encoded)
+                .writeByte(42)
+                .readerIndex(1);
     }
 }

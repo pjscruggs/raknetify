@@ -24,14 +24,22 @@
 
 package com.ishland.raknetify.common.connection;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.ishland.raknetify.api.PacketOrdering;
 import com.ishland.raknetify.common.connection.multichannel.CustomPayloadChannel;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.embedded.EmbeddedChannel;
+
 import network.ycc.raknet.frame.FrameData;
 import network.ycc.raknet.packet.FramedPacket;
 import network.ycc.raknet.pipeline.UserDataCodec;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -39,15 +47,16 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-/** Exercises the wire contract used to carry mod ordering requirements to direct servers and proxies. */
+/**
+ * Exercises the wire contract used to carry mod ordering requirements to direct servers and
+ * proxies.
+ */
 class PayloadOrderingNegotiationTest {
 
-    /** Older transport pipelines discard the new extension without exposing it to Minecraft or leaking it. */
+    /**
+     * Older transport pipelines discard the new extension without exposing it to Minecraft or
+     * leaking it.
+     */
     @Test
     void olderPeersDiscardTheOptionalExtension() {
         EmbeddedChannel channel = new EmbeddedChannel(new FrameDataBlocker());
@@ -61,7 +70,9 @@ class PayloadOrderingNegotiationTest {
         }
     }
 
-    /** A client-installed mod can supply a rule to a proxy without changing another player's rules. */
+    /**
+     * A client-installed mod can supply a rule to a proxy without changing another player's rules.
+     */
     @Test
     void remoteDeclarationsAreConnectionLocal() {
         EmbeddedChannel sender = endpoint(Map.of("remote:entity_path", 2));
@@ -72,12 +83,18 @@ class PayloadOrderingNegotiationTest {
         try {
             assertFalse(receiver.writeInbound(announcement));
             assertEquals(0, announcement.refCnt());
-            assertEquals(2, new CustomPayloadChannel.OverrideHandler(id -> id == 24, receiver)
-                    .getChannelOverride(packet, false));
-            assertEquals(0, new CustomPayloadChannel.OverrideHandler(id -> id == 24, unrelated)
-                    .getChannelOverride(packet, false));
-            assertEquals(0, new CustomPayloadChannel.OverrideHandler(id -> id == 25, receiver)
-                    .getChannelOverride(packet, false));
+            assertEquals(
+                    2,
+                    new CustomPayloadChannel.OverrideHandler(id -> id == 24, receiver)
+                            .getChannelOverride(packet, false));
+            assertEquals(
+                    0,
+                    new CustomPayloadChannel.OverrideHandler(id -> id == 24, unrelated)
+                            .getChannelOverride(packet, false));
+            assertEquals(
+                    0,
+                    new CustomPayloadChannel.OverrideHandler(id -> id == 25, receiver)
+                            .getChannelOverride(packet, false));
             assertEquals(0, packet.readerIndex());
         } finally {
             packet.release();
@@ -97,8 +114,10 @@ class PayloadOrderingNegotiationTest {
         try {
             FrameData declaration = sender.readOutbound();
             receiver.writeInbound(declaration);
-            assertEquals(7, new CustomPayloadChannel.OverrideHandler(id -> id == 24, receiver)
-                    .getChannelOverride(packet, false));
+            assertEquals(
+                    7,
+                    new CustomPayloadChannel.OverrideHandler(id -> id == 24, receiver)
+                            .getChannelOverride(packet, false));
         } finally {
             packet.release();
             sender.finishAndReleaseAll();
@@ -109,8 +128,10 @@ class PayloadOrderingNegotiationTest {
     /** Both setup and initial game frames use the same reliable ordering channel, in that order. */
     @Test
     void declarationPrecedesMinecraftTraffic() {
-        EmbeddedChannel channel = new EmbeddedChannel(new PayloadOrderingNegotiation(Map.of("example:step", 2)),
-                new UserDataCodec(0xFD));
+        EmbeddedChannel channel =
+                new EmbeddedChannel(
+                        new PayloadOrderingNegotiation(Map.of("example:step", 2)),
+                        new UserDataCodec(0xFD));
         try {
             channel.writeOutbound(Unpooled.buffer().writeByte(0));
             FrameData declaration = channel.readOutbound();
@@ -120,7 +141,8 @@ class PayloadOrderingNegotiationTest {
                 assertEquals(0xFD, game.getPacketId());
                 assertEquals(0, declaration.getOrderChannel());
                 assertEquals(0, game.getOrderChannel());
-                assertEquals(FramedPacket.Reliability.RELIABLE_ORDERED, declaration.getReliability());
+                assertEquals(
+                        FramedPacket.Reliability.RELIABLE_ORDERED, declaration.getReliability());
                 assertEquals(FramedPacket.Reliability.RELIABLE_ORDERED, game.getReliability());
             } finally {
                 declaration.release();
@@ -149,7 +171,10 @@ class PayloadOrderingNegotiationTest {
         }
     }
 
-    /** Rejects a second declaration and preserves the complete first table without leaking either frame. */
+    /**
+     * Rejects a second declaration and preserves the complete first table without leaking either
+     * frame.
+     */
     @Test
     void repeatedDeclarationCannotChangePolicy() {
         EmbeddedChannel channel = endpoint(Map.of());
@@ -167,16 +192,27 @@ class PayloadOrderingNegotiationTest {
     }
 
     /**
-     * Bounds decoding and rejects malformed identifiers, groups, and incomplete messages atomically.
+     * Bounds decoding and rejects malformed identifiers, groups, and incomplete messages
+     * atomically.
      *
      * @param kind malformed declaration variant
      */
     @ParameterizedTest
-    @ValueSource(strings = {"version", "count", "identifier", "channel", "duplicate", "trailing", "truncated"})
-    void malformedDeclarationsPublishNoRules(String kind) {
+    @ValueSource(
+            strings = {
+                "version",
+                "count",
+                "identifier",
+                "channel",
+                "duplicate",
+                "trailing",
+                "truncated"
+            })
+    void malformedDeclarationsPublishNoRules(final String kind) {
         EmbeddedChannel channel = endpoint(Map.of());
         ByteBuf payload = malformed(kind);
-        FrameData frame = FrameData.create(channel.alloc(), PayloadOrderingNegotiation.PACKET_ID, payload);
+        FrameData frame =
+                FrameData.create(channel.alloc(), PayloadOrderingNegotiation.PACKET_ID, payload);
         payload.release();
         try {
             assertThrows(RuntimeException.class, () -> channel.writeInbound(frame));
@@ -196,20 +232,28 @@ class PayloadOrderingNegotiationTest {
         PacketOrdering.register("example:later", "chunk");
         assertFalse(snapshot.containsKey("example:later"));
         assertEquals(2, snapshot.get("example:snapshot"));
-        assertThrows(IllegalArgumentException.class, () -> PacketOrdering.register("example:snapshot", "chunk"));
-        assertThrows(IllegalArgumentException.class, () -> PacketOrdering.register("minecraft:brand", "entity"));
-        assertThrows(IllegalArgumentException.class, () -> PacketOrdering.register("example:unsafe", "unreliable"));
-        assertThrows(UnsupportedOperationException.class, () -> snapshot.put("example:mutation", 2));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> PacketOrdering.register("example:snapshot", "chunk"));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> PacketOrdering.register("minecraft:brand", "entity"));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> PacketOrdering.register("example:unsafe", "unreliable"));
+        assertThrows(
+                UnsupportedOperationException.class, () -> snapshot.put("example:mutation", 2));
         assertTrue(PacketOrdering.snapshot().containsKey("porting_lib:extra_data_entity_spawn"));
     }
 
     /**
-     * Creates an active in-memory endpoint whose initial advertisement remains queued for inspection.
+     * Creates an active in-memory endpoint whose initial advertisement remains queued for
+     * inspection.
      *
      * @param rules local startup declarations
      * @return owned channel that must be drained and closed by its caller
      */
-    private static EmbeddedChannel endpoint(Map<String, Integer> rules) {
+    private static EmbeddedChannel endpoint(final Map<String, Integer> rules) {
         return new EmbeddedChannel(new PayloadOrderingNegotiation(rules));
     }
 
@@ -219,7 +263,7 @@ class PayloadOrderingNegotiationTest {
      * @param rules valid remote declarations
      * @return owned frame transferred to an inbound pipeline by the caller
      */
-    private static FrameData declaration(Map<String, Integer> rules) {
+    private static FrameData declaration(final Map<String, Integer> rules) {
         ByteBuf buffer = Unpooled.buffer();
         try {
             PayloadOrderingNegotiation.encode(buffer, rules);
@@ -230,23 +274,25 @@ class PayloadOrderingNegotiationTest {
     }
 
     /**
-     * Encodes a short custom payload for the proxy classifier without depending on Minecraft classes.
+     * Encodes a short custom payload for the proxy classifier without depending on Minecraft
+     * classes.
      *
      * @param identifier ASCII identifier whose length fits one VarInt byte
      * @return owned packet buffer positioned at its packet ID
      */
-    private static ByteBuf payload(String identifier) {
+    private static ByteBuf payload(final String identifier) {
         byte[] bytes = identifier.getBytes(StandardCharsets.US_ASCII);
         return Unpooled.buffer().writeByte(24).writeByte(bytes.length).writeBytes(bytes);
     }
 
     /**
-     * Builds one invalid setup message, including variants with a valid prefix that must never be published.
+     * Builds one invalid setup message, including variants with a valid prefix that must never be
+     * published.
      *
      * @param kind named validation failure
      * @return owned declaration payload without its frame identifier
      */
-    private static ByteBuf malformed(String kind) {
+    private static ByteBuf malformed(final String kind) {
         ByteBuf buffer = Unpooled.buffer();
         PayloadOrderingNegotiation.encode(buffer, Map.of("example:valid", 2));
         switch (kind) {

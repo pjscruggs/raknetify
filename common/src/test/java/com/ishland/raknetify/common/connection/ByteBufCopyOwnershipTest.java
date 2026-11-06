@@ -24,17 +24,22 @@
 
 package com.ishland.raknetify.common.connection;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import io.netty.buffer.AbstractByteBufAllocator;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.embedded.EmbeddedChannel;
+
 import org.junit.jupiter.api.Test;
+
 import java.nio.ReadOnlyBufferException;
-import static org.junit.jupiter.api.Assertions.*;
 
 /** Verifies both sides of a failed native-buffer conversion retain no abandoned reference. */
 class ByteBufCopyOwnershipTest {
-    /** Copy failures release the original heap buffer and the already allocated direct replacement. */
+    /**
+     * Copy failures release the original heap buffer and the already allocated direct replacement.
+     */
     @Test
     void failedCopyReleasesBothBuffers() {
         var allocator = new ReadOnlyAllocator();
@@ -46,8 +51,12 @@ class ByteBufCopyOwnershipTest {
             assertEquals(0, input.refCnt());
             assertEquals(0, allocator.allocated.refCnt());
         } finally {
-            if (input.refCnt() > 0) input.release();
-            if (allocator.allocated != null && allocator.allocated.refCnt() > 0) allocator.allocated.release();
+            if (input.refCnt() > 0) {
+                input.release();
+            }
+            if (allocator.allocated != null && allocator.allocated.refCnt() > 0) {
+                allocator.allocated.release();
+            }
             channel.finishAndReleaseAll();
         }
     }
@@ -59,32 +68,37 @@ class ByteBufCopyOwnershipTest {
 
         /**
          * Supplies the deliberately unwritable direct buffer.
+         *
          * @param initialCapacity requested initial bytes
          * @param maxCapacity maximum growth permitted by the caller
          * @return reference-counted read-only replacement
          */
         @Override
-        protected ByteBuf newDirectBuffer(int initialCapacity, int maxCapacity) {
+        protected ByteBuf newDirectBuffer(final int initialCapacity, final int maxCapacity) {
             allocated = Unpooled.directBuffer(initialCapacity, maxCapacity).asReadOnly();
             return allocated;
         }
 
         /**
          * Supplies ordinary heap storage if requested by the pipeline.
+         *
          * @param initialCapacity initial bytes
          * @param maxCapacity maximum growth
          * @return owned writable heap buffer
          */
         @Override
-        protected ByteBuf newHeapBuffer(int initialCapacity, int maxCapacity) {
+        protected ByteBuf newHeapBuffer(final int initialCapacity, final int maxCapacity) {
             return Unpooled.buffer(initialCapacity, maxCapacity);
         }
 
         /**
          * Identifies the isolated test allocator's ownership model.
+         *
          * @return false because allocations are unpooled
          */
         @Override
-        public boolean isDirectBufferPooled() { return false; }
+        public boolean isDirectBufferPooled() {
+            return false;
+        }
     }
 }

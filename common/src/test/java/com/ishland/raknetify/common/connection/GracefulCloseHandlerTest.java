@@ -24,6 +24,8 @@
 
 package com.ishland.raknetify.common.connection;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFuture;
@@ -32,6 +34,7 @@ import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.util.ReferenceCountUtil;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -39,16 +42,21 @@ import java.nio.channels.ClosedChannelException;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
-
-/** Checks acknowledgement ordering, bounded shutdown and ownership when writes race a normal RakNet close. */
+/**
+ * Checks acknowledgement ordering, bounded shutdown and ownership when writes race a normal RakNet
+ * close.
+ */
 class GracefulCloseHandlerTest {
 
-    /** Waits for every prior write, even when a later write completes first, and rejects new data while draining. */
+    /**
+     * Waits for every prior write, even when a later write completes first, and rejects new data
+     * while draining.
+     */
     @Test
     void waitsForAllWritesAndRejectsNewOnes() {
         HeldTransport transport = new HeldTransport();
-        EmbeddedChannel channel = new EmbeddedChannel(transport, new GracefulCloseHandler(), new NoFlush());
+        EmbeddedChannel channel =
+                new EmbeddedChannel(transport, new GracefulCloseHandler(), new NoFlush());
         try {
             ChannelFuture first = channel.write(Unpooled.buffer().writeByte(1));
             ChannelFuture second = channel.write(Unpooled.buffer().writeByte(2));
@@ -74,7 +82,9 @@ class GracefulCloseHandlerTest {
         }
     }
 
-    /** Preserves a write failure and closes once all other application writes have also finished. */
+    /**
+     * Preserves a write failure and closes once all other application writes have also finished.
+     */
     @Test
     void writeFailureDoesNotStrandClose() {
         HeldTransport transport = new HeldTransport();
@@ -110,7 +120,10 @@ class GracefulCloseHandlerTest {
         }
     }
 
-    /** Tracks fire-and-forget writes rather than allowing their discarded promises to bypass the drain. */
+    /**
+     * Tracks fire-and-forget writes rather than allowing their discarded promises to bypass the
+     * drain.
+     */
     @Test
     void voidPromiseStillDrains() {
         HeldTransport transport = new HeldTransport();
@@ -126,7 +139,10 @@ class GracefulCloseHandlerTest {
         }
     }
 
-    /** Removing an active drain handler cannot abandon a close request or leave a deadline task behind. */
+    /**
+     * Removing an active drain handler cannot abandon a close request or leave a deadline task
+     * behind.
+     */
     @Test
     void removalCompletesPendingClose() {
         HeldTransport transport = new HeldTransport();
@@ -152,7 +168,10 @@ class GracefulCloseHandlerTest {
         channel.finishAndReleaseAll();
     }
 
-    /** An independent peer or transport close completes the outstanding request without waiting for its deadline. */
+    /**
+     * An independent peer or transport close completes the outstanding request without waiting for
+     * its deadline.
+     */
     @Test
     void externalCloseCompletesDrain() {
         HeldTransport transport = new HeldTransport();
@@ -176,53 +195,74 @@ class GracefulCloseHandlerTest {
 
         /** Owned messages retained until an explicit acknowledgement or actual transport close. */
         private final List<Object> messages = new ArrayList<>();
-        /** Caller promises completed by the test in deliberately different acknowledgement orders. */
+
+        /**
+         * Caller promises completed by the test in deliberately different acknowledgement orders.
+         */
         private final List<ChannelPromise> promises = new ArrayList<>();
+
         /** Number of actual close attempts reaching the underlying transport. */
         private int closes;
+
         /** Explicit final flushes reaching transport despite application flush suppression. */
         private int flushes;
 
         /**
          * Retains ownership until the witness supplies an acknowledgement.
+         *
          * @param context transport context, unused until close
          * @param message owned outbound data
          * @param promise completion to be delayed
          */
-        @Override public void write(ChannelHandlerContext context, Object message, ChannelPromise promise) {
+        @Override
+        public void write(
+                final ChannelHandlerContext context,
+                final Object message,
+                final ChannelPromise promise) {
             this.messages.add(message);
             this.promises.add(promise);
         }
 
         /**
          * Records the drain's explicit flush without manufacturing any acknowledgement.
+         *
          * @param context lower transport context
          */
-        @Override public void flush(ChannelHandlerContext context) {
+        @Override
+        public void flush(final ChannelHandlerContext context) {
             this.flushes++;
             context.flush();
         }
 
         /**
-         * Releases one retained message before notifying its original caller of the transport result.
+         * Releases one retained message before notifying its original caller of the transport
+         * result.
+         *
          * @param index original write position
          * @param failure null for acknowledgement or the real transport failure to propagate
          */
-        private void complete(int index, Throwable failure) {
+        private void complete(final int index, final Throwable failure) {
             ReferenceCountUtil.release(this.messages.set(index, null));
-            if (failure == null) this.promises.get(index).trySuccess();
-            else this.promises.get(index).tryFailure(failure);
+            if (failure == null) {
+                this.promises.get(index).trySuccess();
+            } else {
+                this.promises.get(index).tryFailure(failure);
+            }
         }
 
         /**
          * Fails and releases any unacknowledged frames when normal transport shutdown begins.
+         *
          * @param context native embedded-channel close entry point
          * @param promise caller's actual close completion
          */
-        @Override public void close(ChannelHandlerContext context, ChannelPromise promise) {
+        @Override
+        public void close(final ChannelHandlerContext context, final ChannelPromise promise) {
             this.closes++;
             for (int i = 0; i < this.messages.size(); i++) {
-                if (this.messages.get(i) != null) complete(i, new ClosedChannelException());
+                if (this.messages.get(i) != null) {
+                    complete(i, new ClosedChannelException());
+                }
             }
             context.close(promise);
         }

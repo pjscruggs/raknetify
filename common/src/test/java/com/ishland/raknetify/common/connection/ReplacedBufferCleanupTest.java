@@ -24,14 +24,17 @@
 
 package com.ishland.raknetify.common.connection;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.util.ReferenceCountUtil;
+
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-/** Checks buffer ownership across both leaking and already-correct optional decoder implementations. */
+/**
+ * Checks buffer ownership across both leaking and already-correct optional decoder implementations.
+ */
 class ReplacedBufferCleanupTest {
 
     /** Leaves an unchanged helper alive for the decoder's next frame and eventual removal. */
@@ -46,7 +49,9 @@ class ReplacedBufferCleanupTest {
         }
     }
 
-    /** Releases the abandoned constructor allocation while preserving the replacement allocation. */
+    /**
+     * Releases the abandoned constructor allocation while preserving the replacement allocation.
+     */
     @Test
     void replacedHelperReleasesOldOwnership() {
         checkReplacement(1, false, 0);
@@ -72,21 +77,29 @@ class ReplacedBufferCleanupTest {
 
     /**
      * Models a decoder replacement with an optional prior release and checks both buffer lifetimes.
+     *
      * @param references ownership count before the decoder runs
      * @param released whether the decoder already relinquished its old helper
      * @param expected remaining old-buffer owners after compatibility cleanup
      */
-    private static void checkReplacement(int references, boolean released, int expected) {
+    private static void checkReplacement(
+            final int references, final boolean released, final int expected) {
         ByteBuf previous = Unpooled.directBuffer(3);
         ByteBuf current = Unpooled.directBuffer(5);
-        if (references > 1) previous.retain(references - 1);
+        if (references > 1) {
+            previous.retain(references - 1);
+        }
         try {
-            if (released) previous.release();
+            if (released) {
+                previous.release();
+            }
             ReplacedBufferCleanup.releaseAbandoned(previous, current, references);
             assertEquals(expected, previous.refCnt());
             assertEquals(1, current.refCnt());
         } finally {
-            if (previous.refCnt() > 0) previous.release(previous.refCnt());
+            if (previous.refCnt() > 0) {
+                previous.release(previous.refCnt());
+            }
             current.release();
         }
     }

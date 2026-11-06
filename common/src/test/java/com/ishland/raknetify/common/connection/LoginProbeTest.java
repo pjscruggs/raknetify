@@ -23,32 +23,42 @@
  */
 package com.ishland.raknetify.common.connection;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufUtil;
-import org.junit.jupiter.api.Test;
-
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Verifies complete login-start wire layouts at each native protocol boundary used by admission probes. */
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufUtil;
+
+import org.junit.jupiter.api.Test;
+
+/**
+ * Verifies complete login-start wire layouts at each native protocol boundary used by admission
+ * probes.
+ */
 class LoginProbeTest {
     /**
-     * Independent zlib bytes validate compressed admission replies and reject truncation or threshold violations.
+     * Independent zlib bytes validate compressed admission replies and reject truncation or
+     * threshold violations.
+     *
      * @throws Exception if valid protocol vectors cannot be decoded
      */
     @Test
     void nativeLoginCompression() throws Exception {
         byte[] plain = {0, 2, 123, 125};
         LoginCompression compressed = new LoginCompression();
-        assertTrue(compressed.configure(new byte[]{3, 2}));
+        assertTrue(compressed.configure(new byte[] {3, 2}));
         byte[] vector = java.util.HexFormat.of().parseHex("04789c6360aaae0500017d00fb");
         assertArrayEquals(plain, compressed.decode(vector));
-        assertThrows(IllegalArgumentException.class, () -> compressed.decode(new byte[]{0, 0, 2, 123, 125}));
-        assertThrows(Exception.class, () -> compressed.decode(java.util.Arrays.copyOf(vector, vector.length - 1)));
-        assertThrows(IllegalArgumentException.class, () -> compressed.configure(new byte[]{3, 2}));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> compressed.decode(new byte[] {0, 0, 2, 123, 125}));
+        assertThrows(
+                Exception.class,
+                () -> compressed.decode(java.util.Arrays.copyOf(vector, vector.length - 1)));
+        assertThrows(IllegalArgumentException.class, () -> compressed.configure(new byte[] {3, 2}));
         ByteBuf encoded = compressed.encode(io.netty.buffer.Unpooled.wrappedBuffer(plain));
         try {
             byte[] wire = new byte[encoded.readableBytes()];
@@ -58,24 +68,30 @@ class LoginProbeTest {
             encoded.release();
         }
         LoginCompression uncompressed = new LoginCompression();
-        uncompressed.configure(new byte[]{3, (byte) 0x80, 2});
-        assertArrayEquals(plain, uncompressed.decode(new byte[]{0, 0, 2, 123, 125}));
+        uncompressed.configure(new byte[] {3, (byte) 0x80, 2});
+        assertArrayEquals(plain, uncompressed.decode(new byte[] {0, 0, 2, 123, 125}));
     }
 
-    /** Optional login negotiation must retain its transaction ID while ordinary disconnects remain untouched. */
+    /**
+     * Optional login negotiation must retain its transaction ID while ordinary disconnects remain
+     * untouched.
+     */
     @Test
     void declinesOnlyOptionalQueries() {
-        ByteBuf response = RaknetProxyProbe.declineQuery(new byte[]{4, (byte) 0xac, 2, 0});
+        ByteBuf response = RaknetProxyProbe.declineQuery(new byte[] {4, (byte) 0xac, 2, 0});
         try {
             assertEquals("02ac0200", ByteBufUtil.hexDump(response));
         } finally {
             response.release();
         }
-        assertNull(RaknetProxyProbe.declineQuery(new byte[]{0, 2, 123, 125}));
-        assertNull(RaknetProxyProbe.declineQuery(new byte[]{1}));
+        assertNull(RaknetProxyProbe.declineQuery(new byte[] {0, 2, 123, 125}));
+        assertNull(RaknetProxyProbe.declineQuery(new byte[] {1}));
     }
 
-    /** Checks that older servers receive neither unknown UUID bytes nor omitted profile-key presence flags. */
+    /**
+     * Checks that older servers receive neither unknown UUID bytes nor omitted profile-key presence
+     * flags.
+     */
     @Test
     void nativeLoginLayouts() {
         verify(757, "");
@@ -89,15 +105,19 @@ class LoginProbeTest {
     }
 
     /**
-     * Compares the complete frame against an independent literal wire vector and releases its storage.
+     * Compares the complete frame against an independent literal wire vector and releases its
+     * storage.
+     *
      * @param protocol native Minecraft protocol number
      * @param suffix exact fields following the login name for this protocol generation
      */
-    private static void verify(int protocol, String suffix) {
+    private static void verify(final int protocol, final String suffix) {
         ByteBuf packet = RaknetProxyProbe.loginHello(protocol);
         try {
-            assertEquals("000f446973636f6e6e65637450726f6265" + suffix,
-                    ByteBufUtil.hexDump(packet), "Protocol " + protocol);
+            assertEquals(
+                    "000f446973636f6e6e65637450726f6265" + suffix,
+                    ByteBufUtil.hexDump(packet),
+                    "Protocol " + protocol);
         } finally {
             packet.release();
         }

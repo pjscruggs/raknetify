@@ -24,14 +24,17 @@
 
 package com.ishland.raknetify.common.connection;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import com.ishland.raknetify.test.TransportTestPayload;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.embedded.EmbeddedChannel;
+
 import network.ycc.raknet.frame.FrameData;
 import network.ycc.raknet.packet.FramedPacket;
-import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
 
 /** Verifies the shared streaming codec can carry packets larger than vanilla's eight-MiB bound. */
 class LargePayloadCompressionTest {
@@ -42,11 +45,16 @@ class LargePayloadCompressionTest {
     /** Compressed application frame identifier reserved for this isolated codec pair. */
     private static final int COMPRESSED = 252;
 
-    /** Preserves every byte and ordering policy through repeated independent streams in both directions. */
+    /**
+     * Preserves every byte and ordering policy through repeated independent streams in both
+     * directions.
+     */
     @Test
     void oversizedPacketsRetainBytesAndOrderingAcrossAllChannels() {
-        EmbeddedChannel left = new EmbeddedChannel(new MultiChannelingStreamingCompression(RAW, COMPRESSED));
-        EmbeddedChannel right = new EmbeddedChannel(new MultiChannelingStreamingCompression(RAW, COMPRESSED));
+        EmbeddedChannel left =
+                new EmbeddedChannel(new MultiChannelingStreamingCompression(RAW, COMPRESSED));
+        EmbeddedChannel right =
+                new EmbeddedChannel(new MultiChannelingStreamingCompression(RAW, COMPRESSED));
         try {
             transferControl(left, right);
             transferControl(right, left);
@@ -69,23 +77,33 @@ class LargePayloadCompressionTest {
      * @param sender endpoint whose control writes are ready to flush
      * @param receiver peer that consumes the control frames without application output
      */
-    private static void transferControl(EmbeddedChannel sender, EmbeddedChannel receiver) {
+    private static void transferControl(
+            final EmbeddedChannel sender, final EmbeddedChannel receiver) {
         sender.flushOutbound();
         Object message;
-        while ((message = sender.readOutbound()) != null) receiver.writeInbound(message);
+        while ((message = sender.readOutbound()) != null) {
+            receiver.writeInbound(message);
+        }
         assertNull(receiver.readInbound());
     }
 
     /**
-     * Sends one oversized ordered frame and requires compression, exact reconstruction and ownership release.
+     * Sends one oversized ordered frame and requires compression, exact reconstruction and
+     * ownership release.
      *
      * @param sender endpoint retaining this channel's outbound compression dictionary
      * @param receiver endpoint retaining the matching inbound dictionary
      * @param channel ordering channel that must survive both transformations
      * @param marker distinct message identity that detects stale output across repeated writes
      */
-    private static void exchange(EmbeddedChannel sender, EmbeddedChannel receiver, int channel, long marker) {
-        ByteBuf payload = TransportTestPayload.create(sender.alloc(), TransportTestPayload.LARGE_SIZE, marker);
+    private static void exchange(
+            final EmbeddedChannel sender,
+            final EmbeddedChannel receiver,
+            final int channel,
+            final long marker) {
+        ByteBuf payload =
+                TransportTestPayload.create(
+                        sender.alloc(), TransportTestPayload.LARGE_SIZE, marker);
         FrameData frame;
         try {
             frame = FrameData.create(sender.alloc(), RAW, payload);
@@ -108,13 +126,15 @@ class LargePayloadCompressionTest {
     }
 
     /**
-     * Checks decoded bytes, metadata and the absence of extra output before releasing the received frame.
+     * Checks decoded bytes, metadata and the absence of extra output before releasing the received
+     * frame.
      *
      * @param receiver endpoint exposing the reconstructed application frame
      * @param channel expected ordering channel
      * @param marker expected message identity
      */
-    private static void verifyReceived(EmbeddedChannel receiver, int channel, long marker) {
+    private static void verifyReceived(
+            final EmbeddedChannel receiver, final int channel, final long marker) {
         FrameData decoded = receiver.readInbound();
         assertNotNull(decoded);
         ByteBuf bytes = decoded.createData();

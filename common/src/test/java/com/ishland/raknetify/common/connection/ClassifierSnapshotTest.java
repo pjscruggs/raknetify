@@ -24,20 +24,29 @@
 
 package com.ishland.raknetify.common.connection;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import io.netty.buffer.Unpooled;
+
 import org.junit.jupiter.api.Test;
+
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import static org.junit.jupiter.api.Assertions.*;
 
 /** Checks registration visibility and stable classifier precedence during reentrant updates. */
 class ClassifierSnapshotTest {
-    /** A callback may change future routing without changing the snapshot of the packet being classified. */
+    /**
+     * A callback may change future routing without changing the snapshot of the packet being
+     * classified.
+     */
     @Test
     void reentrantRemovalAffectsOnlyTheNextPacket() {
         var codec = new RakNetSimpleMultiChannelCodec(0xfe);
         RakNetSimpleMultiChannelCodec.OverrideHandler second = (buffer, quiet) -> 2;
-        codec.addHandler((buffer, quiet) -> { codec.removeHandler(second); return 0; });
+        codec.addHandler((buffer, quiet) -> {
+            codec.removeHandler(second);
+            return 0;
+        });
         codec.addHandler(second);
         var packet = Unpooled.buffer().writeByte(1);
         try {
@@ -50,13 +59,16 @@ class ClassifierSnapshotTest {
     }
 
     /**
-     * Concurrent registration must not lose rules, and each removal must expose the next complete snapshot.
+     * Concurrent registration must not lose rules, and each removal must expose the next complete
+     * snapshot.
+     *
      * @throws Exception if a bounded registration task fails
      */
     @Test
     void concurrentWritersPublishEveryRegistration() throws Exception {
         var codec = new RakNetSimpleMultiChannelCodec(0xfe);
-        RakNetSimpleMultiChannelCodec.OverrideHandler[] rules = new RakNetSimpleMultiChannelCodec.OverrideHandler[128];
+        RakNetSimpleMultiChannelCodec.OverrideHandler[] rules =
+                new RakNetSimpleMultiChannelCodec.OverrideHandler[128];
         for (int i = 0; i < rules.length; i++) {
             final int id = i + 1;
             rules[i] = (buffer, quiet) -> id;
@@ -79,11 +91,17 @@ class ClassifierSnapshotTest {
 
     /**
      * Registers one interleaved half of the rules from a separate writer.
+     *
      * @param codec shared registration target
      * @param rules unique identities that must all survive publication
      * @param offset parity assigned to this writer
      */
-    private static void add(RakNetSimpleMultiChannelCodec codec, RakNetSimpleMultiChannelCodec.OverrideHandler[] rules, int offset) {
-        for (int i = offset; i < rules.length; i += 2) codec.addHandler(rules[i]);
+    private static void add(
+            final RakNetSimpleMultiChannelCodec codec,
+            final RakNetSimpleMultiChannelCodec.OverrideHandler[] rules,
+            final int offset) {
+        for (int i = offset; i < rules.length; i += 2) {
+            codec.addHandler(rules[i]);
+        }
     }
 }

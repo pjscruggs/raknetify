@@ -24,7 +24,10 @@
 
 package com.ishland.raknetify.common.connection;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import io.netty.channel.embedded.EmbeddedChannel;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -34,21 +37,26 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import static org.junit.jupiter.api.Assertions.*;
-
-/** Exercises opt-in destination selection and connection-scoped query ownership without network or account dependencies. */
+/**
+ * Exercises opt-in destination selection and connection-scoped query ownership without network or
+ * account dependencies.
+ */
 class TransferSupportTest {
 
     /** Disposable operator configuration used to test startup and the native platform bridge. */
     @TempDir Path folder;
+
     /** Different TCP and UDP ports make unintended fallback or port reuse observable. */
-    private static final String RULE = "{\"destinations\":[{\"host\":\"play.example\",\"tcpPort\":25565,\"udpPort\":25570}]}";
+    private static final String RULE =
+            "{\"destinations\":[{\"host\":\"play.example\",\"tcpPort\":25565,\"udpPort\":25570}]}";
 
     /** Requires both an exact destination and an affirmative capability result. */
     @Test
     void selectsOnlyAdvertisedConfiguredDestinations() {
         TransferDestinations policy = TransferDestinations.parse(RULE);
-        assertEquals(new TransferDestinations.Endpoint("raknet;PLAY.EXAMPLE.", 25570), policy.select("PLAY.EXAMPLE.", 25565, true));
+        assertEquals(
+                new TransferDestinations.Endpoint("raknet;PLAY.EXAMPLE.", 25570),
+                policy.select("PLAY.EXAMPLE.", 25565, true));
         assertNull(policy.select("play.example", 25565, false));
         assertNull(policy.select("play.example", 25566, true));
         assertNull(policy.select("other.example", 25565, true));
@@ -61,43 +69,79 @@ class TransferSupportTest {
     /** Matches equivalent IPv6 spelling and IDN hosts without invoking DNS. */
     @Test
     void normalizesLiteralAndInternationalHosts() {
-        TransferDestinations ipv6 = TransferDestinations.parse(RULE.replace("play.example", "[2001:db8::1]"));
+        TransferDestinations ipv6 =
+                TransferDestinations.parse(RULE.replace("play.example", "[2001:db8::1]"));
         assertEquals(25570, ipv6.select("2001:db8:0:0:0:0:0:1", 25565, true).port());
-        TransferDestinations idn = TransferDestinations.parse(RULE.replace("play.example", "bücher.example"));
+        TransferDestinations idn =
+                TransferDestinations.parse(RULE.replace("play.example", "bücher.example"));
         assertEquals(25570, idn.select("xn--bcher-kva.example", 25565, true).port());
     }
 
     /**
      * Rejects unsafe or misspelled host forms instead of broadening matching.
+     *
      * @param host invalid operator host value
      */
     @ParameterizedTest
-    @ValueSource(strings = {"", "*.example", "bad host", "raknet;play.example", "host:25565", "[::1", "fe80::1%eth0", "https://example.com"})
-    void rejectsInvalidHosts(String host) {
-        assertThrows(IllegalArgumentException.class, () -> TransferDestinations.parse(RULE.replace("play.example", host)));
+    @ValueSource(
+            strings = {
+                "",
+                "*.example",
+                "bad host",
+                "raknet;play.example",
+                "host:25565",
+                "[::1",
+                "fe80::1%eth0",
+                "https://example.com"
+            })
+    void rejectsInvalidHosts(final String host) {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> TransferDestinations.parse(RULE.replace("play.example", host)));
     }
 
     /**
      * Prevents truncation, coercion and out-of-range values in port declarations.
+     *
      * @param port invalid JSON port expression
      */
     @ParameterizedTest
-    @ValueSource(strings = {"0", "-1", "65536", "25565.5", "99999999999999999999999", "\"25565\"", "null", "true"})
-    void rejectsInvalidPorts(String port) {
-        assertThrows(IllegalArgumentException.class, () -> TransferDestinations.parse(RULE.replace("25565", port)));
+    @ValueSource(
+            strings = {
+                "0",
+                "-1",
+                "65536",
+                "25565.5",
+                "99999999999999999999999",
+                "\"25565\"",
+                "null",
+                "true"
+            })
+    void rejectsInvalidPorts(final String port) {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> TransferDestinations.parse(RULE.replace("25565", port)));
     }
 
     /**
-     * Detects unknown schema keys, malformed documents and excessive lists before enabling any rule.
+     * Detects unknown schema keys, malformed documents and excessive lists before enabling any
+     * rule.
+     *
      * @throws IOException if the disposable configuration cannot be written
      */
     @Test
     void rejectsMalformedAndOversizedPolicies() throws IOException {
-        assertThrows(IllegalArgumentException.class, () -> TransferDestinations.parse(RULE.replace("udpPort", "udpport")));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> TransferDestinations.parse(RULE.replace("udpPort", "udpport")));
         assertThrows(IllegalArgumentException.class, () -> TransferDestinations.parse("{}"));
         assertThrows(IllegalArgumentException.class, () -> TransferDestinations.parse("null"));
         String entry = "{\"host\":\"play.example\",\"tcpPort\":25565,\"udpPort\":25570}";
-        assertThrows(IllegalArgumentException.class, () -> TransferDestinations.parse("{\"destinations\":[" + entry + "," + entry + "]}"));
+        assertThrows(
+                IllegalArgumentException.class,
+                () ->
+                        TransferDestinations.parse(
+                                "{\"destinations\":[" + entry + "," + entry + "]}"));
         String huge = "{\"destinations\":[" + (entry + ",").repeat(128) + entry + "]}";
         assertThrows(IllegalArgumentException.class, () -> TransferDestinations.parse(huge));
         Path config = this.folder.resolve("oversized.json");
@@ -106,7 +150,9 @@ class TransferSupportTest {
     }
 
     /**
-     * Keeps an unconfigured installation passive and fails initialization on an invalid existing file.
+     * Keeps an unconfigured installation passive and fails initialization on an invalid existing
+     * file.
+     *
      * @throws IOException if the disposable operator configuration cannot be written
      */
     @Test
@@ -121,6 +167,7 @@ class TransferSupportTest {
 
     /**
      * Requires the owned pending response and scopes the positive result to its channel only.
+     *
      * @throws IOException if the disposable configured policy cannot be written
      */
     @Test

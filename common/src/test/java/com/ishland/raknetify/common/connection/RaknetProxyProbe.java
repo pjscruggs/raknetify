@@ -33,6 +33,7 @@ import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.nio.NioEventLoopGroup;
+
 import network.ycc.raknet.client.RakNetClient;
 import network.ycc.raknet.pipeline.UserDataCodec;
 
@@ -47,8 +48,7 @@ public final class RaknetProxyProbe {
     private static final long NONCE = 0x1020304050607080L;
 
     /** Prevents construction of the command-line transport witness. */
-    private RaknetProxyProbe() {
-    }
+    private RaknetProxyProbe() {}
 
     /**
      * Queries a loopback proxy and fails if it omits or corrupts the requested response.
@@ -56,52 +56,81 @@ public final class RaknetProxyProbe {
      * @param args port, protocol number and status, reject, ban or ban-drop
      * @throws Exception if transport setup, response validation or bounded shutdown fails
      */
-    public static void main(String[] args) throws Exception {
+    public static void main(final String[] args) throws Exception {
         int port = Integer.parseInt(args[0]);
         int protocol = Integer.parseInt(args[1]);
         String mode = args[2];
-        LinkedBlockingQueue<byte[]> packets = new LinkedBlockingQueue<>(16);
+        java.util.concurrent.BlockingQueue<byte[]> packets = new LinkedBlockingQueue<>(16);
         NioEventLoopGroup group = new NioEventLoopGroup(1);
         Channel channel = null;
         try {
-            channel = new Bootstrap().group(group).channel(RakNetClient.THREADED_CHANNEL)
-                    .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5000)
-                    .handler(initializer(packets)).connect("127.0.0.1", port).sync().channel();
-            if (mode.equals("ban-drop")) installLoss(channel);
-            channel.writeAndFlush(RaknetStatusProbe.handshake(port, protocol, mode.equals("status") ? 1 : 2)).sync();
+            channel =
+                    new Bootstrap()
+                            .group(group)
+                            .channel(RakNetClient.THREADED_CHANNEL)
+                            .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5000)
+                            .handler(initializer(packets))
+                            .connect("127.0.0.1", port)
+                            .sync()
+                            .channel();
+            if ("ban-drop".equals(mode)) {
+                installLoss(channel);
+            }
+            channel.writeAndFlush(
+                            RaknetStatusProbe.handshake(
+                                    port, protocol, "status".equals(mode) ? 1 : 2))
+                    .sync();
             if (mode.startsWith("ban")) {
                 bannedLogin(channel, packets, protocol);
-            } else if (mode.equals("reject")) {
+            } else if ("reject".equals(mode)) {
                 rejection(channel, packets);
             } else {
                 status(channel, packets);
             }
         } finally {
-            if (channel != null) channel.close().sync();
+            if (channel != null) {
+                channel.close().sync();
+            }
             group.shutdownGracefully(0, 5, TimeUnit.SECONDS).sync();
         }
     }
 
     /**
-     * Drops exactly one fragmented application datagram before reliability processing can acknowledge it.
+     * Drops exactly one fragmented application datagram before reliability processing can
+     * acknowledge it.
+     *
      * @param channel connected threaded client whose parent owns the RakNet reliability pipeline
      * @throws InterruptedException if installing the deterministic impairment is interrupted
      */
-    private static void installLoss(Channel channel) throws InterruptedException {
+    private static void installLoss(final Channel channel) throws InterruptedException {
         Channel transport = channel.parent();
-        transport.eventLoop().submit(() -> transport.pipeline().addBefore(
-                network.ycc.raknet.pipeline.ReliabilityHandler.NAME, "fixture-loss", new DropFirstFragment())).sync();
+        transport
+                .eventLoop()
+                .submit(() ->
+                        transport
+                                .pipeline()
+                                .addBefore(
+                                        network.ycc.raknet.pipeline.ReliabilityHandler.NAME,
+                                        "fixture-loss",
+                                        new DropFirstFragment()))
+                .sync();
     }
 
     /**
-     * Uses vanilla's banned-player login path and requires the complete server-supplied reason over RakNet.
+     * Uses vanilla's banned-player login path and requires the complete server-supplied reason over
+     * RakNet.
+     *
      * @param channel connected application channel
      * @param packets decoded Minecraft packet queue
      * @param protocol server protocol, used for the pre-1.20.2 optional UUID field
      * @throws Exception if login framing or rejection delivery fails
      * @throws IllegalArgumentException if the expected native ban reason is missing
      */
-    private static void bannedLogin(Channel channel, LinkedBlockingQueue<byte[]> packets, int protocol) throws Exception {
+    private static void bannedLogin(
+            final Channel channel,
+            final java.util.concurrent.BlockingQueue<byte[]> packets,
+            final int protocol)
+            throws Exception {
         channel.writeAndFlush(loginHello(protocol)).sync();
         String reason = textPacket(loginResponse(channel, packets));
         if (!reason.contains("Transport rejection fixture") || !reason.contains("END_OF_REASON")) {
@@ -111,34 +140,46 @@ public final class RaknetProxyProbe {
     }
 
     /**
-     * Declines optional mod login queries exactly as a client without those mods would before native admission.
+     * Declines optional mod login queries exactly as a client without those mods would before
+     * native admission.
+     *
      * @param channel connected application channel
      * @param packets bounded response queue
      * @return first non-query packet, still required to contain the exact native ban reason
      * @throws Exception if delivery fails or the server exceeds the bounded query count
      * @throws IllegalStateException if more than sixteen optional login queries precede admission
      */
-    private static byte[] loginResponse(Channel channel, LinkedBlockingQueue<byte[]> packets) throws Exception {
+    private static byte[] loginResponse(
+            final Channel channel, final java.util.concurrent.BlockingQueue<byte[]> packets)
+            throws Exception {
         LoginCompression compression = new LoginCompression();
         for (int count = 0; count < 16; count++) {
             byte[] response = compression.decode(next(packets));
-            if (compression.configure(response)) continue;
+            if (compression.configure(response)) {
+                continue;
+            }
             ByteBuf answer = declineQuery(response);
-            if (answer == null) return response;
+            if (answer == null) {
+                return response;
+            }
             channel.writeAndFlush(compression.encode(answer)).sync();
         }
         throw new IllegalStateException("Too many optional login queries");
     }
 
     /**
-     * Preserves the server's transaction ID while explicitly reporting an unsupported optional payload.
+     * Preserves the server's transaction ID while explicitly reporting an unsupported optional
+     * payload.
+     *
      * @param response complete login-state packet
      * @return owned query reply or null for a packet that must be validated by the caller
      */
-    static ByteBuf declineQuery(byte[] response) {
+    static ByteBuf declineQuery(final byte[] response) {
         ByteBuf input = Unpooled.wrappedBuffer(response);
         try {
-            if (RaknetStatusProbe.readVarint(input) != 4) return null;
+            if (RaknetStatusProbe.readVarint(input) != 4) {
+                return null;
+            }
             int transaction = RaknetStatusProbe.readVarint(input);
             ByteBuf answer = Unpooled.buffer();
             answer.writeByte(2);
@@ -152,18 +193,23 @@ public final class RaknetProxyProbe {
 
     /**
      * Encodes the native login-start layout, including the short-lived optional profile-key fields.
+     *
      * @param protocol Minecraft protocol number negotiated in the handshake
      * @return owned packet buffer for the caller to write or release
      */
-    static ByteBuf loginHello(int protocol) {
+    static ByteBuf loginHello(final int protocol) {
         ByteBuf hello = Unpooled.buffer();
         hello.writeByte(0);
         byte[] name = "DisconnectProbe".getBytes(StandardCharsets.UTF_8);
         RaknetStatusProbe.writeVarint(hello, name.length);
         hello.writeBytes(name);
-        if (protocol == 759 || protocol == 760) hello.writeBoolean(false);
+        if (protocol == 759 || protocol == 760) {
+            hello.writeBoolean(false);
+        }
         if (protocol >= 760) {
-            if (protocol < 764) hello.writeBoolean(true);
+            if (protocol < 764) {
+                hello.writeBoolean(true);
+            }
             hello.writeLong(0x1234567812345678L).writeLong(0x1234567812345678L);
         }
         return hello;
@@ -175,7 +221,8 @@ public final class RaknetProxyProbe {
      * @param packets response queue consumed by the probe thread
      * @return pipeline initializer for this connection
      */
-    private static ChannelInitializer<Channel> initializer(LinkedBlockingQueue<byte[]> packets) {
+    private static ChannelInitializer<Channel> initializer(
+            final java.util.concurrent.BlockingQueue<byte[]> packets) {
         return new ChannelInitializer<>() {
             /**
              * Installs legacy RakNet game framing without multichannel negotiation.
@@ -183,24 +230,29 @@ public final class RaknetProxyProbe {
              * @param channel newly accepted client channel
              */
             @Override
-            protected void initChannel(Channel channel) {
+            protected void initChannel(final Channel channel) {
                 channel.pipeline().addLast(new UserDataCodec(0xFD));
-                channel.pipeline().addLast(new SimpleChannelInboundHandler<Object>() {
-                    /**
-                     * Retains packet bytes independently of Netty's message lifetime.
-                     *
-                     * @param context inbound transport context
-                     * @param message game bytes or an ignored extension frame
-                     */
-                    @Override
-                    protected void channelRead0(ChannelHandlerContext context, Object message) {
-                        if (message instanceof ByteBuf buffer) {
-                            byte[] copy = new byte[buffer.readableBytes()];
-                            buffer.readBytes(copy);
-                            packets.add(copy);
-                        }
-                    }
-                });
+                channel.pipeline()
+                        .addLast(
+                                new SimpleChannelInboundHandler<Object>() {
+                                    /**
+                                     * Retains packet bytes independently of Netty's message
+                                     * lifetime.
+                                     *
+                                     * @param context inbound transport context
+                                     * @param message game bytes or an ignored extension frame
+                                     */
+                                    @Override
+                                    protected void channelRead0(
+                                            final ChannelHandlerContext context,
+                                            final Object message) {
+                                        if (message instanceof ByteBuf buffer) {
+                                            byte[] copy = new byte[buffer.readableBytes()];
+                                            buffer.readBytes(copy);
+                                            packets.add(copy);
+                                        }
+                                    }
+                                });
             }
         };
     }
@@ -213,7 +265,9 @@ public final class RaknetProxyProbe {
      * @throws Exception if either response is absent, malformed or has the wrong nonce
      * @throws IllegalArgumentException if the pong identifier, length or nonce differs
      */
-    private static void status(Channel channel, LinkedBlockingQueue<byte[]> packets) throws Exception {
+    private static void status(
+            final Channel channel, final java.util.concurrent.BlockingQueue<byte[]> packets)
+            throws Exception {
         channel.writeAndFlush(Unpooled.buffer(1).writeByte(0)).sync();
         System.out.println(textPacket(next(packets)));
         channel.writeAndFlush(Unpooled.buffer(9).writeByte(1).writeLong(NONCE)).sync();
@@ -236,7 +290,9 @@ public final class RaknetProxyProbe {
      * @throws Exception if rejection is missing or malformed
      * @throws IllegalArgumentException if the configured maintenance reason was not received
      */
-    private static void rejection(Channel channel, LinkedBlockingQueue<byte[]> packets) throws Exception {
+    private static void rejection(
+            final Channel channel, final java.util.concurrent.BlockingQueue<byte[]> packets)
+            throws Exception {
         byte[] response = next(packets);
         if (!textPacket(response).contains("Transport maintenance fixture")) {
             throw new IllegalArgumentException("Missing maintenance rejection");
@@ -252,26 +308,34 @@ public final class RaknetProxyProbe {
      * @throws InterruptedException if the test thread is interrupted
      * @throws IllegalStateException if no packet arrives within the fixed deadline
      */
-    private static byte[] next(LinkedBlockingQueue<byte[]> packets) throws InterruptedException {
+    private static byte[] next(final java.util.concurrent.BlockingQueue<byte[]> packets)
+            throws InterruptedException {
         byte[] response = packets.poll(10, TimeUnit.SECONDS);
-        if (response == null) throw new IllegalStateException("Proxy response timed out");
+        if (response == null) {
+            throw new IllegalStateException("Proxy response timed out");
+        }
         return response;
     }
 
     /**
-     * Decodes a status packet and rejects TCP length prefixes or trailing bytes inside a RakNet frame.
+     * Decodes a status packet and rejects TCP length prefixes or trailing bytes inside a RakNet
+     * frame.
      *
      * @param bytes complete Minecraft response frame
      * @return exact UTF-8 JSON supplied by the proxy
      * @throws IllegalArgumentException if the response ID or string boundary is invalid
      */
-    private static String textPacket(byte[] bytes) {
+    private static String textPacket(final byte[] bytes) {
         ByteBuf buffer = Unpooled.wrappedBuffer(bytes);
         try {
             int packetId = RaknetStatusProbe.readVarint(buffer);
-            if (packetId != 0) throw new IllegalArgumentException("Wrong response ID: " + packetId);
+            if (packetId != 0) {
+                throw new IllegalArgumentException("Wrong response ID: " + packetId);
+            }
             int length = RaknetStatusProbe.readVarint(buffer);
-            if (length != buffer.readableBytes()) throw new IllegalArgumentException("Incorrect string boundary");
+            if (length != buffer.readableBytes()) {
+                throw new IllegalArgumentException("Incorrect string boundary");
+            }
             return buffer.readCharSequence(length, StandardCharsets.UTF_8).toString();
         } finally {
             buffer.release();

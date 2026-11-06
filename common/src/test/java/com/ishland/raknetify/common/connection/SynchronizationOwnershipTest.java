@@ -24,7 +24,10 @@
 
 package com.ishland.raknetify.common.connection;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import com.ishland.raknetify.common.Constants;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelConfig;
@@ -33,26 +36,32 @@ import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.util.ReferenceCountUtil;
+
 import network.ycc.raknet.config.DefaultConfig;
 import network.ycc.raknet.frame.FrameData;
 import network.ycc.raknet.pipeline.FrameJoiner;
 import network.ycc.raknet.pipeline.FrameOrderIn;
 import network.ycc.raknet.pipeline.FrameOrderOut;
 import network.ycc.raknet.pipeline.ReliabilityHandler;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
-import static org.junit.jupiter.api.Assertions.*;
-
-/** Guards synchronization frame ownership and propagation of the transport's actual write result. */
+/**
+ * Guards synchronization frame ownership and propagation of the transport's actual write result.
+ */
 class SynchronizationOwnershipTest {
 
-    /** Releases both the consumed SYNC frame and its derived buffer after applying an ordering reset. */
+    /**
+     * Releases both the consumed SYNC frame and its derived buffer after applying an ordering
+     * reset.
+     */
     @Test
     void consumedMarkerReleasesEveryReference() {
         EmbeddedChannel channel = transport();
-        FrameData marker = marker(Unpooled.buffer().writeByte(1).writeByte(2).writeInt(4).writeInt(23));
+        FrameData marker =
+                marker(Unpooled.buffer().writeByte(1).writeByte(2).writeInt(4).writeInt(23));
         try {
             assertFalse(channel.writeInbound(marker));
             assertEquals(0, marker.refCnt());
@@ -79,7 +88,8 @@ class SynchronizationOwnershipTest {
     void ordinaryFrameIsForwardedWithoutRelease() {
         EmbeddedChannel channel = transport();
         ByteBuf bytes = Unpooled.buffer().writeInt(42);
-        FrameData packet = FrameData.create(channel.alloc(), Constants.RAKNET_GAME_PACKET_ID, bytes);
+        FrameData packet =
+                FrameData.create(channel.alloc(), Constants.RAKNET_GAME_PACKET_ID, bytes);
         bytes.release();
         try {
             assertTrue(channel.writeInbound(packet));
@@ -91,12 +101,15 @@ class SynchronizationOwnershipTest {
         }
     }
 
-    /** Does not turn a pending or failed synchronization write into an early successful completion. */
+    /**
+     * Does not turn a pending or failed synchronization write into an early successful completion.
+     */
     @Test
     void synchronizationPromiseBelongsToTransport() {
         CompletionGate gate = new CompletionGate();
-        RakNetSimpleMultiChannelCodec codec = new RakNetSimpleMultiChannelCodec(Constants.RAKNET_GAME_PACKET_ID)
-                .addHandler((buffer, silent) -> 2);
+        RakNetSimpleMultiChannelCodec codec =
+                new RakNetSimpleMultiChannelCodec(Constants.RAKNET_GAME_PACKET_ID)
+                        .addHandler((buffer, silent) -> 2);
         EmbeddedChannel channel = new EmbeddedChannel(gate, codec);
         try {
             channel.writeOutbound(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL);
@@ -105,7 +118,8 @@ class SynchronizationOwnershipTest {
             channel.write(SynchronizationLayer.SYNC_REQUEST_OBJECT, result);
             assertSame(result, gate.pending);
             assertFalse(result.isDone(), "The codec must wait for the downstream write result");
-            IOException failure = new IOException("Fixture transport rejected the synchronization marker");
+            IOException failure =
+                    new IOException("Fixture transport rejected the synchronization marker");
             gate.pending.setFailure(failure);
             assertSame(failure, result.cause());
         } finally {
@@ -113,12 +127,16 @@ class SynchronizationOwnershipTest {
         }
     }
 
-    /** Keeps a packet waiting for negotiation on the same channel as packets written after acknowledgement. */
+    /**
+     * Keeps a packet waiting for negotiation on the same channel as packets written after
+     * acknowledgement.
+     */
     @Test
     void negotiationDoesNotSplitOneOrderedStreamAcrossChannels() {
         NegotiationGate gate = new NegotiationGate();
-        RakNetSimpleMultiChannelCodec codec = new RakNetSimpleMultiChannelCodec(Constants.RAKNET_GAME_PACKET_ID)
-                .addHandler((buffer, silent) -> 1);
+        RakNetSimpleMultiChannelCodec codec =
+                new RakNetSimpleMultiChannelCodec(Constants.RAKNET_GAME_PACKET_ID)
+                        .addHandler((buffer, silent) -> 1);
         EmbeddedChannel channel = new EmbeddedChannel(gate, codec);
         try {
             channel.writeOutbound(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL);
@@ -141,12 +159,16 @@ class SynchronizationOwnershipTest {
         }
     }
 
-    /** A failed marker must fail queued writes instead of sending packets on channels the peer never enabled. */
+    /**
+     * A failed marker must fail queued writes instead of sending packets on channels the peer never
+     * enabled.
+     */
     @Test
     void failedNegotiationReleasesQueuedWrites() {
         NegotiationGate gate = new NegotiationGate();
-        RakNetSimpleMultiChannelCodec codec = new RakNetSimpleMultiChannelCodec(Constants.RAKNET_GAME_PACKET_ID)
-                .addHandler((buffer, silent) -> 1);
+        RakNetSimpleMultiChannelCodec codec =
+                new RakNetSimpleMultiChannelCodec(Constants.RAKNET_GAME_PACKET_ID)
+                        .addHandler((buffer, silent) -> 1);
         EmbeddedChannel channel = new EmbeddedChannel(gate, codec);
         ByteBuf payload = Unpooled.buffer().writeByte(1);
         try {
@@ -163,12 +185,16 @@ class SynchronizationOwnershipTest {
         }
     }
 
-    /** Cancelling one queued promise cannot interrupt cleanup of later frames when the handler is removed. */
+    /**
+     * Cancelling one queued promise cannot interrupt cleanup of later frames when the handler is
+     * removed.
+     */
     @Test
     void removalDrainsCancelledWritesBeforeLateAcknowledgement() {
         NegotiationGate gate = new NegotiationGate();
-        RakNetSimpleMultiChannelCodec codec = new RakNetSimpleMultiChannelCodec(Constants.RAKNET_GAME_PACKET_ID)
-                .addHandler((buffer, silent) -> 1);
+        RakNetSimpleMultiChannelCodec codec =
+                new RakNetSimpleMultiChannelCodec(Constants.RAKNET_GAME_PACKET_ID)
+                        .addHandler((buffer, silent) -> 1);
         EmbeddedChannel channel = new EmbeddedChannel(gate, codec);
         ByteBuf first = Unpooled.buffer().writeByte(1);
         ByteBuf second = Unpooled.buffer().writeByte(2);
@@ -183,19 +209,28 @@ class SynchronizationOwnershipTest {
             assertEquals(0, first.refCnt());
             assertEquals(0, second.refCnt());
             gate.pending.setSuccess();
-            assertNull(channel.readOutbound(), "Removed frames cannot be forwarded by a late acknowledgement");
+            assertNull(
+                    channel.readOutbound(),
+                    "Removed frames cannot be forwarded by a late acknowledgement");
         } finally {
             channel.finishAndReleaseAll();
         }
     }
 
-    /** A classifier exception while negotiation is pending still releases the input buffer and fails its write. */
+    /**
+     * A classifier exception while negotiation is pending still releases the input buffer and fails
+     * its write.
+     */
     @Test
     void queuedClassifierFailureReleasesInput() {
         NegotiationGate gate = new NegotiationGate();
-        IllegalArgumentException failure = new IllegalArgumentException("Fixture classifier rejected packet");
-        RakNetSimpleMultiChannelCodec codec = new RakNetSimpleMultiChannelCodec(Constants.RAKNET_GAME_PACKET_ID)
-                .addHandler((buffer, silent) -> { throw failure; });
+        IllegalArgumentException failure =
+                new IllegalArgumentException("Fixture classifier rejected packet");
+        RakNetSimpleMultiChannelCodec codec =
+                new RakNetSimpleMultiChannelCodec(Constants.RAKNET_GAME_PACKET_ID)
+                        .addHandler((buffer, silent) -> {
+                            throw failure;
+                        });
         EmbeddedChannel channel = new EmbeddedChannel(gate, codec);
         ByteBuf payload = Unpooled.buffer().writeByte(1);
         try {
@@ -215,8 +250,13 @@ class SynchronizationOwnershipTest {
      */
     private static EmbeddedChannel transport() {
         EmbeddedChannel channel = new RaknetChannel();
-        channel.pipeline().addLast(new ReliabilityHandler(), new FrameJoiner(), new FrameOrderIn(),
-                new FrameOrderOut(), new SynchronizationLayer(Constants.SYNC_IGNORE_CHANNELS));
+        channel.pipeline()
+                .addLast(
+                        new ReliabilityHandler(),
+                        new FrameJoiner(),
+                        new FrameOrderIn(),
+                        new FrameOrderOut(),
+                        new SynchronizationLayer(Constants.SYNC_IGNORE_CHANNELS));
         return channel;
     }
 
@@ -226,7 +266,7 @@ class SynchronizationOwnershipTest {
      * @param payload cursor data following the frame identifier
      * @return owned synchronization frame
      */
-    private static FrameData marker(ByteBuf payload) {
+    private static FrameData marker(final ByteBuf payload) {
         try {
             return FrameData.create(payload.alloc(), Constants.RAKNET_SYNC_PACKET_ID, payload);
         } finally {
@@ -234,23 +274,33 @@ class SynchronizationOwnershipTest {
         }
     }
 
-    /** Holds only the synchronization write so its eventual success or failure remains controlled by the test. */
+    /**
+     * Holds only the synchronization write so its eventual success or failure remains controlled by
+     * the test.
+     */
     private static final class CompletionGate extends ChannelOutboundHandlerAdapter {
 
-        /** Pending transport completion, deliberately left unfinished until the assertion checks it. */
+        /**
+         * Pending transport completion, deliberately left unfinished until the assertion checks it.
+         */
         private ChannelPromise pending;
 
         /**
-         * Retains the local marker's promise while allowing negotiation and ordinary frames to pass.
+         * Retains the local marker's promise while allowing negotiation and ordinary frames to
+         * pass.
          *
          * @param ctx outgoing context forwarding non-marker traffic
          * @param msg local synchronization marker or normal frame
          * @param promise original completion that must not be completed by the codec
          */
         @Override
-        public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) {
-            if (msg == SynchronizationLayer.SYNC_REQUEST_OBJECT) pending = promise;
-            else ctx.write(msg, promise);
+        public void write(
+                final ChannelHandlerContext ctx, final Object msg, final ChannelPromise promise) {
+            if (msg == SynchronizationLayer.SYNC_REQUEST_OBJECT) {
+                pending = promise;
+            } else {
+                ctx.write(msg, promise);
+            }
         }
     }
 
@@ -268,7 +318,8 @@ class SynchronizationOwnershipTest {
          * @param promise transport completion for this write
          */
         @Override
-        public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) {
+        public void write(
+                final ChannelHandlerContext ctx, final Object msg, final ChannelPromise promise) {
             if (pending == null) {
                 pending = promise;
                 ReferenceCountUtil.release(msg);
@@ -281,7 +332,9 @@ class SynchronizationOwnershipTest {
     /** Supplies real RakNet configuration to the deterministic in-memory transport. */
     private static final class RaknetChannel extends EmbeddedChannel {
 
-        /** Lazy because EmbeddedChannel requests its configuration from the superclass constructor. */
+        /**
+         * Lazy because EmbeddedChannel requests its configuration from the superclass constructor.
+         */
         private ChannelConfig transportConfig;
 
         /**
@@ -291,7 +344,9 @@ class SynchronizationOwnershipTest {
          */
         @Override
         public ChannelConfig config() {
-            if (transportConfig == null) transportConfig = new DefaultConfig(this);
+            if (transportConfig == null) {
+                transportConfig = new DefaultConfig(this);
+            }
             return transportConfig;
         }
     }
