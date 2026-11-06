@@ -24,6 +24,8 @@
 
 package com.ishland.raknetify.test.mixin;
 
+import net.fabricmc.loader.api.FabricLoader;
+
 import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
@@ -65,8 +67,21 @@ public final class FixtureMixinPlugin implements IMixinConfigPlugin {
      */
     @Override
     public boolean shouldApplyMixin(final String targetClassName, final String mixinClassName) {
-        return mixinClassName.endsWith(".TransferLoginMixin")
-                == Boolean.getBoolean("raknetify.test.transfers");
+        if (mixinClassName.endsWith(".TransferLoginMixin")) {
+            return Boolean.getBoolean("raknetify.test.transfers");
+        }
+        if (Boolean.getBoolean("raknetify.test.transfers")) {
+            return false;
+        }
+        String version =
+                FabricLoader.getInstance()
+                        .getModContainer("minecraft")
+                        .orElseThrow()
+                        .getMetadata()
+                        .getVersion()
+                        .getFriendlyString();
+        boolean snapshot = "26.4-alpha.7".equals(version) || "26.4-snapshot-7".equals(version);
+        return mixinClassName.endsWith(".EncryptionLogin26_4Mixin") == snapshot;
     }
 
     /**

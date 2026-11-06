@@ -68,13 +68,12 @@ public final class EncryptionExchange extends SimpleChannelInboundHandler<FrameD
     }
 
     /**
-     * Requires explicit test mode, a loopback RakNet peer, and the real frame encryption handler.
-     * This fixture never installs replacement ciphers or alters authentication in distributed jars.
+     * Restricts authentication fixtures to explicitly enabled loopback RakNet connections.
      *
-     * @param channel disposable native server connection after its encryption setup
-     * @throws IllegalStateException if the isolated fixture or real frame encryption is missing
+     * @param channel disposable connection whose endpoint and test mode must be verified
+     * @throws IllegalStateException if this is not the isolated loopback test environment
      */
-    public static void install(final Channel channel) {
+    public static void requireTestConnection(final Channel channel) {
         if (!Boolean.getBoolean("raknetify.test.encryption")) {
             throw new IllegalStateException("Test mode required");
         }
@@ -85,6 +84,17 @@ public final class EncryptionExchange extends SimpleChannelInboundHandler<FrameD
         if (!peer.getAddress().isLoopbackAddress()) {
             throw new IllegalStateException("Loopback required");
         }
+    }
+
+    /**
+     * Requires explicit test mode, a loopback RakNet peer, and the real frame encryption handler.
+     * This fixture never installs replacement ciphers or alters authentication in distributed jars.
+     *
+     * @param channel disposable native server connection after its encryption setup
+     * @throws IllegalStateException if the isolated fixture or real frame encryption is missing
+     */
+    public static void install(final Channel channel) {
+        requireTestConnection(channel);
         if (channel.pipeline().get(MultiChannellingEncryption.class) == null) {
             throw new IllegalStateException("Frame encryption was not installed");
         }

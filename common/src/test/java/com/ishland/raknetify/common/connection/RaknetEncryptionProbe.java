@@ -64,6 +64,11 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
      */
     private static final SecretKey KEY = new SecretKeySpec(new byte[16], "AES");
 
+    /**
+     * Exact supported snapshot protocol with an options acknowledgement before cipher installation.
+     */
+    private static final int OPTIONS_PROTOCOL = 1073742169;
+
     /** Known payload checked after the server's real frame decryption. */
     private static final long CHALLENGE = 0x5d37a91b046ce28fL;
 
@@ -209,6 +214,8 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
                 checkThrottle(buffer);
             } else if (answered && !"echo".equals(mode)) {
                 checkRejection(buffer);
+            } else if (answered && protocol == OPTIONS_PROTOCOL) {
+                answerOptions(context, buffer);
             } else {
                 answerKey(context, buffer);
             }
@@ -257,6 +264,34 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
         if ("rejected-nonce".equals(mode)) {
             return;
         }
+        if (protocol != OPTIONS_PROTOCOL) {
+            enableEncryption(context);
+        }
+    }
+
+    /**
+     * Acknowledges the snapshot's plaintext options request before installing encrypted framing.
+     *
+     * @param context native connection waiting for the options acknowledgement
+     * @param request decoded options packet with its original packet identifier
+     * @throws IllegalArgumentException if the request does not enable encryption alone
+     */
+    private void answerOptions(final ChannelHandlerContext context, final ByteBuf request) {
+        if (RaknetStatusProbe.readVarint(request) != 6
+                || request.readUnsignedByte() != 1
+                || request.isReadable()) {
+            throw new IllegalArgumentException("Expected encryption options request");
+        }
+        context.writeAndFlush(Unpooled.buffer(1).writeByte(5));
+        enableEncryption(context);
+    }
+
+    /**
+     * Installs the real client frame cipher and sends the bounded encrypted witness payload.
+     *
+     * @param context connection whose plaintext key or options response has already been written
+     */
+    private void enableEncryption(final ChannelHandlerContext context) {
         context.pipeline().addBefore("game", "encryption", new MultiChannellingEncryption(KEY));
         if ("rejected-session".equals(mode)) {
             return;

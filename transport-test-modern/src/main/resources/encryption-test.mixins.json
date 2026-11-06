@@ -5,7 +5,8 @@
   "plugin": "com.ishland.raknetify.test.mixin.FixtureMixinPlugin",
   "mixins": [
     "TransferLoginMixin",
-    "EncryptionLoginMixin"
+    "EncryptionLoginMixin",
+    "EncryptionLogin26_4Mixin"
   ],
   "injectors": {
     "defaultRequire": 1
