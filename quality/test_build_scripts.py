@@ -99,6 +99,27 @@ class BuildScriptTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'exited before readiness'):
             SMOKE.await_ready(process, Mock())
 
+    def test_readiness_checks_exit_after_quiet_interval(self):
+        """An empty log queue must not hide a server that exits during the wait."""
+        process = Mock()
+        process.poll.side_effect = [None, 1]
+        events = Mock()
+        events.get.side_effect = SMOKE.queue.Empty
+        with self.assertRaisesRegex(RuntimeError, 'exited before readiness'):
+            SMOKE.await_ready(process, events)
+        events.get.assert_called_once_with(timeout=1)
+
+    def test_readiness_deadline_survives_quiet_intervals(self):
+        """Repeated empty log reads must end at the startup deadline without accepting readiness."""
+        process = Mock()
+        process.poll.return_value = None
+        events = Mock()
+        events.get.side_effect = SMOKE.queue.Empty
+        with patch.object(SMOKE.time, 'monotonic', side_effect=[0, 0, 179, 180]):
+            with self.assertRaisesRegex(TimeoutError, '180 seconds'):
+                SMOKE.await_ready(process, events)
+        self.assertEqual(2, events.get.call_count)
+
 
 if __name__ == '__main__':
     unittest.main()

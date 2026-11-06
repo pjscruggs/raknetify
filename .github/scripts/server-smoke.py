@@ -177,6 +177,7 @@ def await_ready(process, events):
             if 'Done (' in events.get(timeout=1):
                 return
         except queue.Empty:
+            # Startup can be quiet between log lines. The next iteration still checks exit and deadline.
             pass
     raise TimeoutError('Server startup exceeded 180 seconds')
 
