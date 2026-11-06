@@ -25,7 +25,7 @@ def ownedSources = providers.exec {
     workingDir projectDir.parentFile
     commandLine 'git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z'
 }.standardOutput.asText.get().split('\u0000').findAll { !it.empty }
-        .collect { new File(projectDir.parentFile, it) }
+        .collect { new File(projectDir.parentFile, it) }.findAll { it.isFile() }
 
 checkstyle {
     toolVersion = '14.4.0'
