@@ -24,39 +24,112 @@
 
 package com.ishland.raknetify.common.connection;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import io.netty.buffer.Unpooled;
 import io.netty.buffer.UnpooledByteBufAllocator;
-import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.channel.ChannelConfig;
+import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.codec.TooLongFrameException;
-import network.ycc.raknet.frame.Frame;
+
 import network.ycc.raknet.config.DefaultConfig;
+import network.ycc.raknet.frame.Frame;
 import network.ycc.raknet.frame.FrameData;
 import network.ycc.raknet.pipeline.FrameJoiner;
 import network.ycc.raknet.pipeline.FrameOrderIn;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 
-import static org.junit.jupiter.api.Assertions.*;
-
 /** Exercises retransmitted reliable frames before reassembly and application packet delivery. */
 class ReliableFrameDeduplicatorTest {
-    /** A lost acknowledgement must not make Paper receive the same keepalive challenge twice. */
+    /** Retains the negative half-space boundary returned by the transport's wrap arithmetic. */
     @Test
-    void retransmittedUnorderedFrameIsDeliveredOnce() {
-        EmbeddedChannel channel = new EmbeddedChannel(new ReliableFrameDeduplicator(), new FrameJoiner(), new FrameOrderIn());
+    void halfSpaceBoundaryRetryIsNotDeliveredAgain() {
+        EmbeddedChannel channel = transport();
         try {
-            assertTrue(channel.writeInbound(frame(42)));
-            FrameData first = channel.readInbound();
-            first.release();
-            assertFalse(channel.writeInbound(frame(42)), "A retransmitted reliable ID reached the application twice");
+            deliver(channel, 0x800000, true);
+            deliver(channel, 0xffffff, true);
+            deliver(channel, 0, true);
+            deliver(channel, 0x800000, false);
         } finally {
             channel.finishAndReleaseAll();
         }
     }
 
-    /** Equal payloads with distinct IDs remain separate messages, even when delivery order is reversed. */
+    /**
+     * Accepts a contiguous run after its lower boundary crosses half and all of the wire space.
+     *
+     * @throws Exception if direct decoder processing fails
+     */
+    @Test
+    void continuousRunSurvivesFullSerialWrap() throws Exception {
+        var decoder = new ReliableFrameDeduplicator();
+        var output = new ArrayList<Object>(1);
+        Frame packet = frame(0);
+        try {
+            for (int index = 0; index <= 0x1000010; index++) {
+                packet.setReliableIndex(index & 0xffffff);
+                decoder.decode(null, packet, output);
+                assertEquals(1, output.size());
+                ((Frame) output.remove(0)).release();
+            }
+            decoder.decode(null, packet, output);
+            assertTrue(output.isEmpty());
+        } finally {
+            packet.release();
+        }
+    }
+
+    /**
+     * A deterministic independent identity set covers reordering, duplicates, gaps and many wire
+     * counter wraps.
+     */
+    @Test
+    void randomizedArrivalsMatchUnwrappedIdentityModel() {
+        var random = new java.util.Random(240496);
+        var accepted = new java.util.HashSet<Long>();
+        EmbeddedChannel channel = transport();
+        long newest = 0;
+        accepted.add(0L);
+        try {
+            deliver(channel, 0, true);
+            for (int i = 0; i < 100_000; i++) {
+                long absolute = newest + random.nextInt(64) - 32;
+                if (i % 1000 == 0) {
+                    absolute = newest + 0x700000;
+                }
+                newest = Math.max(newest, absolute);
+                deliver(channel, (int) absolute & 0xffffff, accepted.add(absolute));
+            }
+        } finally {
+            channel.finishAndReleaseAll();
+        }
+    }
+
+    /** A lost acknowledgement must not make Paper receive the same keepalive challenge twice. */
+    @Test
+    void retransmittedUnorderedFrameIsDeliveredOnce() {
+        EmbeddedChannel channel =
+                new EmbeddedChannel(
+                        new ReliableFrameDeduplicator(), new FrameJoiner(), new FrameOrderIn());
+        try {
+            assertTrue(channel.writeInbound(frame(42)));
+            FrameData first = channel.readInbound();
+            first.release();
+            assertFalse(
+                    channel.writeInbound(frame(42)),
+                    "A retransmitted reliable ID reached the application twice");
+        } finally {
+            channel.finishAndReleaseAll();
+        }
+    }
+
+    /**
+     * Equal payloads with distinct IDs remain separate messages, even when delivery order is
+     * reversed.
+     */
     @Test
     void distinctAndWidelyReorderedIdsAreNotDiscarded() {
         EmbeddedChannel channel = transport();
@@ -72,7 +145,10 @@ class ReliableFrameDeduplicatorTest {
         }
     }
 
-    /** Counter wrap reuses IDs only after retiring the previous epoch, while late frames still retain their epoch. */
+    /**
+     * Counter wrap reuses IDs only after retiring the previous epoch, while late frames still
+     * retain their epoch.
+     */
     @Test
     void serialWrapAndLateFramesPreserveIdentity() {
         EmbeddedChannel channel = transport();
@@ -90,7 +166,10 @@ class ReliableFrameDeduplicatorTest {
         }
     }
 
-    /** Unreliable packets carry no reliable ID, so identical index fields cannot be used to suppress them. */
+    /**
+     * Unreliable packets carry no reliable ID, so identical index fields cannot be used to suppress
+     * them.
+     */
     @Test
     void unreliablePacketsAreNeverDeduplicated() {
         EmbeddedChannel channel = transport();
@@ -108,7 +187,10 @@ class ReliableFrameDeduplicatorTest {
         }
     }
 
-    /** Retrying all fragments after completion must neither redeliver the packet nor leave a new incomplete builder. */
+    /**
+     * Retrying all fragments after completion must neither redeliver the packet nor leave a new
+     * incomplete builder.
+     */
     @Test
     void retransmittedFragmentsAreConsumedBeforeReassembly() {
         EmbeddedChannel channel = transport();
@@ -122,25 +204,36 @@ class ReliableFrameDeduplicatorTest {
         packet.fragment(7, 128, 12, fragments);
         packet.release();
         try {
-            for (Object fragment : fragments) channel.writeInbound(((Frame) fragment).retain());
+            for (Object fragment : fragments) {
+                channel.writeInbound(((Frame) fragment).retain());
+            }
             FrameData delivered = channel.readInbound();
             assertNotNull(delivered);
             delivered.release();
-            for (Object fragment : fragments) assertFalse(channel.writeInbound(((Frame) fragment).retain()));
+            for (Object fragment : fragments) {
+                assertFalse(channel.writeInbound(((Frame) fragment).retain()));
+            }
             assertNull(channel.readInbound());
-            for (Object fragment : fragments) assertEquals(1, ((Frame) fragment).refCnt());
+            for (Object fragment : fragments) {
+                assertEquals(1, ((Frame) fragment).refCnt());
+            }
         } finally {
             channel.finishAndReleaseAll();
             fragments.forEach(fragment -> ((Frame) fragment).release());
         }
     }
 
-    /** Excessive sparse history fails the connection explicitly instead of silently forgetting old reliable IDs. */
+    /**
+     * Excessive sparse history fails the connection explicitly instead of silently forgetting old
+     * reliable IDs.
+     */
     @Test
     void sparseHistoryHasABoundedFailClosedLimit() {
         EmbeddedChannel channel = transport();
         try {
-            for (int i = 0; i < 65536; i++) deliver(channel, i * 2, true);
+            for (int i = 0; i < 65536; i++) {
+                deliver(channel, i * 2, true);
+            }
             deliver(channel, 1, true);
             deliver(channel, 131072, true);
             assertThrows(TooLongFrameException.class, () -> channel.writeInbound(frame(131074)));
@@ -152,11 +245,13 @@ class ReliableFrameDeduplicatorTest {
 
     /**
      * Checks both delivery count and reference ownership after one synthetic network arrival.
+     *
      * @param channel isolated receive pipeline
      * @param index reliable identity of this arrival
      * @param expected whether this ID has not been seen before
      */
-    private static void deliver(EmbeddedChannel channel, int index, boolean expected) {
+    private static void deliver(
+            final EmbeddedChannel channel, final int index, final boolean expected) {
         assertEquals(expected, channel.writeInbound(frame(index)));
         FrameData result = channel.readInbound();
         if (expected) {
@@ -169,11 +264,13 @@ class ReliableFrameDeduplicatorTest {
 
     /**
      * Places duplicate filtering ahead of the transport's real reassembly and ordering handlers.
+     *
      * @return owned pipeline with no external socket or scheduler
      */
     private static EmbeddedChannel transport() {
         EmbeddedChannel channel = new TransportChannel();
-        channel.pipeline().addLast(new ReliableFrameDeduplicator(), new FrameJoiner(), new FrameOrderIn());
+        channel.pipeline()
+                .addLast(new ReliableFrameDeduplicator(), new FrameJoiner(), new FrameOrderIn());
         return channel;
     }
 
@@ -183,22 +280,27 @@ class ReliableFrameDeduplicatorTest {
         private ChannelConfig transportConfig;
 
         /**
-         * Returns the same configuration for every fragment rather than substituting a TCP channel config.
+         * Returns the same configuration for every fragment rather than substituting a TCP channel
+         * config.
+         *
          * @return persistent transport queue and MTU settings
          */
         @Override
         public ChannelConfig config() {
-            if (transportConfig == null) transportConfig = new DefaultConfig(this);
+            if (transportConfig == null) {
+                transportConfig = new DefaultConfig(this);
+            }
             return transportConfig;
         }
     }
 
     /**
      * Creates a wire-equivalent unordered frame with an explicit reliable message index.
+     *
      * @param index identity retained when the sender retransmits the frame in another datagram
      * @return owned frame transferred to the inbound pipeline
      */
-    private static Frame frame(int index) {
+    private static Frame frame(final int index) {
         var payload = Unpooled.buffer().writeLong(240496);
         FrameData data = FrameData.create(UnpooledByteBufAllocator.DEFAULT, 0xfe, payload);
         payload.release();
