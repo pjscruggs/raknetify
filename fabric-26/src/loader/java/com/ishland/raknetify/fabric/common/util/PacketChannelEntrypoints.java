@@ -25,27 +25,32 @@
 package com.ishland.raknetify.fabric.common.util;
 
 import com.ishland.raknetify.api.PacketOrdering;
+
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
-/** Loads optional ordering declarations without requiring other mods to link against Raknetify classes. */
+/**
+ * Loads optional ordering declarations without requiring other mods to link against Raknetify
+ * classes.
+ */
 public final class PacketChannelEntrypoints {
 
     /** Prevents construction of the Fabric entrypoint loader. */
-    private PacketChannelEntrypoints() {
-    }
+    private PacketChannelEntrypoints() {}
 
     /**
-     * Invokes each provider with a registrar accepting a payload identifier and a named ordering group.
-     * The JDK-only entrypoint contract lets Fabric leave compatibility classes unloaded when this mod is absent.
+     * Invokes each provider with a registrar accepting a payload identifier and a named ordering
+     * group. The JDK-only entrypoint contract lets Fabric leave compatibility classes unloaded when
+     * this mod is absent.
      */
     @SuppressWarnings("unchecked")
     public static void initialize() {
         BiConsumer<String, String> registrar = PacketOrdering::register;
         for (Consumer<BiConsumer<String, String>> provider :
-                FabricLoader.getInstance().getEntrypoints("raknetify:packet_channels", Consumer.class)) {
+                FabricLoader.getInstance()
+                        .getEntrypoints("raknetify:packet_channels", Consumer.class)) {
             provider.accept(registrar);
         }
     }

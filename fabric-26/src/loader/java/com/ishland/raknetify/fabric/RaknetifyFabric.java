@@ -31,13 +31,11 @@ import net.fabricmc.loader.api.entrypoint.PreLaunchEntrypoint;
 public final class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
 
     /** Creates the Fabric entrypoint without loading Minecraft classes during prelaunch. */
-    public RaknetifyFabric() {
-    }
+    public RaknetifyFabric() {}
 
     /** Defers Minecraft class access until the normal initialization phase. */
     @Override
-    public void onPreLaunch() {
-    }
+    public void onPreLaunch() {}
 
     /** Initializes routing and transport configuration after Fabric has prepared Minecraft. */
     @Override

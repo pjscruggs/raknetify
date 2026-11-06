@@ -24,31 +24,38 @@
 
 package com.ishland.raknetify.fabric;
 
-import com.ishland.raknetify.minecraft.ModPlatform;
 import com.ishland.raknetify.fabric.common.util.PacketChannelEntrypoints;
+import com.ishland.raknetify.minecraft.ModPlatform;
+
 import net.fabricmc.api.EnvType;
 import net.fabricmc.loader.api.FabricLoader;
+
 import java.nio.file.Path;
 
 /** Connects the shared modern runtime to Fabric's discovery and entrypoint APIs. */
 public final class FabricPlatform implements ModPlatform {
 
     /** Creates the service provider without accessing Minecraft classes. */
-    public FabricPlatform() {
-    }
+    public FabricPlatform() {}
 
     /**
      * Reads the built-in Minecraft mod entry without loading game code.
+     *
      * @return Minecraft's normalized version from Fabric's built-in mod metadata
      */
     @Override
     public String minecraftVersion() {
-        return FabricLoader.getInstance().getModContainer("minecraft").orElseThrow()
-                .getMetadata().getVersion().getFriendlyString();
+        return FabricLoader.getInstance()
+                .getModContainer("minecraft")
+                .orElseThrow()
+                .getMetadata()
+                .getVersion()
+                .getFriendlyString();
     }
 
     /**
      * Selects the physical distribution used for client-only initialization.
+     *
      * @return whether Fabric is running the physical client distribution
      */
     @Override
@@ -58,6 +65,7 @@ public final class FabricPlatform implements ModPlatform {
 
     /**
      * Determines whether development-only mixin auditing is appropriate.
+     *
      * @return whether Fabric is running in a development environment
      */
     @Override
@@ -67,16 +75,18 @@ public final class FabricPlatform implements ModPlatform {
 
     /**
      * Checks Fabric's already-discovered mods without initializing their classes.
+     *
      * @param id Fabric mod identifier
      * @return whether Fabric discovered this mod
      */
     @Override
-    public boolean isModLoaded(String id) {
+    public boolean isModLoaded(final String id) {
         return FabricLoader.getInstance().isModLoaded(id);
     }
 
     /**
      * Uses the instance configuration directory selected by the loader.
+     *
      * @return Fabric's configured instance configuration directory
      */
     @Override
