@@ -28,8 +28,6 @@ import com.ishland.raknetify.common.connection.TransferSupport;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.embedded.EmbeddedChannel;
-import net.fabricmc.loader.api.FabricLoader;
-import net.fabricmc.loader.api.metadata.version.VersionPredicate;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -44,8 +42,7 @@ import java.util.function.Consumer;
 final class TransferNativeTest {
 
     /** Runtime namespace determines only reflective class and member names, never packet behavior. */
-    private static final boolean MODERN = FabricLoader.getInstance().getModContainer("minecraft").orElseThrow()
-            .getMetadata().getVersion().getFriendlyString().startsWith("26.");
+    private static final boolean MODERN = FixtureRuntime.modern();
 
     /** Prevents constructing a stateless isolated witness. */
     private TransferNativeTest() {
@@ -56,9 +53,8 @@ final class TransferNativeTest {
      * @throws Exception if a native API changes, a hook is absent or a packet differs from the expected result
      */
     static void verify() throws Exception {
-        if (!VersionPredicate.parse(">=1.20.5").test(FabricLoader.getInstance().getModContainer("minecraft")
-                .orElseThrow().getMetadata().getVersion())) return;
-        Path config = FabricLoader.getInstance().getGameDir().resolve("transfer-test-config");
+        if (!FixtureRuntime.atLeast("1.20.5")) return;
+        Path config = FixtureRuntime.gameDirectory().resolve("transfer-test-config");
         Files.createDirectories(config);
         Files.writeString(config.resolve("raknetify2-transfers.json"),
                 "{\"destinations\":[{\"host\":\"fixture.test\",\"tcpPort\":25565,\"udpPort\":25570}]}");

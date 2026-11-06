@@ -1,5 +1,6 @@
 /** Builds client address checks without linking them to a particular Minecraft namespace. */
 repositories { maven { url = 'https://maven.fabricmc.net/' } }
+sourceSets.main.java.srcDir 'src/shared/java'
 dependencies { compileOnly "net.fabricmc:fabric-loader:${project.loader_version}" }
 dependencies {
     compileOnly project(':common')

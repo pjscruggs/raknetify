@@ -28,7 +28,6 @@ import com.ishland.raknetify.common.connection.RakNetSimpleMultiChannelCodec;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.embedded.EmbeddedChannel;
-import net.fabricmc.loader.api.FabricLoader;
 import network.ycc.raknet.frame.Frame;
 import network.ycc.raknet.frame.FrameData;
 import network.ycc.raknet.packet.FramedPacket;
@@ -116,8 +115,7 @@ final class GameplayOrderingTest {
      * @throws ReflectiveOperationException if packet lookup or the routing entry point fails
      */
     static int[] nativeRoutes(String[][] packets) throws ReflectiveOperationException {
-        boolean modern = FabricLoader.getInstance().getModContainer("minecraft").orElseThrow()
-                .getMetadata().getVersion().getFriendlyString().startsWith("26.");
+        boolean modern = FixtureRuntime.modern();
         Method route = Class.forName("com.ishland.raknetify.fabric.common.connection.RakNetMultiChannel")
                 .getMethod("getPacketChannelOverride", Class.class, boolean.class);
         int[] routes = new int[packets.length];

@@ -28,8 +28,6 @@ import com.ishland.raknetify.common.connection.RakNetSimpleMultiChannelCodec;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.embedded.EmbeddedChannel;
-import net.fabricmc.loader.api.FabricLoader;
-import net.fabricmc.loader.api.metadata.version.VersionPredicate;
 import network.ycc.raknet.frame.Frame;
 import network.ycc.raknet.frame.FrameData;
 import network.ycc.raknet.pipeline.FrameOrderIn;
@@ -71,8 +69,7 @@ final class SignedChatTest {
             {"class_7640", "ServerboundChatAckPacket"}
     };
     /** Selects class names while the installed game supplies all signing and validation behavior. */
-    private static final boolean MODERN = FabricLoader.getInstance().getModContainer("minecraft").orElseThrow()
-            .getMetadata().getVersion().getFriendlyString().startsWith("26.");
+    private static final boolean MODERN = FixtureRuntime.modern();
 
     /** Prevents construction of the stateless test entry point. */
     private SignedChatTest() {
@@ -83,12 +80,10 @@ final class SignedChatTest {
      * @throws Exception if a native signature, packet dependency or reflected API fails the witness
      */
     static void verify() throws Exception {
-        if (!VersionPredicate.parse(">=1.19.3").test(FabricLoader.getInstance().getModContainer("minecraft")
-                .orElseThrow().getMetadata().getVersion())) return;
+        if (!FixtureRuntime.atLeast("1.19.3")) return;
         GameplayOrderingTest.verifyGroup(SERVERBOUND, "serverbound chat");
         GameplayOrderingTest.verifyGroup(CLIENTBOUND, "clientbound chat");
-        if (VersionPredicate.parse(">=1.20.5").test(FabricLoader.getInstance().getModContainer("minecraft")
-                .orElseThrow().getMetadata().getVersion())) GameplayOrderingTest.verifyGroup(SIGNED_COMMANDS, "signed command");
+        if (FixtureRuntime.atLeast("1.20.5")) GameplayOrderingTest.verifyGroup(SIGNED_COMMANDS, "signed command");
         bootstrapRegistries();
         Chain chain = new Chain();
         chain.requireRejectedOrder();
