@@ -21,6 +21,8 @@
     "client.hud.MixinDebugHud1_21_8",
     "common.MixinCCConnect",
     "common.MixinClientConnection",
+    "common.MixinTransferDestination",
+    "common.MixinTransferQueryAnswer",
     "common.MixinClientConnection1",
     "common.MixinClientConnection1_20_2",
     "common.encryption.MixinClientConnection",
@@ -36,6 +38,7 @@
     "server.MixinPlayerManager1_20_2",
     "server.MixinServerCommonNetworkHandler",
     "server.MixinServerLoginNetworkHandler",
+    "server.MixinTransferNegotiation",
     "server.MixinServerNetworkIo",
     "server.MixinServerNetworkIo1",
     "server.MixinServerPlayNetworkHandler1_20_1"
@@ -44,6 +47,7 @@
     "defaultRequire": 1
   },
   "client": [
+    "client.MixinTransferCapability",
     "access.IClientPlayNetworkHandler",
     "access.IDebugHudEntries",
     "client.MixinMultiplayerServerListPinger1_20_2",

@@ -120,25 +120,27 @@ public class RaknetifyFabricMixinPlugin implements IMixinConfigPlugin {
      */
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+        if (mixinClassName.contains(".MixinTransfer") && !AFTER_1_20_4) return false;
         if (mixinClassName.startsWith("com.ishland.raknetify.fabric.mixin.client.")) {
             return FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT
                     && isClientMixinSupported(mixinClassName);
         }
-        if (mixinClassName.equals("com.ishland.raknetify.fabric.mixin.server.MixinServerPlayNetworkHandler1_20_1"))
-            return !AFTER_1_20_1;
-        if (mixinClassName.equals("com.ishland.raknetify.fabric.mixin.server.MixinServerCommonNetworkHandler"))
-            return AFTER_1_20_1;
-        if (mixinClassName.equals("com.ishland.raknetify.fabric.mixin.server.MixinPlayerManager1_20_2"))
-            return AFTER_1_20_1;
-        if (mixinClassName.equals("com.ishland.raknetify.fabric.mixin.common.MixinClientConnection1_20_2"))
-            return AFTER_1_20_1;
-        if (mixinClassName.equals("com.ishland.raknetify.fabric.mixin.server.MixinPlayerManager1_20_1"))
-            return !AFTER_1_20_1;
-        if (mixinClassName.equals("com.ishland.raknetify.fabric.mixin.access.INetworkState1_20_4"))
-            return !AFTER_1_20_4;
-        if (mixinClassName.equals("com.ishland.raknetify.fabric.mixin.access.INetworkStateInternalPacketHandler"))
-            return !AFTER_1_20_4;
-        return true;
+        return isSharedMixinSupported(mixinClassName);
+    }
+
+    /**
+     * Groups server and connection hooks by the native API transition they require.
+     * @param mixinClassName fully qualified candidate mixin name
+     * @return whether the active Minecraft version contains that hook's target
+     */
+    private static boolean isSharedMixinSupported(String mixinClassName) {
+        return switch (mixinClassName.substring("com.ishland.raknetify.fabric.mixin.".length())) {
+            case "server.MixinServerPlayNetworkHandler1_20_1", "server.MixinPlayerManager1_20_1" -> !AFTER_1_20_1;
+            case "server.MixinServerCommonNetworkHandler", "server.MixinPlayerManager1_20_2",
+                    "common.MixinClientConnection1_20_2" -> AFTER_1_20_1;
+            case "access.INetworkState1_20_4", "access.INetworkStateInternalPacketHandler" -> !AFTER_1_20_4;
+            default -> true;
+        };
     }
 
 
