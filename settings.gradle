@@ -29,6 +29,7 @@ include "neoforge"
 include "forge"
 include "velocity"
 include "bungee"
+include "spigot"
 include "common"
 
 include "transport-test-legacy"

@@ -1,0 +1,7 @@
+name: Raknetify2
+version: '${version}'
+main: com.ishland.raknetify.spigot.RaknetifySpigotPlugin
+api-version: '26.3'
+description: RakNet transport for Minecraft clients.
+website: https://github.com/pjscruggs/raknetify2
+authors: [ishland, pjscruggs]

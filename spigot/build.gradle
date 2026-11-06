@@ -1,0 +1,39 @@
+/** Builds the Bukkit plugin without bundling the server API or Minecraft classes. */
+apply plugin: 'com.gradleup.shadow'
+
+base { archivesName = project.archives_base_name + '-spigot' }
+group = project.maven_group + '.spigot'
+
+repositories {
+    maven { url = 'https://hub.spigotmc.org/nexus/repository/snapshots/' }
+}
+
+configurations { shadowInclude }
+
+dependencies {
+    compileOnly 'org.spigotmc:spigot-api:26.3-R0.1-20261026.080323-10'
+    compileOnly 'io.netty:netty-all:4.1.25.Final'
+    shadowInclude implementation(project(':common'))
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.3'
+    testImplementation 'io.netty:netty-all:4.1.25.Final'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testRuntimeOnly 'com.google.code.gson:gson:2.9.0'
+    testRuntimeOnly 'com.google.guava:guava:31.1-jre'
+}
+
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('plugin.yml') { expand version: inputs.properties.version }
+}
+
+shadowJar {
+    configurations = [project.configurations.shadowInclude]
+    archiveClassifier = ''
+    dependencies { exclude(dependency('it.unimi.dsi:fastutil:.*')) }
+    exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA'
+    from rootProject.file('LICENSE')
+}
+
+jar { archiveClassifier = 'dev' }
+assemble.dependsOn shadowJar
+test { useJUnitPlatform() }
