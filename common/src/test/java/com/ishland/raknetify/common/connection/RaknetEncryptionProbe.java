@@ -64,6 +64,10 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
 
     /** Message size used to exercise either ordinary or fragmented encrypted frames. */
     private final int payloadSize;
+    /** Expected native outcome: fixture echo, rejected session, or rejected nonce. */
+    private final String mode;
+    /** Distinguishes the initial encryption request from the later native rejection packet. */
+    private boolean answered;
 
     /** Completes only after the encrypted server reply is decrypted and checked. */
     private final CompletableFuture<Void> result = new CompletableFuture<>();
@@ -73,21 +77,29 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
      *
      * @param protocol native Minecraft protocol number
      * @param payloadSize bounded plaintext challenge length
+     * @param mode expected echo or native authentication rejection
      */
-    private RaknetEncryptionProbe(int protocol, int payloadSize) {
+    private RaknetEncryptionProbe(int protocol, int payloadSize, String mode) {
         this.protocol = protocol;
         this.payloadSize = payloadSize;
+        this.mode = mode;
     }
 
     /**
      * Connects only to loopback and fails if the encrypted exchange does not complete within thirty seconds.
      *
-     * @param args local server port, native protocol number, and optional plaintext payload size
+     * @param args local port, native protocol, optional payload size, and optional echo, rejected-session, or rejected-nonce mode
      * @throws Exception if transport, RSA, AES, or challenge validation fails
+     * @throws IllegalArgumentException if the requested verification mode is unknown
      */
     public static void main(String[] args) throws Exception {
         int port = Integer.parseInt(args[0]);
-        RaknetEncryptionProbe probe = new RaknetEncryptionProbe(Integer.parseInt(args[1]), args.length > 2 ? Integer.parseInt(args[2]) : 8);
+        String mode = args.length > 3 ? args[3] : "echo";
+        if (!java.util.Set.of("echo", "rejected-session", "rejected-nonce").contains(mode)) {
+            throw new IllegalArgumentException("Unknown encryption verification mode");
+        }
+        RaknetEncryptionProbe probe = new RaknetEncryptionProbe(Integer.parseInt(args[1]),
+                args.length > 2 ? Integer.parseInt(args[2]) : 8, mode);
         NioEventLoopGroup group = new NioEventLoopGroup(1);
         Channel channel = null;
         try {
@@ -97,7 +109,8 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
             channel.writeAndFlush(RaknetStatusProbe.handshake(port, probe.protocol, 2)).sync();
             channel.writeAndFlush(probe.hello()).sync();
             probe.result.get(30, TimeUnit.SECONDS);
-            System.out.println("PASS native RSA and bidirectional RakNet encryption");
+            System.out.println(mode.equals("echo") ? "PASS native RSA and bidirectional RakNet encryption"
+                    : "PASS native authentication " + mode);
         } finally {
             if (channel != null) channel.close().sync();
             group.shutdownGracefully(0, 5, TimeUnit.SECONDS).sync();
@@ -151,7 +164,10 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
      */
     @Override
     protected void channelRead0(ChannelHandlerContext context, Object message) throws Exception {
-        if (message instanceof ByteBuf buffer) answerKey(context, buffer);
+        if (message instanceof ByteBuf buffer) {
+            if (answered && !mode.equals("echo")) checkRejection(buffer);
+            else answerKey(context, buffer);
+        }
         if (message instanceof FrameData frame && frame.getPacketId() == 0xF8) checkReply(frame);
     }
 
@@ -169,6 +185,7 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
         readBytes(request);
         PublicKey key = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(readBytes(request)));
         byte[] nonce = readBytes(request);
+        if (mode.equals("rejected-nonce")) nonce[0] ^= 1;
         if (request.isReadable()) request.readBoolean();
         if (request.isReadable()) throw new IllegalArgumentException("Trailing encryption request data");
         ByteBuf reply = Unpooled.buffer().writeByte(1);
@@ -176,13 +193,28 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
         if (protocol >= 759 && protocol <= 760) reply.writeBoolean(true);
         writeBytes(reply, encrypt(key, nonce));
         context.writeAndFlush(reply);
+        answered = true;
+        if (mode.equals("rejected-nonce")) return;
         context.pipeline().addBefore("game", "encryption", new MultiChannellingEncryption(KEY));
+        if (mode.equals("rejected-session")) return;
         ByteBuf challenge = TransportTestPayload.create(context.alloc(), payloadSize, CHALLENGE);
         try {
             context.writeAndFlush(FrameData.create(context.alloc(), 0xF7, challenge));
         } finally {
             challenge.release();
         }
+    }
+
+    /**
+     * Requires a native login disconnect after the expected plaintext or encrypted key-exchange outcome.
+     * @param packet decoded login packet whose frame cipher has already been applied when appropriate
+     * @throws IllegalArgumentException if the server admits the probe or sends a malformed disconnect
+     */
+    private void checkRejection(ByteBuf packet) {
+        if (RaknetStatusProbe.readVarint(packet) != 0 || !packet.isReadable()) {
+            throw new IllegalArgumentException("Expected a native login rejection");
+        }
+        result.complete(null);
     }
 
     /**

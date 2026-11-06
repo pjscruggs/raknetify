@@ -25,6 +25,7 @@
 package com.ishland.raknetify.test;
 
 import com.ishland.raknetify.common.connection.MultiChannelingStreamingCompression;
+import com.ishland.raknetify.common.connection.MultiChannellingEncryption;
 import com.ishland.raknetify.fabric.mixin.access.IClientConnection;
 import io.netty.channel.Channel;
 import net.minecraft.client.Minecraft;
@@ -100,6 +101,9 @@ public final class NativeConnectionTest {
         if (!(channel.config() instanceof RakNet.Config)) throw new IllegalStateException("Client joined over TCP");
         var compression = channel.pipeline().get(MultiChannelingStreamingCompression.class);
         if (compression == null || !compression.isActive()) throw new IllegalStateException("Streaming compression was not negotiated");
+        if (Boolean.getBoolean("raknetify.test.encrypted") && channel.pipeline().get(MultiChannellingEncryption.class) == null) {
+            throw new IllegalStateException("Native login did not negotiate frame encryption");
+        }
         listener.sendChat("Raknetify transport fixture joined");
         System.out.println("PASS native RakNet login, configuration and playable world");
         armed = false;

@@ -14,6 +14,7 @@ import sys
 import threading
 from types import SimpleNamespace
 import urllib.request
+import urllib.parse
 import uuid
 import zipfile
 
@@ -240,7 +241,7 @@ def client(args, lock, metadata, join=False):
               'natives_directory': folder / 'natives', 'launcher_name': 'TransportTests', 'launcher_version': '1'}
     arguments = launcher_arguments(metadata['arguments']['jvm'] + profile['arguments']['jvm'], values)
     command = [args.java, '-Xmx1G', '-Dstdout.encoding=UTF-8', '-Dstderr.encoding=UTF-8',
-               '-Draknetify.test.join=' + str(join).lower(), *arguments,
+               '-Draknetify.test.join=' + str(join).lower(), *authentication_arguments(args), *arguments,
                profile['mainClass'], *profile['arguments']['game'], '--gameDir', str(folder),
                '--assetsDir', str(asset_directory), '--assetIndex', metadata['assetIndex']['id'],
                '--version', profile['id'], '--accessToken', '0', '--username', 'TransportProbe', '--offlineDeveloperMode']
@@ -258,6 +259,18 @@ def client(args, lock, metadata, join=False):
     witnesses.check_transfer_witness(lock['minecraft'], text)
     check_failures(log)
     print('PASS', args.loader, lock['minecraft'], 'packaged client contracts', flush=True)
+
+
+def authentication_arguments(args):
+    """Enable encrypted test logins only through a loopback discovery fixture using the launcher's synthetic identity."""
+    url = getattr(args, 'discovery_url', None)
+    if url is None:
+        return []
+    parsed = urllib.parse.urlsplit(url)
+    assert parsed.scheme == 'http' and parsed.hostname == '127.0.0.1', 'Session fixture must use loopback'
+    assert parsed.port and parsed.path == '/discovery', 'Invalid session fixture endpoint'
+    assert not any((parsed.username, parsed.password, parsed.query, parsed.fragment)), 'Unexpected fixture URL fields'
+    return ['-Dminecraft.api.discovery.host=' + url, '-Draknetify.test.encrypted=true']
 
 
 def check_failures(log):
