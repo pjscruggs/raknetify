@@ -1,47 +1,49 @@
-# Automatically build the project and run any configured tests for every push
-# and submitted pull request. This can help catch issues that only occur on
-# certain platforms or Java versions, and provides a first line of defence
-# against bad commits.
-
 name: build
-on: [pull_request, push]
+on: [pull_request, push, workflow_dispatch]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        # Use these Java versions
-        java: [
-          25,    # Required by Minecraft 26.x
-        ]
-        os: [ubuntu-24.04]
-    runs-on: ${{ matrix.os }}
+  quality:
+    name: Documentation and complexity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-      - name: checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: gradle/actions/wrapper-validation@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: 25
+      - name: Check every owned source before compiling Minecraft modules
+        run: ./gradlew -p quality check --no-daemon --max-workers=2
+      - name: Preserve quality reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Quality-reports
+          path: quality/build/reports/
+          if-no-files-found: warn
+
+  build:
+    name: Build and unit tests
+    needs: quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
-      - name: validate gradle wrapper
-        uses: gradle/actions/wrapper-validation@v4
-      - name: setup jdk 17
-        id: java17
-        uses: actions/setup-java@v5
+      - uses: actions/setup-java@v5
         with:
-          distribution: 'zulu'
-          java-version: 17
-      - name: setup jdk 21
-        id: java21
-        uses: actions/setup-java@v5
-        with:
-          distribution: 'zulu'
-          java-version: 21
-      - name: setup jdk ${{ matrix.java }}
-        uses: actions/setup-java@v5
-        with:
-          distribution: 'zulu'
-          java-version: ${{ matrix.java }}
-          java-package: jdk
+          distribution: zulu
+          java-version: 25
       - uses: actions/cache@v4
         with:
           path: |
@@ -51,40 +53,116 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: |
             ${{ runner.os }}-gradle-
-      - name: build
-        run: ./gradlew build :common:transportProbe
+      - name: Build and run unit tests
+        run: ./gradlew build :common:transportProbe --no-daemon --max-workers=2
+      - name: Preserve unit and quality reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Build-test-reports
+          path: |
+            **/build/test-results/**/*.xml
+            **/build/reports/**
+          if-no-files-found: warn
+      - name: Stage the exact artifacts for downstream verification
+        run: |
+          mkdir -p ci-input
+          cp --parents fabric-universal/build/libs/*.jar fabric-universal/build/generated/metadata/compatibility.json ci-input/
+          cp --parents velocity/build/libs/*-all.jar bungee/build/libs/*-all.jar ci-input/
+          cp --parents transport-test-legacy/build/libs/*.jar transport-test-modern/build/libs/*.jar transport-test-client/build/libs/*.jar ci-input/
+          cp --parents -r common/build/transport-probe ci-input/
+          cd ci-input
+          find . -type f -print0 | sort -z | xargs -0 sha256sum > ../test-inputs.sha256
+          mv ../test-inputs.sha256 .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Test-inputs
+          path: ci-input/
+          if-no-files-found: error
+          retention-days: 7
+
+  network:
+    name: ${{ matrix.suite }} (${{ matrix.os }})
+    needs: build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        os: [ubuntu-24.04]
+        suite: [server, proxy, disconnect, polymer, krypton, polymer-krypton, packetfixer, packetfixer-krypton, packetfixer-polymer-krypton, ordering, transfers, transfer-clients, fastipping]
+        include:
+          - os: windows-2022
+            suite: disconnect
+          - os: windows-2022
+            suite: ordering
+          - os: windows-2022
+            suite: proxy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v5
+        with:
+          name: Test-inputs
+      - name: Verify exact build inputs
+        run: sha256sum --check test-inputs.sha256
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-java@v5
+        id: java17
+        with:
+          distribution: zulu
+          java-version: 17
+      - uses: actions/setup-java@v5
+        id: java21
+        with:
+          distribution: zulu
+          java-version: 21
+      - uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: 25
       - name: Linux server transports
+        if: matrix.suite == 'server'
         run: >-
-          python3 .github/scripts/server-smoke.py --discard-runtime
+          python .github/scripts/server-smoke.py --discard-runtime
           --jar fabric-universal/build/libs/*.jar
           --work-dir "$RUNNER_TEMP/raknetify-smoke"
           --java-17 "${{ steps.java17.outputs.path }}/bin/java"
           --java-21 "${{ steps.java21.outputs.path }}/bin/java"
       - name: Velocity and FastMOTD compatibility
+        if: matrix.suite == 'proxy'
         run: >-
-          python3 .github/scripts/proxy-smoke.py
+          python .github/scripts/proxy-smoke.py
           --jar velocity/build/libs/*-all.jar
           --probe-dir common/build/transport-probe
           --work-dir "$RUNNER_TEMP/raknetify-smoke/fastmotd"
       - name: Disconnect reasons under packet loss
+        if: matrix.suite == 'disconnect'
         run: >-
-          python3 .github/scripts/disconnect-smoke.py --discard-runtime
+          python .github/scripts/disconnect-smoke.py --discard-runtime
           --jar fabric-universal/build/libs/*.jar
           --probe-dir common/build/transport-probe
           --work-dir "$RUNNER_TEMP/raknetify-smoke/disconnect"
           --java-17 "${{ steps.java17.outputs.path }}/bin/java"
           --java-21 "${{ steps.java21.outputs.path }}/bin/java"
       - name: Polymer shared-port compatibility
+        if: matrix.suite == 'polymer'
         run: >-
-          python3 .github/scripts/server-smoke.py --discard-runtime
+          python .github/scripts/server-smoke.py --discard-runtime
           --jar fabric-universal/build/libs/*.jar
           --work-dir "$RUNNER_TEMP/raknetify-smoke/polymer"
           --java-21 "${{ steps.java21.outputs.path }}/bin/java"
           --versions 1.21.11 26.3
           --polymer-lock .github/polymer-versions.json
       - name: Krypton version compatibility
+        if: matrix.suite == 'krypton'
         run: >-
-          python3 .github/scripts/server-smoke.py --discard-runtime
+          python .github/scripts/server-smoke.py --discard-runtime
           --jar fabric-universal/build/libs/*.jar
           --work-dir "$RUNNER_TEMP/raknetify-smoke/krypton"
           --java-17 "${{ steps.java17.outputs.path }}/bin/java"
@@ -93,8 +171,9 @@ jobs:
           --encryption-legacy transport-test-legacy/build/libs/*.jar
           --encryption-modern transport-test-modern/build/libs/*.jar
       - name: Polymer and Krypton together
+        if: matrix.suite == 'polymer-krypton'
         run: >-
-          python3 .github/scripts/server-smoke.py --discard-runtime
+          python .github/scripts/server-smoke.py --discard-runtime
           --jar fabric-universal/build/libs/*.jar
           --work-dir "$RUNNER_TEMP/raknetify-smoke/polymer-krypton"
           --java-21 "${{ steps.java21.outputs.path }}/bin/java"
@@ -104,8 +183,9 @@ jobs:
           --encryption-legacy transport-test-legacy/build/libs/*.jar
           --encryption-modern transport-test-modern/build/libs/*.jar
       - name: PacketFixer version compatibility
+        if: matrix.suite == 'packetfixer'
         run: >-
-          python3 .github/scripts/server-smoke.py --discard-runtime
+          python .github/scripts/server-smoke.py --discard-runtime
           --jar fabric-universal/build/libs/*.jar
           --work-dir "$RUNNER_TEMP/raknetify-smoke/packetfixer"
           --java-17 "${{ steps.java17.outputs.path }}/bin/java"
@@ -114,8 +194,9 @@ jobs:
           --encryption-legacy transport-test-legacy/build/libs/*.jar
           --encryption-modern transport-test-modern/build/libs/*.jar
       - name: PacketFixer and Krypton together
+        if: matrix.suite == 'packetfixer-krypton'
         run: >-
-          python3 .github/scripts/server-smoke.py --discard-runtime
+          python .github/scripts/server-smoke.py --discard-runtime
           --jar fabric-universal/build/libs/*.jar
           --work-dir "$RUNNER_TEMP/raknetify-smoke/packetfixer-krypton"
           --java-17 "${{ steps.java17.outputs.path }}/bin/java"
@@ -126,8 +207,9 @@ jobs:
           --encryption-legacy transport-test-legacy/build/libs/*.jar
           --encryption-modern transport-test-modern/build/libs/*.jar
       - name: PacketFixer with Polymer and Krypton
+        if: matrix.suite == 'packetfixer-polymer-krypton'
         run: >-
-          python3 .github/scripts/server-smoke.py --discard-runtime
+          python .github/scripts/server-smoke.py --discard-runtime
           --jar fabric-universal/build/libs/*.jar
           --work-dir "$RUNNER_TEMP/raknetify-smoke/packetfixer-polymer-krypton"
           --java-21 "${{ steps.java21.outputs.path }}/bin/java"
@@ -138,16 +220,18 @@ jobs:
           --encryption-legacy transport-test-legacy/build/libs/*.jar
           --encryption-modern transport-test-modern/build/libs/*.jar
       - name: Native gameplay and signed chat ordering
+        if: matrix.suite == 'ordering'
         run: >-
-          python3 .github/scripts/client-address-check.py --ordering-only
+          python .github/scripts/client-address-check.py --ordering-only
           --jar fabric-universal/build/libs/*.jar
           --fixture transport-test-client/build/libs/*.jar
           --work-dir "$RUNNER_TEMP/raknetify-smoke/ordering"
           --java-17 "${{ steps.java17.outputs.path }}/bin/java"
           --java-21 "${{ steps.java21.outputs.path }}/bin/java"
       - name: Native transfer negotiation
+        if: matrix.suite == 'transfers'
         run: >-
-          python3 .github/scripts/transfer-smoke.py --discard-runtime
+          python .github/scripts/transfer-smoke.py --discard-runtime
           --jar fabric-universal/build/libs/*.jar
           --encryption-legacy transport-test-legacy/build/libs/*.jar
           --encryption-modern transport-test-modern/build/libs/*.jar
@@ -155,37 +239,51 @@ jobs:
           --java-21 "${{ steps.java21.outputs.path }}/bin/java"
           --companion-lock .github/polymer-versions.json
       - name: Transfer clients with Fabric API and Polymer
+        if: matrix.suite == 'transfer-clients'
         run: >-
-          python3 .github/scripts/client-address-check.py --ordering-only
+          python .github/scripts/client-address-check.py --ordering-only
           --jar fabric-universal/build/libs/*.jar
           --fixture transport-test-client/build/libs/*.jar
           --lock .github/polymer-versions.json
           --work-dir "$RUNNER_TEMP/raknetify-smoke/transfer-clients"
           --java-21 "${{ steps.java21.outputs.path }}/bin/java"
       - name: Fast IP Ping client addresses
+        if: matrix.suite == 'fastipping'
         run: >-
-          python3 .github/scripts/client-address-check.py
+          python .github/scripts/client-address-check.py
           --jar fabric-universal/build/libs/*.jar
           --fixture transport-test-client/build/libs/*.jar
           --lock .github/fastipping-versions.json
           --work-dir "$RUNNER_TEMP/raknetify-smoke/fastipping"
           --java-17 "${{ steps.java17.outputs.path }}/bin/java"
           --java-21 "${{ steps.java21.outputs.path }}/bin/java"
-      - name: capture network smoke logs
+      - name: Preserve native test logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Linux-network-smoke-logs
+          name: Network-${{ matrix.os }}-${{ matrix.suite }}
           path: ${{ runner.temp }}/raknetify-smoke/**/*.log
-      - name: prepare downloads
+          if-no-files-found: warn
+
+  downloads:
+    name: Verified downloads
+    needs: [quality, build, network]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: Test-inputs
+      - name: Verify and prepare release files
         run: |
-          mkdir -p "$RUNNER_TEMP/raknetify-downloads"
-          cp fabric-universal/build/libs/*.jar "$RUNNER_TEMP/raknetify-downloads/"
-          cp fabric-universal/build/generated/metadata/compatibility.json "$RUNNER_TEMP/raknetify-downloads/"
-          cp velocity/build/libs/*-all.jar bungee/build/libs/*-all.jar "$RUNNER_TEMP/raknetify-downloads/"
-      - name: capture build artifacts
-        if: ${{ runner.os == 'Linux' && matrix.java == '25' }} # Only upload artifacts built from latest java on one OS
-        uses: actions/upload-artifact@v4
+          sha256sum --check test-inputs.sha256
+          mkdir -p downloads
+          cp fabric-universal/build/libs/*.jar fabric-universal/build/generated/metadata/compatibility.json downloads/
+          cp velocity/build/libs/*-all.jar bungee/build/libs/*-all.jar downloads/
+          cd downloads
+          sha256sum ./*.jar ./compatibility.json > SHA256SUMS
+      - uses: actions/upload-artifact@v4
         with:
           name: Artifacts
-          path: ${{ runner.temp }}/raknetify-downloads/*
+          path: downloads/*
+          if-no-files-found: error
