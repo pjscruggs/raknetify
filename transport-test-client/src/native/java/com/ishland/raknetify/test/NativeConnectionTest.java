@@ -50,6 +50,8 @@ public final class NativeConnectionTest {
     private static boolean finishing;
     /** Whether the final chat was sent and the fixture is waiting for the server's gameplay acknowledgement. */
     private static boolean chatSent;
+    /** Application channel retained while the fixture verifies complete transport shutdown. */
+    private static Channel closingChannel;
 
     /** Monotonic deadline covering resource loading, login and receipt of the first playable world. */
     private static long deadline;
@@ -77,7 +79,7 @@ public final class NativeConnectionTest {
     public static void tick(Minecraft minecraft) {
         if (!armed) return;
         try {
-            if (System.nanoTime() > deadline) throw new IllegalStateException("Native RakNet join timed out");
+            if (System.nanoTime() > deadline) throw timeoutFailure();
             if (!connecting) {
                 if (minecraft.gui.overlay() == null) connect(minecraft);
                 return;
@@ -118,12 +120,30 @@ public final class NativeConnectionTest {
         if (!verifyWorldChanges(minecraft)) return;
         if (!verifyChatAcknowledgement(minecraft)) return;
         finishing = true;
-        channel.closeFuture().addListener(future -> minecraft.execute(() -> {
-            System.out.println("PASS native RakNet login, configuration and playable world");
-            armed = false;
-            minecraft.stop();
-        }));
+        closingChannel = channel;
+        channel.closeFuture().addListener(future -> {
+            System.out.println("PASS native transport close completed");
+            minecraft.execute(() -> {
+                System.out.println("PASS native RakNet login, configuration and playable world");
+                armed = false;
+                minecraft.stop();
+            });
+        });
         listener.getConnection().disconnect(Component.literal("Transport fixture complete"));
+    }
+
+    /**
+     * Distinguishes incomplete gameplay from a stranded close and reports both transport layers.
+     * @return failure containing the actual channel state at the bounded deadline
+     */
+    private static IllegalStateException timeoutFailure() {
+        StringBuilder state = new StringBuilder("Native RakNet test timed out, finishing=" + finishing);
+        for (Channel channel = closingChannel; channel != null; channel = channel.parent()) {
+            state.append("\n").append(channel.getClass().getName()).append(" open=").append(channel.isOpen())
+                    .append(" active=").append(channel.isActive()).append(" registered=").append(channel.isRegistered())
+                    .append(" closed=").append(channel.closeFuture().isDone()).append(" pipeline=").append(channel.pipeline());
+        }
+        return new IllegalStateException(state.toString());
     }
 
     /**
