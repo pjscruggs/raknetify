@@ -25,6 +25,7 @@
 package com.ishland.raknetify.common.voice;
 
 import com.google.gson.JsonParser;
+
 import de.maxhenkel.voicechat.api.ForgeVoicechatPlugin;
 import de.maxhenkel.voicechat.api.VoicechatPlugin;
 import de.maxhenkel.voicechat.api.events.EventRegistration;
@@ -38,11 +39,15 @@ import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.Set;
 
-/** Optional server integration discovered through the voice API on Fabric, Forge, NeoForge and Bukkit. */
+/**
+ * Optional server integration discovered through the voice API on Fabric, Forge, NeoForge and
+ * Bukkit.
+ */
 @ForgeVoicechatPlugin
 public final class VoicePlugin implements VoicechatPlugin {
     /**
      * Identifies this socket provider in Simple Voice Chat's plugin registry.
+     *
      * @return stable provider identifier
      */
     @Override
@@ -52,25 +57,31 @@ public final class VoicePlugin implements VoicechatPlugin {
 
     /**
      * Selects the shared socket before voice opens its configured UDP port.
+     *
      * @param registration voice server lifecycle event registry
      * @throws UncheckedIOException if the operator's configuration cannot be read
      */
     @Override
-    public void registerEvents(EventRegistration registration) {
+    public void registerEvents(final EventRegistration registration) {
         try {
-            if (!enabled(Path.of("config", "raknetify2-voicechat.json"))) return;
+            if (!enabled(Path.of("config", "raknetify2-voicechat.json"))) {
+                return;
+            }
         } catch (IOException failure) {
-            throw new UncheckedIOException("Cannot read Raknetify2 voice sharing configuration", failure);
+            throw new UncheckedIOException(
+                    "Cannot read Raknetify2 voice sharing configuration", failure);
         }
         registration.registerEvent(VoicechatServerStartingEvent.class, VoicePlugin::starting);
     }
 
     /**
-     * Refuses to replace another socket provider after the operator explicitly enabled shared-port voice.
+     * Refuses to replace another socket provider after the operator explicitly enabled shared-port
+     * voice.
+     *
      * @param event voice server's pre-bind event
      * @throws IllegalStateException if another plugin already selected a custom socket
      */
-    private static void starting(VoicechatServerStartingEvent event) {
+    private static void starting(final VoicechatServerStartingEvent event) {
         if (event.getSocketImplementation() != null) {
             throw new IllegalStateException("Another voice plugin already supplies a UDP socket");
         }
@@ -79,17 +90,23 @@ public final class VoicePlugin implements VoicechatPlugin {
 
     /**
      * Requires an explicit boolean opt-in and rejects misspelled or oversized configuration.
+     *
      * @param path server-local configuration file
      * @return enabled setting, or false only when the file is absent
      * @throws IOException if reading fails or the document exceeds one KiB
      * @throws IllegalArgumentException if its schema is not exactly one boolean enabled field
      */
-    static boolean enabled(Path path) throws IOException {
+    static boolean enabled(final Path path) throws IOException {
         try (var input = Files.newInputStream(path)) {
             byte[] bytes = input.readNBytes(1025);
-            if (bytes.length > 1024) throw new IOException("Voice sharing configuration exceeds one KiB");
-            var root = JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8)).getAsJsonObject();
-            if (!root.keySet().equals(Set.of("enabled")) || !root.get("enabled").isJsonPrimitive()
+            if (bytes.length > 1024) {
+                throw new IOException("Voice sharing configuration exceeds one KiB");
+            }
+            var root =
+                    JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8))
+                            .getAsJsonObject();
+            if (!root.keySet().equals(Set.of("enabled"))
+                    || !root.get("enabled").isJsonPrimitive()
                     || !root.getAsJsonPrimitive("enabled").isBoolean()) {
                 throw new IllegalArgumentException("Expected only a boolean enabled field");
             }

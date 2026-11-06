@@ -26,8 +26,9 @@ package com.ishland.raknetify.common.connection;
 
 import io.netty.buffer.ByteBuf;
 
-import javax.crypto.Cipher;
 import java.security.GeneralSecurityException;
+
+import javax.crypto.Cipher;
 
 // TODO [VanillaCopy] from fabric
 /**
@@ -36,17 +37,13 @@ import java.security.GeneralSecurityException;
  * Instances must stay on one pipeline thread because the cipher and scratch arrays are mutable.
  */
 public class PacketEncryptionManager {
-    /**
-     * Initialized encryption or decryption cipher reused for independent frame payloads.
-     */
+    /** Initialized encryption or decryption cipher reused for independent frame payloads. */
     private final Cipher cipher;
-    /**
-     * Reusable input array grown to fit the largest payload seen so far.
-     */
+
+    /** Reusable input array grown to fit the largest payload seen so far. */
     private byte[] conversionBuffer = new byte[0];
-    /**
-     * Reusable output array sized using the cipher's output-size bound.
-     */
+
+    /** Reusable output array sized using the cipher's output-size bound. */
     private byte[] encryptionBuffer = new byte[0];
 
     /**
@@ -54,18 +51,18 @@ public class PacketEncryptionManager {
      *
      * @param cipher initialized encryption or decryption cipher used only by this manager
      */
-    protected PacketEncryptionManager(Cipher cipher) {
+    protected PacketEncryptionManager(final Cipher cipher) {
         this.cipher = cipher;
     }
 
     /**
-     * Consumes the buffer's readable bytes into reusable scratch storage.
-     * Only the original readable-byte count is valid, since the array may be larger than the payload.
+     * Consumes the buffer's readable bytes into reusable scratch storage. Only the original
+     * readable-byte count is valid, since the array may be larger than the payload.
      *
      * @param buf input buffer whose reader index advances to its writer index
      * @return reusable array containing the consumed bytes at offset zero
      */
-    private byte[] toByteArray(ByteBuf buf) {
+    private byte[] toByteArray(final ByteBuf buf) {
         int i = buf.readableBytes();
         if (this.conversionBuffer.length < i) {
             this.conversionBuffer = new byte[i];
@@ -76,14 +73,14 @@ public class PacketEncryptionManager {
     }
 
     /**
-     * Transforms one complete payload and appends the cipher output to the destination.
-     * Consumes the input reader index but leaves reference-count ownership with the caller.
+     * Transforms one complete payload and appends the cipher output to the destination. Consumes
+     * the input reader index but leaves reference-count ownership with the caller.
      *
      * @param buf source payload to encrypt or decrypt
      * @param result destination buffer receiving the transformed bytes
      * @throws GeneralSecurityException if the cipher cannot process the payload
      */
-    public void doWork(ByteBuf buf, ByteBuf result) throws GeneralSecurityException {
+    public void doWork(final ByteBuf buf, final ByteBuf result) throws GeneralSecurityException {
         int i = buf.readableBytes();
         byte[] bs = this.toByteArray(buf);
         int outputSize = this.cipher.getOutputSize(i);
@@ -91,7 +88,7 @@ public class PacketEncryptionManager {
             this.encryptionBuffer = new byte[outputSize];
         }
 
-        result.writeBytes(this.encryptionBuffer, 0, this.cipher.doFinal(bs, 0, i, this.encryptionBuffer));
+        result.writeBytes(
+                this.encryptionBuffer, 0, this.cipher.doFinal(bs, 0, i, this.encryptionBuffer));
     }
 }
-

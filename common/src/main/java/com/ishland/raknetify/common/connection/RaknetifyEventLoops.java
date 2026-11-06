@@ -26,6 +26,7 @@ package com.ishland.raknetify.common.connection;
 
 import com.google.common.base.Suppliers;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+
 import io.netty.channel.DefaultEventLoopGroup;
 import io.netty.channel.epoll.EpollEventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -38,88 +39,75 @@ import java.util.function.Supplier;
  */
 public class RaknetifyEventLoops {
 
-    /**
-     * Memoized Java NIO event loops for server UDP sockets.
-     */
+    /** Memoized Java NIO event loops for server UDP sockets. */
     public static final Supplier<NioEventLoopGroup> NIO_EVENT_LOOP_GROUP =
-            Suppliers.memoize(() -> new NioEventLoopGroup(
+            Suppliers.memoize(() ->
+                    new NioEventLoopGroup(
                             0,
                             new ThreadFactoryBuilder()
                                     .setThreadFactory(FastThreadLocalThread::new)
                                     .setNameFormat("Netty Server NIO Raknetify #%d")
                                     .setDaemon(true)
-                                    .build()
-                    )
-            );
+                                    .build()));
 
-    /**
-     * Memoized Java NIO event loops for client UDP sockets.
-     */
+    /** Memoized Java NIO event loops for client UDP sockets. */
     public static final Supplier<NioEventLoopGroup> NIO_CLIENT_EVENT_LOOP_GROUP =
-            Suppliers.memoize(() -> new NioEventLoopGroup(
+            Suppliers.memoize(() ->
+                    new NioEventLoopGroup(
                             0,
                             new ThreadFactoryBuilder()
                                     .setThreadFactory(FastThreadLocalThread::new)
                                     .setNameFormat("Netty Client NIO Raknetify #%d")
                                     .setDaemon(true)
-                                    .build()
-                    )
-            );
+                                    .build()));
 
     /**
-     * Memoized Linux epoll event loops for server UDP sockets, requested only when epoll is available.
+     * Memoized Linux epoll event loops for server UDP sockets, requested only when epoll is
+     * available.
      */
     public static final Supplier<EpollEventLoopGroup> EPOLL_EVENT_LOOP_GROUP =
-            Suppliers.memoize(() -> new EpollEventLoopGroup(
+            Suppliers.memoize(() ->
+                    new EpollEventLoopGroup(
                             0,
                             new ThreadFactoryBuilder()
                                     .setThreadFactory(FastThreadLocalThread::new)
                                     .setNameFormat("Netty Server Epoll Raknetify  #%d")
                                     .setDaemon(true)
-                                    .build()
-                    )
-            );
+                                    .build()));
 
     /**
-     * Memoized Linux epoll event loops for client UDP sockets, requested only when epoll is available.
+     * Memoized Linux epoll event loops for client UDP sockets, requested only when epoll is
+     * available.
      */
     public static final Supplier<EpollEventLoopGroup> EPOLL_CLIENT_EVENT_LOOP_GROUP =
-            Suppliers.memoize(() -> new EpollEventLoopGroup(
+            Suppliers.memoize(() ->
+                    new EpollEventLoopGroup(
                             0,
                             new ThreadFactoryBuilder()
                                     .setThreadFactory(FastThreadLocalThread::new)
                                     .setNameFormat("Netty Client Epoll Raknetify  #%d")
                                     .setDaemon(true)
-                                    .build()
-                    )
-            );
+                                    .build()));
 
-    /**
-     * Memoized server application event loops separating packet processing from UDP I/O.
-     */
+    /** Memoized server application event loops separating packet processing from UDP I/O. */
     public static final Supplier<DefaultEventLoopGroup> DEFAULT_EVENT_LOOP_GROUP =
-            Suppliers.memoize(() -> new DefaultEventLoopGroup(
+            Suppliers.memoize(() ->
+                    new DefaultEventLoopGroup(
                             0,
                             new ThreadFactoryBuilder()
                                     .setThreadFactory(FastThreadLocalThread::new)
                                     .setNameFormat("Netty Server App Raknetify #%d")
                                     .setDaemon(true)
-                                    .build()
-                    )
-            );
+                                    .build()));
 
-    /**
-     * Memoized client application event loops separating packet processing from UDP I/O.
-     */
+    /** Memoized client application event loops separating packet processing from UDP I/O. */
     public static final Supplier<DefaultEventLoopGroup> DEFAULT_CLIENT_EVENT_LOOP_GROUP =
-            Suppliers.memoize(() -> new DefaultEventLoopGroup(
+            Suppliers.memoize(() ->
+                    new DefaultEventLoopGroup(
                             0,
                             new ThreadFactoryBuilder()
                                     .setThreadFactory(FastThreadLocalThread::new)
                                     .setNameFormat("Netty Client App Raknetify #%d")
                                     .setDaemon(true)
-                                    .build()
-                    )
-            );
-
+                                    .build()));
 }

@@ -39,63 +39,62 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
- * Polls local interface addresses so wildcard UDP listeners can follow network changes.
- * Callbacks run on a shared polling thread. Consumers must dispatch channel mutations to
- * the appropriate event loop or platform scheduler.
+ * Polls local interface addresses so wildcard UDP listeners can follow network changes. Callbacks
+ * run on a shared polling thread. Consumers must dispatch channel mutations to the appropriate
+ * event loop or platform scheduler.
  */
 public class NetworkInterfaceListener {
 
-    /**
-     * Single daemon polling thread with slightly reduced priority.
-     */
-    private static final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(
-            r -> {
+    /** Single daemon polling thread with slightly reduced priority. */
+    private static final ScheduledExecutorService scheduler =
+            Executors.newSingleThreadScheduledExecutor(r -> {
                 final Thread thread = new Thread(r, "Raknetify IFListener");
                 thread.setDaemon(true);
                 thread.setPriority(Thread.NORM_PRIORITY - 1);
                 return thread;
-            }
-    );
+            });
 
     static {
-        scheduler.scheduleAtFixedRate(() -> {
-            try {
-                pollChanges();
-            } catch (Throwable t) {
-                t.printStackTrace();
-            }
-        }, 0, 10, TimeUnit.SECONDS);
+        scheduler.scheduleAtFixedRate(
+                () -> {
+                    try {
+                        pollChanges();
+                    } catch (Throwable t) {
+                        t.printStackTrace();
+                    }
+                },
+                0,
+                10,
+                TimeUnit.SECONDS);
     }
 
-    /**
-     * Forces initialization of the shared ten-second interface polling task.
-     */
-    public static void init() {
-    }
+    /** Forces initialization of the shared ten-second interface polling task. */
+    public static void init() {}
 
-    /**
-     * Addresses seen on active interfaces at the last poll, owned by the polling thread.
-     */
+    /** Addresses seen on active interfaces at the last poll, owned by the polling thread. */
     private static final ObjectOpenHashSet<InetAddress> knownAddresses = new ObjectOpenHashSet<>();
-    /**
-     * Identity-based synchronized callback set, allowing platform-specific listener removal.
-     */
-    private static final ReferenceSet<Consumer<InterfaceAddressChangeEvent>> listeners = ReferenceSets.synchronize(new ReferenceOpenHashSet<>());
+
+    /** Identity-based synchronized callback set, allowing platform-specific listener removal. */
+    private static final ReferenceSet<Consumer<InterfaceAddressChangeEvent>> listeners =
+            ReferenceSets.synchronize(new ReferenceOpenHashSet<>());
 
     /**
-     * Compares active interface addresses with the previous snapshot and publishes additions and removals.
-     * Enumeration or callback failures are logged so the scheduled task can run again.
+     * Compares active interface addresses with the previous snapshot and publishes additions and
+     * removals. Enumeration or callback failures are logged so the scheduled task can run again.
      */
     private static void pollChanges() {
         try {
-            final List<NetworkInterface> networkInterfaces = NetworkInterface.networkInterfaces().toList();
+            final List<NetworkInterface> networkInterfaces =
+                    NetworkInterface.networkInterfaces().toList();
             ObjectOpenHashSet<InetAddress> currentAddresses = new ObjectOpenHashSet<>();
             for (NetworkInterface networkInterface : networkInterfaces) {
                 if (networkInterface.isUp()) {
                     for (InetAddress address : networkInterface.inetAddresses().toList()) {
                         currentAddresses.add(address);
                         if (knownAddresses.add(address)) {
-                            listeners.forEach(consumer -> consumer.accept(new InterfaceAddressChangeEvent(true, address)));
+                            listeners.forEach(consumer ->
+                                    consumer.accept(
+                                            new InterfaceAddressChangeEvent(true, address)));
                         }
                     }
                 }
@@ -105,7 +104,8 @@ public class NetworkInterfaceListener {
                 final InetAddress address = iterator.next();
                 if (!currentAddresses.contains(address)) {
                     iterator.remove();
-                    listeners.forEach(consumer -> consumer.accept(new InterfaceAddressChangeEvent(false, address)));
+                    listeners.forEach(consumer ->
+                            consumer.accept(new InterfaceAddressChangeEvent(false, address)));
                 }
             }
         } catch (Throwable t) {
@@ -118,7 +118,7 @@ public class NetworkInterfaceListener {
      *
      * @param consumer callback invoked on the shared interface polling thread
      */
-    public static void addListener(Consumer<InterfaceAddressChangeEvent> consumer) {
+    public static void addListener(final Consumer<InterfaceAddressChangeEvent> consumer) {
         listeners.add(consumer);
     }
 
@@ -127,7 +127,7 @@ public class NetworkInterfaceListener {
      *
      * @param consumer callback identity to remove
      */
-    public static void removeListener(Consumer<InterfaceAddressChangeEvent> consumer) {
+    public static void removeListener(final Consumer<InterfaceAddressChangeEvent> consumer) {
         listeners.remove(consumer);
     }
 
@@ -137,7 +137,5 @@ public class NetworkInterfaceListener {
      * @param added true for an address addition, false for a removal
      * @param address local IPv4 or IPv6 address affected by the change
      */
-    public record InterfaceAddressChangeEvent(boolean added, InetAddress address) {
-    }
-
+    public record InterfaceAddressChangeEvent(boolean added, InetAddress address) {}
 }

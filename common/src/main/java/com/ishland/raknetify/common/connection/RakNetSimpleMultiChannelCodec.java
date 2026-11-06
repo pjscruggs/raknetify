@@ -26,13 +26,16 @@ package com.ishland.raknetify.common.connection;
 
 import com.ishland.raknetify.common.Constants;
 import com.ishland.raknetify.common.util.MathUtil;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
+
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
+
 import network.ycc.raknet.frame.FrameData;
 import network.ycc.raknet.packet.FramedPacket;
 
@@ -42,25 +45,19 @@ import java.util.List;
 import java.util.Queue;
 
 /**
- * Wraps Minecraft payloads in RakNet frames and selects their ordering or reliability policy.
- * The channel event loop owns negotiation and pending writes. Override registration is synchronized
+ * Wraps Minecraft payloads in RakNet frames and selects their ordering or reliability policy. The
+ * channel event loop owns negotiation and pending writes. Override registration is synchronized
  * because protocol handlers can be installed from another thread.
  */
 public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
 
-    /**
-     * Pipeline name used to locate the Minecraft-to-RakNet framing handler.
-     */
+    /** Pipeline name used to locate the Minecraft-to-RakNet framing handler. */
     public static final String NAME = "raknetify-simple-multi-channel-data-codec";
 
-    /**
-     * Local outbound marker requesting multichannel negotiation rather than a wire payload.
-     */
+    /** Local outbound marker requesting multichannel negotiation rather than a wire payload. */
     public static final Object SIGNAL_START_MULTICHANNEL = new Object();
 
-    /**
-     * Frame identifier used to wrap and recognize Minecraft payloads.
-     */
+    /** Frame identifier used to wrap and recognize Minecraft payloads. */
     private final int packetId;
 
     /**
@@ -68,14 +65,13 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
      *
      * @param packetId RakNet frame identifier reserved for Minecraft payloads
      */
-    public RakNetSimpleMultiChannelCodec(int packetId) {
+    public RakNetSimpleMultiChannelCodec(final int packetId) {
         this.packetId = packetId;
     }
 
-    /**
-     * Immutable classifier snapshot published after registration changes, in precedence order.
-     */
+    /** Immutable classifier snapshot published after registration changes, in precedence order. */
     private volatile OverrideHandler[] handlers = new OverrideHandler[0];
+
     /** Serializes rare registration changes without locking the packet-processing path. */
     private final Object handlersLock = new Object();
 
@@ -85,7 +81,7 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
      * @param handler packet classifier to consult during encoding
      * @return this codec for chained registration
      */
-    public RakNetSimpleMultiChannelCodec addHandler(OverrideHandler handler) {
+    public RakNetSimpleMultiChannelCodec addHandler(final OverrideHandler handler) {
         synchronized (handlersLock) {
             OverrideHandler[] updated = Arrays.copyOf(handlers, handlers.length + 1);
             updated[updated.length - 1] = handler;
@@ -99,10 +95,12 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
      *
      * @param handler previously registered classifier to remove
      */
-    public void removeHandler(OverrideHandler handler) {
+    public void removeHandler(final OverrideHandler handler) {
         synchronized (handlersLock) {
             int index = Arrays.asList(handlers).indexOf(handler);
-            if (index < 0) return;
+            if (index < 0) {
+                return;
+            }
             OverrideHandler[] updated = new OverrideHandler[handlers.length - 1];
             System.arraycopy(handlers, 0, updated, 0, index);
             System.arraycopy(handlers, index + 1, updated, index, updated.length - index);
@@ -117,25 +115,22 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
      * @param clazz runtime type used to identify the classifier
      * @return the first matching classifier, or null when none is installed
      */
-    public <T> T getHandler(Class<T> clazz) {
+    public <T> T getHandler(final Class<T> clazz) {
         for (OverrideHandler handler : handlers) {
-            if (clazz.isInstance(handler)) return clazz.cast(handler);
+            if (clazz.isInstance(handler)) {
+                return clazz.cast(handler);
+            }
         }
         return null;
     }
 
-    /**
-     * Whether the negotiation marker has completed and channel overrides may affect delivery.
-     */
+    /** Whether the negotiation marker has completed and channel overrides may affect delivery. */
     private boolean isMultichannelEnabled;
 
-    /**
-     * Whether Minecraft writes must wait for the multichannel negotiation marker.
-     */
+    /** Whether Minecraft writes must wait for the multichannel negotiation marker. */
     private boolean queuePendingWrites;
-    /**
-     * Owned encoded frames and their completion promises awaiting negotiation completion.
-     */
+
+    /** Owned encoded frames and their completion promises awaiting negotiation completion. */
     private final Queue<PendingWrite> pendingWrites = new ArrayDeque<>();
 
     /**
@@ -145,14 +140,15 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
      * @throws Exception if superclass removal processing fails
      */
     @Override
-    public void handlerRemoved(ChannelHandlerContext ctx) throws Exception {
+    public void handlerRemoved(final ChannelHandlerContext ctx) throws Exception {
         super.handlerRemoved(ctx);
         failPendingWrites(new IllegalStateException("Channel closed"));
     }
 
     /**
      * Handles local negotiation markers and transfers Minecraft buffers into routed frames.
-     * Consumed payload buffers are released after encoding. Unrelated pipeline messages pass through.
+     * Consumed payload buffers are released after encoding. Unrelated pipeline messages pass
+     * through.
      *
      * @param ctx outbound context used for allocation and frame delivery
      * @param msg Minecraft payload, local control marker, or unrelated pipeline message
@@ -160,7 +156,9 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
      * @throws Exception if forwarding through the superclass fails
      */
     @Override
-    public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+    public void write(
+            final ChannelHandlerContext ctx, final Object msg, final ChannelPromise promise)
+            throws Exception {
         if (this.queuePendingWrites && msg instanceof ByteBuf buf) {
             queueWrite(ctx, buf, promise);
             return;
@@ -172,7 +170,10 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
         }
         if (msg == SynchronizationLayer.SYNC_REQUEST_OBJECT) {
             if (this.isMultichannelEnabled) {
-                if (Constants.DEBUG) System.out.println("Raknetify: [MultiChannellingDataCodec] Stopped multichannel");
+                if (Constants.DEBUG) {
+                    System.out.println(
+                            "Raknetify: [MultiChannellingDataCodec] Stopped multichannel");
+                }
                 this.isMultichannelEnabled = false;
                 super.write(ctx, msg, promise);
             } else {
@@ -198,48 +199,59 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
         super.write(ctx, msg, promise);
     }
 
-
     /**
      * Starts channel negotiation and holds writes until the ordered marker has been delivered.
      *
      * @param ctx outbound context used to send the marker on channel seven
-     * @param promise notification for accepting the local start request, not the peer acknowledgement
+     * @param promise notification for accepting the local start request, not the peer
+     *     acknowledgement
      */
-    private void startMultichannel(ChannelHandlerContext ctx, ChannelPromise promise) {
+    private void startMultichannel(final ChannelHandlerContext ctx, final ChannelPromise promise) {
         promise.trySuccess();
-        if (this.isMultichannelEnabled) return;
+        if (this.isMultichannelEnabled) {
+            return;
+        }
         if (!this.isMultichannelAvailable()) {
-            System.out.println("Raknetify: [MultiChannellingDataCodec] Failed to start multichannel: not available");
+            System.out.println(
+                    "Raknetify: [MultiChannellingDataCodec] Failed to start multichannel: not"
+                            + " available");
             return;
         }
         final ByteBuf buf = ctx.alloc().buffer(1).writeByte(0);
         try {
-            final FrameData frameData = FrameData.create(ctx.alloc(), Constants.RAKNET_PING_PACKET_ID, buf);
+            final FrameData frameData =
+                    FrameData.create(ctx.alloc(), Constants.RAKNET_PING_PACKET_ID, buf);
             frameData.setOrderChannel(7);
             this.queuePendingWrites = true;
-            ctx.write(frameData).addListener(future -> {
-                if (!future.isSuccess()) {
-                    failPendingWrites(future.cause());
-                    ctx.close();
-                    return;
-                }
-                isMultichannelEnabled = true;
-                if (Constants.DEBUG) System.out.println("Raknetify: [MultiChannellingDataCodec] Started multichannel");
-                flushPendingWrites(ctx);
-            });
+            ctx.write(frameData)
+                    .addListener(future -> {
+                        if (!future.isSuccess()) {
+                            failPendingWrites(future.cause());
+                            ctx.close();
+                            return;
+                        }
+                        isMultichannelEnabled = true;
+                        if (Constants.DEBUG) {
+                            System.out.println(
+                                    "Raknetify: [MultiChannellingDataCodec] Started multichannel");
+                        }
+                        flushPendingWrites(ctx);
+                    });
         } finally {
             buf.release();
         }
     }
 
     /**
-     * Holds an encoded packet until multichannel negotiation finishes, completing discarded packets immediately.
+     * Holds an encoded packet until multichannel negotiation finishes, completing discarded packets
+     * immediately.
      *
      * @param ctx allocation context for the encoded frame
      * @param buf Minecraft packet payload released after encoding
      * @param promise completion notification retained with an accepted frame
      */
-    private void queueWrite(ChannelHandlerContext ctx, ByteBuf buf, ChannelPromise promise) {
+    private void queueWrite(
+            final ChannelHandlerContext ctx, final ByteBuf buf, final ChannelPromise promise) {
         try {
             final FrameData data = encode0(ctx, buf);
             if (data != null) {
@@ -253,12 +265,13 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
     }
 
     /**
-     * Removes and releases each held frame before notifying its caller, including already cancelled writes.
-     * Emptying the queue also prevents a late marker acknowledgement from forwarding released frames.
+     * Removes and releases each held frame before notifying its caller, including already cancelled
+     * writes. Emptying the queue also prevents a late marker acknowledgement from forwarding
+     * released frames.
      *
      * @param failure negotiation or channel-removal cause preserved on every unfinished write
      */
-    private void failPendingWrites(Throwable failure) {
+    private void failPendingWrites(final Throwable failure) {
         PendingWrite pendingWrite;
         while ((pendingWrite = this.pendingWrites.poll()) != null) {
             pendingWrite.frameData.release();
@@ -275,7 +288,7 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
      * @param buf readable Minecraft payload with its packet ID at the reader index
      * @return an owned frame, or null for empty payloads or an explicit discard rule
      */
-    private FrameData encode0(ChannelHandlerContext ctx, ByteBuf buf) {
+    private FrameData encode0(final ChannelHandlerContext ctx, final ByteBuf buf) {
         if (buf.isReadable()) {
             final int packetChannelOverride = getChannelOverride(buf, !isMultichannelEnabled);
             if (packetChannelOverride == Integer.MIN_VALUE) {
@@ -283,12 +296,13 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
             }
             final FrameData frameData = FrameData.create(ctx.alloc(), packetId, buf);
             if (isMultichannelEnabled || queuePendingWrites) {
-                if (packetChannelOverride >= 0)
+                if (packetChannelOverride >= 0) {
                     frameData.setOrderChannel(packetChannelOverride);
-                else if (packetChannelOverride == -1)
+                } else if (packetChannelOverride == -1) {
                     frameData.setReliability(FramedPacket.Reliability.RELIABLE);
-                else if (packetChannelOverride == -2)
+                } else if (packetChannelOverride == -2) {
                     frameData.setReliability(FramedPacket.Reliability.UNRELIABLE);
+                }
             }
             return frameData;
         }
@@ -301,7 +315,7 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
      *
      * @param ctx outbound context that receives the queued frames
      */
-    private void flushPendingWrites(ChannelHandlerContext ctx) {
+    private void flushPendingWrites(final ChannelHandlerContext ctx) {
         this.queuePendingWrites = false;
         PendingWrite pendingWrite;
         while ((pendingWrite = this.pendingWrites.poll()) != null) {
@@ -327,12 +341,15 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
      *
      * @param buf Minecraft payload inspected without consuming its reader index
      * @param suppressWarning whether classifiers should suppress unknown-packet diagnostics
-     * @return ordering channel, -1 for reliable unordered, -2 for unreliable, or Integer.MIN_VALUE to discard
+     * @return ordering channel, -1 for reliable unordered, -2 for unreliable, or Integer.MIN_VALUE
+     *     to discard
      */
-    protected int getChannelOverride(ByteBuf buf, boolean suppressWarning) {
+    protected int getChannelOverride(final ByteBuf buf, final boolean suppressWarning) {
         for (OverrideHandler handler : handlers) {
             final int override = handler.getChannelOverride(buf, suppressWarning);
-            if (override != 0) return override;
+            if (override != 0) {
+                return override;
+            }
         }
         return 0;
     }
@@ -346,7 +363,7 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
      * @throws Exception if superclass inbound processing fails
      */
     @Override
-    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+    public void channelRead(final ChannelHandlerContext ctx, final Object msg) throws Exception {
         if (msg instanceof FrameData packet && !packet.isFragment() && packet.getDataSize() > 0) {
             try {
                 if (packetId == packet.getPacketId()) {
@@ -365,14 +382,16 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
     }
 
     /**
-     * Extracts a Minecraft payload or retains an unrelated frame for a decoder output list.
-     * The caller retains responsibility for releasing the input frame. Negotiation markers produce no output.
+     * Extracts a Minecraft payload or retains an unrelated frame for a decoder output list. The
+     * caller retains responsibility for releasing the input frame. Negotiation markers produce no
+     * output.
      *
      * @param ctx decoder context, unused because the frame supplies its own retained payload
      * @param packet complete, nonfragmented frame to inspect
      * @param out output list receiving owned payload buffers or retained frames
      */
-    protected void decode(ChannelHandlerContext ctx, FrameData packet, List<Object> out) {
+    protected void decode(
+            final ChannelHandlerContext ctx, final FrameData packet, final List<Object> out) {
         assert !packet.isFragment();
         if (packet.getDataSize() > 0) {
             if (packetId == packet.getPacketId()) {
@@ -385,9 +404,7 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
         }
     }
 
-    /**
-     * Classifies a Minecraft packet without changing the payload reader index.
-     */
+    /** Classifies a Minecraft packet without changing the payload reader index. */
     @FunctionalInterface
     public interface OverrideHandler {
         /**
@@ -395,28 +412,24 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
          *
          * @param buf payload beginning with the Minecraft packet ID, which must remain unconsumed
          * @param suppressWarning whether an unknown packet should be inspected without a diagnostic
-         * @return zero to defer, a positive ordering channel, -1 for reliable unordered, -2 for unreliable,
-         *     or Integer.MIN_VALUE to discard the packet
+         * @return zero to defer, a positive ordering channel, -1 for reliable unordered, -2 for
+         *     unreliable, or Integer.MIN_VALUE to discard the packet
          */
         int getChannelOverride(ByteBuf buf, boolean suppressWarning);
     }
 
-    /**
-     * Uses a protocol-specific packet-ID table and warns once for each unknown packet ID.
-     */
+    /** Uses a protocol-specific packet-ID table and warns once for each unknown packet ID. */
     public static class PacketIdBasedOverrideHandler implements OverrideHandler {
 
         /**
          * Packet IDs already reported as unknown, preventing repeated diagnostics on a connection.
          */
         private final IntOpenHashSet unknownPacketIds = new IntOpenHashSet();
-        /**
-         * Private copy of the packet-ID routes supplied for this protocol direction.
-         */
+
+        /** Private copy of the packet-ID routes supplied for this protocol direction. */
         private final Int2IntOpenHashMap channelMapping;
-        /**
-         * Human-readable protocol and direction included in unknown-packet diagnostics.
-         */
+
+        /** Human-readable protocol and direction included in unknown-packet diagnostics. */
         private final String descriptiveProtocolStatus;
 
         /**
@@ -425,28 +438,31 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
          * @param channelMapping packet IDs mapped to ordering channels or special delivery policies
          * @param descriptiveProtocolStatus protocol and direction to identify in diagnostics
          */
-        public PacketIdBasedOverrideHandler(Int2IntMap channelMapping, String descriptiveProtocolStatus) {
+        public PacketIdBasedOverrideHandler(
+                final Int2IntMap channelMapping, final String descriptiveProtocolStatus) {
             this.channelMapping = new Int2IntOpenHashMap(channelMapping);
             this.descriptiveProtocolStatus = descriptiveProtocolStatus;
         }
 
         /**
-         * Reads the packet ID from a slice and looks up its delivery policy.
-         * An explicit unknown sentinel falls back to channel seven, with at most one warning per ID.
+         * Reads the packet ID from a slice and looks up its delivery policy. An explicit unknown
+         * sentinel falls back to channel seven, with at most one warning per ID.
          *
          * @param buf Minecraft payload whose reader index remains unchanged
          * @param suppressWarning whether an unknown ID should be handled silently
          * @return table policy, or channel seven for an Integer.MAX_VALUE table entry
          */
         @Override
-        public int getChannelOverride(ByteBuf buf, boolean suppressWarning) {
+        public int getChannelOverride(final ByteBuf buf, final boolean suppressWarning) {
             final ByteBuf slice = buf.slice();
             final int packetId = MathUtil.readVarInt(slice);
             final int override = this.channelMapping.get(packetId);
             if (override == Integer.MAX_VALUE) {
                 if (!suppressWarning) {
                     if (this.unknownPacketIds.add(packetId)) {
-                        System.err.println("Raknetify: Unknown packet id %d for %s".formatted(packetId, descriptiveProtocolStatus));
+                        System.err.println(
+                                "Raknetify: Unknown packet id %d for %s"
+                                        .formatted(packetId, descriptiveProtocolStatus));
                     }
                 }
                 return 7;
@@ -461,7 +477,5 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
      * @param frameData encoded frame released on removal or transferred when the queue drains
      * @param promise completion notification belonging to the original Minecraft write
      */
-    private record PendingWrite(FrameData frameData, ChannelPromise promise) {
-    }
-
+    private record PendingWrite(FrameData frameData, ChannelPromise promise) {}
 }

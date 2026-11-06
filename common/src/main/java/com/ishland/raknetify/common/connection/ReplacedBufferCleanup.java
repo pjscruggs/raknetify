@@ -30,18 +30,19 @@ import io.netty.buffer.ByteBuf;
 public final class ReplacedBufferCleanup {
 
     /** Prevents construction of the static ownership helper. */
-    private ReplacedBufferCleanup() {
-    }
+    private ReplacedBufferCleanup() {}
 
     /**
      * Releases the old owner's reference only when replacement left its reference count unchanged.
      * An unchanged buffer stays owned by its handler. A codec that already released the old
      * reference needs no cleanup, including when other owners still retain that buffer.
+     *
      * @param previous helper owned before decoding began
      * @param current helper owned after decoding finished or threw
      * @param references count observed before calling the native decoder
      */
-    public static void releaseAbandoned(ByteBuf previous, ByteBuf current, int references) {
+    public static void releaseAbandoned(
+            final ByteBuf previous, final ByteBuf current, final int references) {
         if (previous != current && references > 0 && previous.refCnt() == references) {
             previous.release();
         }

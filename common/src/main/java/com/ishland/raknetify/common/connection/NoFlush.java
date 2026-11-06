@@ -27,9 +27,7 @@ package com.ishland.raknetify.common.connection;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 
-/**
- * Suppresses application flush requests so RakNet retains control of its own send cadence.
- */
+/** Suppresses application flush requests so RakNet retains control of its own send cadence. */
 public class NoFlush extends ChannelDuplexHandler {
 
     /**
@@ -38,7 +36,7 @@ public class NoFlush extends ChannelDuplexHandler {
      * @param ctx outbound context intentionally left unflushed
      */
     @Override
-    public void flush(ChannelHandlerContext ctx) {
+    public void flush(final ChannelHandlerContext ctx) {
         // no-op
     }
 }

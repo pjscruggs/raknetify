@@ -26,6 +26,7 @@ package com.ishland.raknetify.common.connection;
 
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+
 import network.ycc.raknet.frame.FrameData;
 
 /**
@@ -36,7 +37,8 @@ public class FrameDataBlocker extends ChannelInboundHandlerAdapter {
     /**
      * Enables diagnostics for unconsumed frames through the raknetify.printBlockedFrames property.
      */
-    private static final boolean printBlockedFrames = Boolean.getBoolean("raknetify.printBlockedFrames");
+    private static final boolean printBlockedFrames =
+            Boolean.getBoolean("raknetify.printBlockedFrames");
 
     /**
      * Drops and releases remaining RakNet frames while forwarding decoded Minecraft messages.
@@ -46,9 +48,11 @@ public class FrameDataBlocker extends ChannelInboundHandlerAdapter {
      * @throws Exception reserved by the Netty callback contract
      */
     @Override
-    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+    public void channelRead(final ChannelHandlerContext ctx, final Object msg) throws Exception {
         if (msg instanceof FrameData data) {
-            if (printBlockedFrames) System.out.println("Blocked %s".formatted(msg));
+            if (printBlockedFrames) {
+                System.out.println("Blocked %s".formatted(msg));
+            }
             data.release();
             return;
         }

@@ -28,7 +28,8 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
 /**
- * Marks reflected transport and platform members accessible while preserving their concrete reflection type.
+ * Marks reflected transport and platform members accessible while preserving their concrete
+ * reflection type.
  */
 public class ReflectionUtil {
 
@@ -38,7 +39,7 @@ public class ReflectionUtil {
      * @param field reflected field whose access checks should be disabled
      * @return the supplied field with access checks disabled
      */
-    public static Field accessible(Field field) {
+    public static Field accessible(final Field field) {
         field.setAccessible(true);
         return field;
     }
@@ -49,9 +50,8 @@ public class ReflectionUtil {
      * @param method reflected method whose access checks should be disabled
      * @return the supplied method with access checks disabled
      */
-    public static Method accessible(Method method) {
+    public static Method accessible(final Method method) {
         method.setAccessible(true);
         return method;
     }
-
 }

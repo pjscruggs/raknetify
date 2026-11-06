@@ -34,44 +34,62 @@ import java.net.SocketException;
 
 /** Adapts an existing RakNet listener to Simple Voice Chat's supported server socket interface. */
 final class SharedVoiceSocket implements VoicechatSocket {
-    /** Publishes the listener and its inbox together so readers cannot observe half an open operation. */
+    /**
+     * Publishes the listener and its inbox together so readers cannot observe half an open
+     * operation.
+     */
     private volatile Attachment attachment;
+
     /** Prevents close during startup from being undone by a late listener bind. */
     private volatile boolean closed;
+
     /** A voice socket instance may be opened only once, including after a failed open. */
     private boolean opened;
 
     /**
      * Joins the matching RakNet listener instead of binding a competing UDP socket.
+     *
      * @param port voice configuration port, resolved from -1 by Simple Voice Chat itself
      * @param bindAddress voice configuration interface, empty for a wildcard
-     * @throws Exception if the bind request is invalid, no listener starts or the socket was already used
+     * @throws Exception if the bind request is invalid, no listener starts or the socket was
+     *     already used
      * @throws SocketException if voice closes while waiting for the game listener
      */
     @Override
-    public void open(int port, String bindAddress) throws Exception {
+    public void open(final int port, final String bindAddress) throws Exception {
         beginOpen(port);
-        InetAddress address = InetAddress.getByName(bindAddress.isBlank() ? "0.0.0.0" : bindAddress);
+        InetAddress address =
+                InetAddress.getByName(bindAddress.isBlank() ? "0.0.0.0" : bindAddress);
         VoiceHub selected = VoiceTransport.await(port, address, () -> closed);
         synchronized (this) {
-            if (closed) throw new SocketException("Voice socket closed during startup");
+            if (closed) {
+                throw new SocketException("Voice socket closed during startup");
+            }
             attachment = new Attachment(selected, selected.attach());
         }
     }
 
     /**
-     * Claims this instance's one permitted open attempt before waiting for another thread's listener.
+     * Claims this instance's one permitted open attempt before waiting for another thread's
+     * listener.
+     *
      * @param port configured voice UDP port
-     * @throws SocketException if this socket was used already or the port cannot identify a bound listener
+     * @throws SocketException if this socket was used already or the port cannot identify a bound
+     *     listener
      */
-    private synchronized void beginOpen(int port) throws SocketException {
-        if (opened || closed) throw new SocketException("Voice socket already opened or closed");
-        if (port < 1 || port > 65535) throw new SocketException("Shared voice port must match an explicit RakNet port");
+    private synchronized void beginOpen(final int port) throws SocketException {
+        if (opened || closed) {
+            throw new SocketException("Voice socket already opened or closed");
+        }
+        if (port < 1 || port > 65535) {
+            throw new SocketException("Shared voice port must match an explicit RakNet port");
+        }
         opened = true;
     }
 
     /**
      * Returns copied encrypted bytes for Simple Voice Chat to authenticate and decode normally.
+     *
      * @return received datagram with its original arrival time and physical reply address
      * @throws Exception if the attachment closes or its reader is interrupted
      */
@@ -83,13 +101,14 @@ final class SharedVoiceSocket implements VoicechatSocket {
 
     /**
      * Sends through the existing physical UDP port without adding RakNet reliability or ordering.
+     *
      * @param data complete encrypted voice packet
      * @param address peer address supplied by the voice server
      * @throws Exception if the socket is closed, the address is unsupported or the write fails
      * @throws SocketException if the destination is not a resolved UDP endpoint
      */
     @Override
-    public void send(byte[] data, SocketAddress address) throws Exception {
+    public void send(final byte[] data, final SocketAddress address) throws Exception {
         Attachment current = requireAttachment();
         if (!(address instanceof InetSocketAddress inet) || inet.isUnresolved()) {
             throw new SocketException("Voice destination must be a resolved UDP address");
@@ -98,18 +117,23 @@ final class SharedVoiceSocket implements VoicechatSocket {
     }
 
     /**
-     * Rejects reads and writes before successful startup instead of dereferencing a partial attachment.
+     * Rejects reads and writes before successful startup instead of dereferencing a partial
+     * attachment.
+     *
      * @return atomically published listener and open inbox
      * @throws SocketException if no open attachment exists
      */
     private Attachment requireAttachment() throws SocketException {
         Attachment current = attachment;
-        if (current == null || current.inbox().closed()) throw new SocketException("Voice socket is not open");
+        if (current == null || current.inbox().closed()) {
+            throw new SocketException("Voice socket is not open");
+        }
         return current;
     }
 
     /**
      * Reports the actual shared port used in Simple Voice Chat's client handshake.
+     *
      * @return bound port or -1 before a successful open
      */
     @Override
@@ -123,12 +147,15 @@ final class SharedVoiceSocket implements VoicechatSocket {
     @Override
     public synchronized void close() {
         closed = true;
-        if (attachment != null) attachment.inbox().close();
+        if (attachment != null) {
+            attachment.inbox().close();
+        }
         VoiceTransport.wakeWaiters();
     }
 
     /**
      * Lets the voice receive loop exit on either voice shutdown or game listener shutdown.
+     *
      * @return whether there is no currently usable attachment
      */
     @Override
@@ -139,19 +166,21 @@ final class SharedVoiceSocket implements VoicechatSocket {
 
     /**
      * Keeps the reply listener and received-packet queue from different startup stages from mixing.
+     *
      * @param hub listener owning the physical socket
      * @param inbox exclusive voice subscription on that listener
      */
-    private record Attachment(VoiceHub hub, VoiceHub.Inbox inbox) {
-    }
+    private record Attachment(VoiceHub hub, VoiceHub.Inbox inbox) {}
 
     /**
      * Keeps the optional API dependency confined to classes loaded only by Simple Voice Chat.
+     *
      * @param received copied wire data and arrival metadata
      */
     private record Packet(VoiceHub.Received received) implements RawUdpPacket {
         /**
          * Supplies heap-owned packet bytes to the voice decoder.
+         *
          * @return complete original UDP payload
          */
         @Override
@@ -161,6 +190,7 @@ final class SharedVoiceSocket implements VoicechatSocket {
 
         /**
          * Preserves arrival time rather than measuring time spent waiting in the inbox.
+         *
          * @return epoch millisecond timestamp
          */
         @Override
@@ -170,6 +200,7 @@ final class SharedVoiceSocket implements VoicechatSocket {
 
         /**
          * Supplies the endpoint used by voice nonces, connection checks and replies.
+         *
          * @return physical UDP sender
          */
         @Override

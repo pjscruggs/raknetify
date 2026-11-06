@@ -28,48 +28,68 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.socket.DatagramPacket;
 
-/** Validates proxy metadata before any datagram reaches RakNet's handshake or reliability decoders. */
+/**
+ * Validates proxy metadata before any datagram reaches RakNet's handshake or reliability decoders.
+ */
 final class ProxyDatagramHandler extends SimpleChannelInboundHandler<DatagramPacket> {
     /** Immutable policy inherited by each connected UDP socket. */
     private final ProxyProtocolConfig config;
+
     /** Listener-scoped bindings survive the transition to connected child sockets. */
     private final ProxySessions sessions;
 
     /**
      * Creates an independently owned handler sharing only synchronized identity state.
+     *
      * @param config explicit physical sender trust policy
      * @param sessions listener's bounded identity table
      */
-    ProxyDatagramHandler(ProxyProtocolConfig config, ProxySessions sessions) {
+    ProxyDatagramHandler(final ProxyProtocolConfig config, final ProxySessions sessions) {
         this.config = config;
         this.sessions = sessions;
     }
 
     /**
-     * Drops untrusted or malformed packets and forwards a retained payload with its physical routing intact.
-     * The enclosing inbound handler releases every original datagram, including rejected inputs.
+     * Drops untrusted or malformed packets and forwards a retained payload with its physical
+     * routing intact. The enclosing inbound handler releases every original datagram, including
+     * rejected inputs.
+     *
      * @param context physical socket pipeline
      * @param packet received UDP envelope
      */
     @Override
-    protected void channelRead0(ChannelHandlerContext context, DatagramPacket packet) {
-        if (!config.trusts(packet.sender().getAddress())) return;
+    protected void channelRead0(final ChannelHandlerContext context, final DatagramPacket packet) {
+        if (!config.trusts(packet.sender().getAddress())) {
+            return;
+        }
         ProxyProtocolHeader header;
         try {
-            header = ProxyProtocolHeader.present(packet.content())
-                    ? ProxyProtocolHeader.decode(packet.content(), packet.sender(), packet.recipient()) : null;
+            header =
+                    ProxyProtocolHeader.present(packet.content())
+                            ? ProxyProtocolHeader.decode(
+                                    packet.content(), packet.sender(), packet.recipient())
+                            : null;
         } catch (IllegalArgumentException malformed) {
             return;
         }
         int offset = header == null ? 0 : header.length();
-        if (packet.content().readableBytes() <= offset) return;
-        if (sessions.resolve(packet.sender(), header) == null) return;
+        if (packet.content().readableBytes() <= offset) {
+            return;
+        }
+        if (sessions.resolve(packet.sender(), header) == null) {
+            return;
+        }
         if (packet.content().getUnsignedByte(packet.content().readerIndex() + offset) == 0xff
                 && packet.content().readableBytes() - offset <= 4095) {
             sessions.voiceActivity(packet.sender());
         }
-        context.fireChannelRead(new DatagramPacket(packet.content().retainedSlice(
-                packet.content().readerIndex() + offset, packet.content().readableBytes() - offset),
-                packet.recipient(), packet.sender()));
+        context.fireChannelRead(
+                new DatagramPacket(
+                        packet.content()
+                                .retainedSlice(
+                                        packet.content().readerIndex() + offset,
+                                        packet.content().readableBytes() - offset),
+                        packet.recipient(),
+                        packet.sender()));
     }
 }

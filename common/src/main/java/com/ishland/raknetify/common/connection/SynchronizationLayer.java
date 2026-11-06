@@ -24,19 +24,23 @@
 
 package com.ishland.raknetify.common.connection;
 
+import static com.ishland.raknetify.common.util.ReflectionUtil.accessible;
+
 import com.ishland.raknetify.common.Constants;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
+
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.ints.IntSet;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
-import it.unimi.dsi.fastutil.objects.Reference2ReferenceLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceLinkedOpenHashSet;
+
 import network.ycc.raknet.frame.Frame;
 import network.ycc.raknet.frame.FrameData;
 import network.ycc.raknet.packet.FrameSet;
@@ -45,6 +49,7 @@ import network.ycc.raknet.pipeline.FrameJoiner;
 import network.ycc.raknet.pipeline.FrameOrderIn;
 import network.ycc.raknet.pipeline.FrameOrderOut;
 import network.ycc.raknet.pipeline.ReliabilityHandler;
+
 import org.apache.commons.math3.util.Pair;
 
 import java.lang.reflect.Array;
@@ -54,12 +59,10 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.PriorityQueue;
 
-import static com.ishland.raknetify.common.util.ReflectionUtil.accessible;
-
 /**
- * Abandons obsolete ordered traffic when Minecraft changes worlds or protocol phases.
- * A reliable control frame advances the peer ordering and sequence cursors before queued new
- * traffic resumes. All mutable transport state is accessed on the owning channel event loop.
+ * Abandons obsolete ordered traffic when Minecraft changes worlds or protocol phases. A reliable
+ * control frame advances the peer ordering and sequence cursors before queued new traffic resumes.
+ * All mutable transport state is accessed on the owning channel event loop.
  */
 public class SynchronizationLayer extends ChannelDuplexHandler {
 
@@ -73,60 +76,61 @@ public class SynchronizationLayer extends ChannelDuplexHandler {
     //
     // Response callback is handled using reliable transport
 
-    /**
-     * Local outbound request and inbound user event indicating an ordering resynchronization.
-     */
+    /** Local outbound request and inbound user event indicating an ordering resynchronization. */
     public static final Object SYNC_REQUEST_OBJECT = new Object();
 
-    /**
-     * Transport implementation class containing one inbound ordering channel queue.
-     */
+    /** Transport implementation class containing one inbound ordering channel queue. */
     static final Class<?> CLASS_QUEUE;
-    /**
-     * Transport implementation class retaining fragments of an incomplete frame.
-     */
+
+    /** Transport implementation class retaining fragments of an incomplete frame. */
     static final Class<?> CLASS_FRAME_JOINER_BUILDER;
-    /**
-     * Reflective access to the last delivered index, advanced to skip obsolete ordered packets.
-     */
+
+    /** Reflective access to the last delivered index, advanced to skip obsolete ordered packets. */
     static final Field FIELD_QUEUE_LAST_ORDER_INDEX;
-    /**
-     * Transport cleanup method that releases fragments held by an abandoned frame builder.
-     */
+
+    /** Transport cleanup method that releases fragments held by an abandoned frame builder. */
     static final Method METHOD_QUEUE_BUILDER_RELEASE;
-    /**
-     * Resolved transport method for clearing an inbound ordered queue.
-     */
+
+    /** Resolved transport method for clearing an inbound ordered queue. */
     static final Method METHOD_QUEUE_CLEAR;
+
     /**
      * Reflective access to the outgoing frame-set sequence cursor sent in a synchronization marker.
      */
     static final Field FIELD_RELIABILITY_NEXT_SEND_SEQ_ID;
+
     /**
      * Reflective access to the incoming sequence cursor advanced after a synchronization marker.
      */
     static final Field FIELD_RELIABILITY_LAST_RECEIVED_SEQ_ID;
-    /**
-     * Reflective access to queue-byte accounting repaired after dropping obsolete frames.
-     */
+
+    /** Reflective access to queue-byte accounting repaired after dropping obsolete frames. */
     static final Field FIELD_RELIABILITY_QUEUED_BYTES;
-    /**
-     * Representative fragment used to determine an incomplete frame's ordering channel.
-     */
+
+    /** Representative fragment used to determine an incomplete frame's ordering channel. */
     static final Field FIELD_FRAME_JOINER_BUILDER_SAMPLE_PACKET;
 
     static {
         try {
-            CLASS_QUEUE = Class.forName("network.ycc.raknet.pipeline.FrameOrderIn$OrderedChannelPacketQueue");
-            CLASS_FRAME_JOINER_BUILDER = Class.forName("network.ycc.raknet.pipeline.FrameJoiner$Builder");
+            CLASS_QUEUE =
+                    Class.forName(
+                            "network.ycc.raknet.pipeline.FrameOrderIn$OrderedChannelPacketQueue");
+            CLASS_FRAME_JOINER_BUILDER =
+                    Class.forName("network.ycc.raknet.pipeline.FrameJoiner$Builder");
 
-            FIELD_QUEUE_LAST_ORDER_INDEX = accessible(CLASS_QUEUE.getDeclaredField("lastOrderIndex"));
-            FIELD_RELIABILITY_NEXT_SEND_SEQ_ID = accessible(ReliabilityHandler.class.getDeclaredField("nextSendSeqId"));
-            FIELD_RELIABILITY_LAST_RECEIVED_SEQ_ID = accessible(ReliabilityHandler.class.getDeclaredField("lastReceivedSeqId"));
-            FIELD_RELIABILITY_QUEUED_BYTES = accessible(ReliabilityHandler.class.getDeclaredField("queuedBytes"));
-            FIELD_FRAME_JOINER_BUILDER_SAMPLE_PACKET = accessible(CLASS_FRAME_JOINER_BUILDER.getDeclaredField("samplePacket"));
+            FIELD_QUEUE_LAST_ORDER_INDEX =
+                    accessible(CLASS_QUEUE.getDeclaredField("lastOrderIndex"));
+            FIELD_RELIABILITY_NEXT_SEND_SEQ_ID =
+                    accessible(ReliabilityHandler.class.getDeclaredField("nextSendSeqId"));
+            FIELD_RELIABILITY_LAST_RECEIVED_SEQ_ID =
+                    accessible(ReliabilityHandler.class.getDeclaredField("lastReceivedSeqId"));
+            FIELD_RELIABILITY_QUEUED_BYTES =
+                    accessible(ReliabilityHandler.class.getDeclaredField("queuedBytes"));
+            FIELD_FRAME_JOINER_BUILDER_SAMPLE_PACKET =
+                    accessible(CLASS_FRAME_JOINER_BUILDER.getDeclaredField("samplePacket"));
 
-            METHOD_QUEUE_BUILDER_RELEASE = accessible(CLASS_FRAME_JOINER_BUILDER.getDeclaredMethod("release"));
+            METHOD_QUEUE_BUILDER_RELEASE =
+                    accessible(CLASS_FRAME_JOINER_BUILDER.getDeclaredMethod("release"));
             METHOD_QUEUE_CLEAR = accessible(CLASS_QUEUE.getDeclaredMethod("clear"));
 
         } catch (Throwable t) {
@@ -134,62 +138,51 @@ public class SynchronizationLayer extends ChannelDuplexHandler {
         }
     }
 
-    /**
-     * Ordering channels whose pending traffic must survive synchronization.
-     */
+    /** Ordering channels whose pending traffic must survive synchronization. */
     private final IntSet channelToIgnore = new IntOpenHashSet();
 
-    /**
-     * Inbound ordering handler whose per-channel cursors are updated from peer markers.
-     */
+    /** Inbound ordering handler whose per-channel cursors are updated from peer markers. */
     private FrameOrderIn frameOrderIn;
-    /**
-     * Live inbound channel queues copied as references from the transport's internal array.
-     */
+
+    /** Live inbound channel queues copied as references from the transport's internal array. */
     private Object[] frameOrderInQueues;
-    /**
-     * Outbound ordering handler that assigns each channel's packet indices.
-     */
+
+    /** Outbound ordering handler that assigns each channel's packet indices. */
     private FrameOrderOut frameOrderOut;
-    /**
-     * Live transport cursor array used to describe the last index assigned to each channel.
-     */
+
+    /** Live transport cursor array used to describe the last index assigned to each channel. */
     private int[] frameOrderOutNextOrderIndex;
-    /**
-     * Transport reliability handler owning queued and unacknowledged frame sets.
-     */
+
+    /** Transport reliability handler owning queued and unacknowledged frame sets. */
     private ReliabilityHandler reliabilityHandler;
-    /**
-     * Live outgoing priority queue drained while an ordering reset is in progress.
-     */
-    private PriorityQueue<Frame> reliabilityHandlerFrameQueue;
-    /**
-     * Live unacknowledged frame sets whose obsolete ordered frames are discarded on reset.
-     */
+
+    /** Live outgoing priority queue drained while an ordering reset is in progress. */
+    private java.util.Queue<Frame> reliabilityHandlerFrameQueue;
+
+    /** Live unacknowledged frame sets whose obsolete ordered frames are discarded on reset. */
     private Int2ObjectMap<FrameSet> reliabilityHandlerPendingFrameSets;
-    /**
-     * Inbound reassembly handler that owns incomplete fragmented packets.
-     */
+
+    /** Inbound reassembly handler that owns incomplete fragmented packets. */
     private FrameJoiner frameJoiner;
-    /**
-     * Live fragment builders inspected and released when their ordering channel is reset.
-     */
+
+    /** Live fragment builders inspected and released when their ordering channel is reset. */
     private Int2ObjectOpenHashMap<?> frameJoinerPendingPackets;
-    /**
-     * Number of ordering channels included in each synchronization marker.
-     */
+
+    /** Number of ordering channels included in each synchronization marker. */
     private int channelsLength;
+
     /**
      * Whether all reflective references to this connection's transport state have been captured.
      */
-    private boolean initialized = false;
+    private boolean initialized;
 
     /**
      * Creates a synchronization handler with explicit channels exempt from packet dropping.
      *
-     * @param channelsToIgnore ordering-channel indices whose traffic must remain queued across resets
+     * @param channelsToIgnore ordering-channel indices whose traffic must remain queued across
+     *     resets
      */
-    public SynchronizationLayer(int... channelsToIgnore) {
+    public SynchronizationLayer(final int... channelsToIgnore) {
         for (int ch : channelsToIgnore) {
             channelToIgnore.add(ch);
         }
@@ -203,7 +196,7 @@ public class SynchronizationLayer extends ChannelDuplexHandler {
      */
     @SuppressWarnings("unchecked")
     @Override
-    public void channelActive(ChannelHandlerContext ctx) throws Exception {
+    public void channelActive(final ChannelHandlerContext ctx) throws Exception {
         super.channelActive(ctx);
         initializeIfNecessary(ctx);
     }
@@ -214,29 +207,52 @@ public class SynchronizationLayer extends ChannelDuplexHandler {
      * @param ctx connection pipeline containing ordering, reliability, and fragment handlers
      * @throws RuntimeException if the expected transport internals cannot be accessed
      */
-    private void initializeIfNecessary(ChannelHandlerContext ctx) {
-        if (initialized) return;
+    private void initializeIfNecessary(final ChannelHandlerContext ctx) {
+        if (initialized) {
+            return;
+        }
         try {
             this.frameOrderIn = ctx.pipeline().get(FrameOrderIn.class);
-            Object frameOrderInQueueArray = accessible(FrameOrderIn.class.getDeclaredField("channels")).get(this.frameOrderIn);
+            Object frameOrderInQueueArray =
+                    accessible(FrameOrderIn.class.getDeclaredField("channels"))
+                            .get(this.frameOrderIn);
             this.frameOrderInQueues = new Object[Array.getLength(frameOrderInQueueArray)];
             for (int i = 0; i < this.frameOrderInQueues.length; i++) {
                 this.frameOrderInQueues[i] = Array.get(frameOrderInQueueArray, i);
             }
 
             this.frameOrderOut = ctx.pipeline().get(FrameOrderOut.class);
-            this.frameOrderOutNextOrderIndex = (int[]) accessible(FrameOrderOut.class.getDeclaredField("nextOrderIndex")).get(this.frameOrderOut);
+            this.frameOrderOutNextOrderIndex =
+                    (int[])
+                            accessible(FrameOrderOut.class.getDeclaredField("nextOrderIndex"))
+                                    .get(this.frameOrderOut);
 
             this.reliabilityHandler = ctx.pipeline().get(ReliabilityHandler.class);
-            this.reliabilityHandlerFrameQueue = (PriorityQueue<Frame>) accessible(ReliabilityHandler.class.getDeclaredField("frameQueue")).get(this.reliabilityHandler);
-            this.reliabilityHandlerPendingFrameSets = (Int2ObjectMap<FrameSet>) accessible(ReliabilityHandler.class.getDeclaredField("pendingFrameSets")).get(this.reliabilityHandler);
+            this.reliabilityHandlerFrameQueue =
+                    (PriorityQueue<Frame>)
+                            accessible(ReliabilityHandler.class.getDeclaredField("frameQueue"))
+                                    .get(this.reliabilityHandler);
+            this.reliabilityHandlerPendingFrameSets =
+                    (Int2ObjectMap<FrameSet>)
+                            accessible(
+                                            ReliabilityHandler.class.getDeclaredField(
+                                                    "pendingFrameSets"))
+                                    .get(this.reliabilityHandler);
 
             int originalChannelsLength = this.frameOrderOutNextOrderIndex.length;
             //noinspection deprecation
-            this.channelsLength = (int) (originalChannelsLength - this.channelToIgnore.stream().filter(value -> value < originalChannelsLength).count());
+            this.channelsLength =
+                    (int)
+                            (originalChannelsLength
+                                    - this.channelToIgnore.stream()
+                                            .filter(value -> value < originalChannelsLength)
+                                            .count());
 
             this.frameJoiner = ctx.pipeline().get(FrameJoiner.class);
-            this.frameJoinerPendingPackets = (Int2ObjectOpenHashMap<?>) accessible(FrameJoiner.class.getDeclaredField("pendingPackets")).get(this.frameJoiner);
+            this.frameJoinerPendingPackets =
+                    (Int2ObjectOpenHashMap<?>)
+                            accessible(FrameJoiner.class.getDeclaredField("pendingPackets"))
+                                    .get(this.frameJoiner);
 
             initialized = true;
         } catch (Throwable t) {
@@ -246,19 +262,23 @@ public class SynchronizationLayer extends ChannelDuplexHandler {
 
     /**
      * Consumes peer synchronization markers and advances receive cursors past abandoned traffic.
-     * Incomplete fragments on reset channels are released. Other inbound messages pass through unchanged.
+     * Incomplete fragments on reset channels are released. Other inbound messages pass through
+     * unchanged.
      *
      * @param ctx inbound context used to publish the reset event and ordinary messages
      * @param msg synchronization frame or other inbound traffic
      * @throws Exception if transport cursors or fragment cleanup methods cannot be accessed
      */
     @Override
-    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+    public void channelRead(final ChannelHandlerContext ctx, final Object msg) throws Exception {
         initializeIfNecessary(ctx);
-        if (msg instanceof FrameData packet && packet.getPacketId() == Constants.RAKNET_SYNC_PACKET_ID) {
+        if (msg instanceof FrameData packet
+                && packet.getPacketId() == Constants.RAKNET_SYNC_PACKET_ID) {
             // read
             {
-                if (Constants.DEBUG) System.out.println("Raknetify: Received sync packet");
+                if (Constants.DEBUG) {
+                    System.out.println("Raknetify: Received sync packet");
+                }
                 ctx.fireUserEventTriggered(SYNC_REQUEST_OBJECT);
                 final ByteBuf byteBuf = packet.createData().skipBytes(1);
                 try {
@@ -266,21 +286,27 @@ public class SynchronizationLayer extends ChannelDuplexHandler {
                     for (int i = 0; i < count; i++) {
                         final byte channel = byteBuf.readByte();
                         final int orderIndex = byteBuf.readInt();
-                        if (Constants.DEBUG)
-                            System.out.println("Raknetify: Channel %d: %d -> %d"
-                                    .formatted(channel,
-                                            (int) FIELD_QUEUE_LAST_ORDER_INDEX.get(frameOrderInQueues[channel]),
-                                            orderIndex
-                                    ));
+                        if (Constants.DEBUG) {
+                            System.out.println(
+                                    "Raknetify: Channel %d: %d -> %d"
+                                            .formatted(
+                                                    channel,
+                                                    FIELD_QUEUE_LAST_ORDER_INDEX.get(
+                                                            frameOrderInQueues[channel]),
+                                                    orderIndex));
+                        }
                         FIELD_QUEUE_LAST_ORDER_INDEX.set(frameOrderInQueues[channel], orderIndex);
                         discardPartialFrames(channel);
                     }
                     final int seqId = byteBuf.readInt();
-                    if (Constants.DEBUG)
-                        System.out.println("Raknetify: ReliabilityHandler: %d -> %d".formatted(
-                                (int) FIELD_RELIABILITY_LAST_RECEIVED_SEQ_ID.get(this.reliabilityHandler),
-                                seqId
-                        ));
+                    if (Constants.DEBUG) {
+                        System.out.println(
+                                "Raknetify: ReliabilityHandler: %d -> %d"
+                                        .formatted(
+                                                FIELD_RELIABILITY_LAST_RECEIVED_SEQ_ID.get(
+                                                        this.reliabilityHandler),
+                                                seqId));
+                    }
                     FIELD_RELIABILITY_LAST_RECEIVED_SEQ_ID.set(this.reliabilityHandler, seqId);
                 } finally {
                     byteBuf.release();
@@ -292,7 +318,6 @@ public class SynchronizationLayer extends ChannelDuplexHandler {
         ctx.fireChannelRead(msg);
     }
 
-
     /**
      * Releases incomplete ordered frames that belong to a channel being resynchronized.
      *
@@ -300,7 +325,7 @@ public class SynchronizationLayer extends ChannelDuplexHandler {
      * @throws ReflectiveOperationException if the transport's fragment builder cannot be released
      * @throws RuntimeException if the builder's retained frame cannot be read
      */
-    private void discardPartialFrames(int channel) throws ReflectiveOperationException {
+    private void discardPartialFrames(final int channel) throws ReflectiveOperationException {
         final ObjectIterator<?> iterator = this.frameJoinerPendingPackets.values().iterator();
         while (iterator.hasNext()) {
             final Object next = iterator.next();
@@ -316,22 +341,23 @@ public class SynchronizationLayer extends ChannelDuplexHandler {
         }
     }
 
-    /**
-     * Outbound messages and promises held until the synchronization marker completes.
-     */
-    private final ReferenceLinkedOpenHashSet<Pair<ChannelPromise, Object>> queue = new ReferenceLinkedOpenHashSet<>();
-    /**
-     * Surviving unreliable, unordered, or exempt-channel frames temporarily removed from transport queues.
-     */
-    private final ObjectArrayList<Frame> queuedFrames = new ObjectArrayList<>();
-    /**
-     * Whether a synchronization marker is outstanding and new writes must wait.
-     */
-    private boolean isWaitingForResponse = false;
+    /** Outbound messages and promises held until the synchronization marker completes. */
+    private final ReferenceLinkedOpenHashSet<Pair<ChannelPromise, Object>> queue =
+            new ReferenceLinkedOpenHashSet<>();
 
     /**
-     * Drops obsolete queued traffic for a reset request and delays subsequent writes until its marker completes.
-     * Duplicate reset requests complete immediately while the existing reset remains outstanding.
+     * Surviving unreliable, unordered, or exempt-channel frames temporarily removed from transport
+     * queues.
+     */
+    private final ObjectArrayList<Frame> queuedFrames = new ObjectArrayList<>();
+
+    /** Whether a synchronization marker is outstanding and new writes must wait. */
+    private boolean isWaitingForResponse;
+
+    /**
+     * Drops obsolete queued traffic for a reset request and delays subsequent writes until its
+     * marker completes. Duplicate reset requests complete immediately while the existing reset
+     * remains outstanding.
      *
      * @param ctx outbound context used to send the reliable synchronization marker
      * @param msg local reset marker or message whose ordering must be preserved
@@ -339,7 +365,9 @@ public class SynchronizationLayer extends ChannelDuplexHandler {
      * @throws Exception if transport sequence access or ordinary outbound forwarding fails
      */
     @Override
-    public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+    public void write(
+            final ChannelHandlerContext ctx, final Object msg, final ChannelPromise promise)
+            throws Exception {
         initializeIfNecessary(ctx);
         if (msg == SYNC_REQUEST_OBJECT) {
             if (isWaitingForResponse) {
@@ -351,20 +379,34 @@ public class SynchronizationLayer extends ChannelDuplexHandler {
 
             final ByteBuf byteBuf = ctx.alloc().buffer(1 + channelsLength * 5 + 4);
             byteBuf.writeByte(channelsLength);
-            for (int channel = 0, frameOrderOutNextOrderIndexLength = frameOrderOutNextOrderIndex.length; channel < frameOrderOutNextOrderIndexLength; channel++) {
-                if (channelToIgnore.contains(channel)) continue;
+            for (int channel = 0; channel < frameOrderOutNextOrderIndex.length; channel++) {
+                if (channelToIgnore.contains(channel)) {
+                    continue;
+                }
                 int orderOutNextOrderIndex = frameOrderOutNextOrderIndex[channel];
-                if (Constants.DEBUG)
-                    System.out.println("Raknetify: Writing sync packet: Channel %d: %d".formatted(channel, orderOutNextOrderIndex - 1));
+                if (Constants.DEBUG) {
+                    System.out.println(
+                            "Raknetify: Writing sync packet: Channel %d: %d"
+                                    .formatted(channel, orderOutNextOrderIndex - 1));
+                }
                 byteBuf.writeByte(channel);
                 byteBuf.writeInt(orderOutNextOrderIndex - 1);
             }
-            int seqId = (int) FIELD_RELIABILITY_NEXT_SEND_SEQ_ID.get(this.reliabilityHandler); // TODO implementation details (probable lib bug): nextSendSeqId == lastReceivedSeqId
-            if (Constants.DEBUG)
-                System.out.println("Raknetify: Writing sync packet: ReliabilityHandler: %d".formatted(seqId));
+            int seqId =
+                    (int)
+                            FIELD_RELIABILITY_NEXT_SEND_SEQ_ID.get(
+                                    this.reliabilityHandler); // TODO implementation details
+            // (probable lib bug):
+            // nextSendSeqId ==
+            // lastReceivedSeqId
+            if (Constants.DEBUG) {
+                System.out.println(
+                        "Raknetify: Writing sync packet: ReliabilityHandler: %d".formatted(seqId));
+            }
             byteBuf.writeInt(seqId);
 
-            final FrameData frameData = FrameData.create(ctx.alloc(), Constants.RAKNET_SYNC_PACKET_ID, byteBuf);
+            final FrameData frameData =
+                    FrameData.create(ctx.alloc(), Constants.RAKNET_SYNC_PACKET_ID, byteBuf);
             frameData.setReliability(FramedPacket.Reliability.RELIABLE);
             this.isWaitingForResponse = true;
             ctx.write(frameData).addListener(future -> this.flushQueue(ctx));
@@ -381,14 +423,15 @@ public class SynchronizationLayer extends ChannelDuplexHandler {
 
     /**
      * Reclaims obsolete ordered frames and temporarily retains traffic exempt from the reset.
-     * Discarded frame promises complete successfully because the phase transition intentionally supersedes them.
+     * Discarded frame promises complete successfully because the phase transition intentionally
+     * supersedes them.
      *
      * @throws RuntimeException if queued-byte accounting cannot be updated after the drop
      */
     private void dropSenderPackets() {
         int droppedFrames = 0;
 
-        ArrayList<Frame> retainedFrameList = new ArrayList<>();
+        java.util.List<Frame> retainedFrameList = new ArrayList<>();
 
         //noinspection CollectionAddAllCanBeReplacedWithConstructor
         retainedFrameList.addAll(this.reliabilityHandlerFrameQueue);
@@ -403,9 +446,12 @@ public class SynchronizationLayer extends ChannelDuplexHandler {
         int byteSize = 0;
         for (Iterator<Frame> iterator = retainedFrameList.iterator(); iterator.hasNext(); ) {
             Frame frame = iterator.next();
-            if (frame.getReliability().isOrdered && !channelToIgnore.contains(frame.getOrderChannel())) {
+            if (frame.getReliability().isOrdered
+                    && !channelToIgnore.contains(frame.getOrderChannel())) {
                 final ChannelPromise promise1 = frame.getPromise();
-                if (promise1 != null) promise1.trySuccess();
+                if (promise1 != null) {
+                    promise1.trySuccess();
+                }
                 iterator.remove();
                 frame.release();
                 droppedFrames++;
@@ -415,7 +461,9 @@ public class SynchronizationLayer extends ChannelDuplexHandler {
         }
         this.queuedFrames.addAll(retainedFrameList);
 
-        if (Constants.DEBUG) System.out.println("Raknetify: Dropping %d frames".formatted(droppedFrames));
+        if (Constants.DEBUG) {
+            System.out.println("Raknetify: Dropping %d frames".formatted(droppedFrames));
+        }
         try {
             FIELD_RELIABILITY_QUEUED_BYTES.set(this.reliabilityHandler, byteSize);
         } catch (Throwable t) {
@@ -426,14 +474,16 @@ public class SynchronizationLayer extends ChannelDuplexHandler {
     }
 
     /**
-     * Restores surviving transport frames and drains new writes after marker completion.
-     * Callbacks arriving off the event loop are rescheduled before touching the queues.
+     * Restores surviving transport frames and drains new writes after marker completion. Callbacks
+     * arriving off the event loop are rescheduled before touching the queues.
      *
      * @param ctx outbound context belonging to the synchronized connection
      */
-    private void flushQueue(ChannelHandlerContext ctx) {
+    private void flushQueue(final ChannelHandlerContext ctx) {
         if (!isWaitingForResponse) {
-            if (Constants.DEBUG) System.out.println("Raknetify: Ignoring duplicate call to flushQueue()");
+            if (Constants.DEBUG) {
+                System.out.println("Raknetify: Ignoring duplicate call to flushQueue()");
+            }
             return;
         }
         if (!ctx.channel().eventLoop().inEventLoop()) {
@@ -443,11 +493,18 @@ public class SynchronizationLayer extends ChannelDuplexHandler {
 
         this.isWaitingForResponse = false;
 
-        if (Constants.DEBUG) System.out.println("Raknetify: Picking up %d queued frames".formatted(this.queuedFrames.size()));
+        if (Constants.DEBUG) {
+            System.out.println(
+                    "Raknetify: Picking up %d queued frames".formatted(this.queuedFrames.size()));
+        }
         this.reliabilityHandlerFrameQueue.addAll(this.queuedFrames);
         this.queuedFrames.clear();
 
-        if (Constants.DEBUG) System.out.println("Raknetify: Flushing %d queued packets as synchronization finished".formatted(this.queue.size()));
+        if (Constants.DEBUG) {
+            System.out.println(
+                    "Raknetify: Flushing %d queued packets as synchronization finished"
+                            .formatted(this.queue.size()));
+        }
         while (!this.queue.isEmpty()) {
             Pair<ChannelPromise, Object> pair = this.queue.removeFirst();
             final ChannelPromise promise = pair.getFirst();
@@ -455,5 +512,4 @@ public class SynchronizationLayer extends ChannelDuplexHandler {
             ctx.write(msg, promise);
         }
     }
-
 }

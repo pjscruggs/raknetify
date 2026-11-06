@@ -24,10 +24,12 @@
 
 package com.ishland.raknetify.common.proxy;
 
-import io.netty.channel.Channel;
 import com.ishland.raknetify.common.voice.VoiceTransport;
+
+import io.netty.channel.Channel;
 import io.netty.channel.socket.DatagramChannel;
 import io.netty.util.AttributeKey;
+
 import network.ycc.raknet.server.channel.RakNetChildChannel;
 import network.ycc.raknet.server.channel.RakNetServerChannel;
 
@@ -41,47 +43,61 @@ import java.util.function.Supplier;
 
 /** Shared PROXY v2 entry point for Fabric, native mod loaders and server plugins. */
 public final class ProxyProtocol {
-    /** Marks only application channels whose identity came through the validated UDP trust boundary. */
-    private static final AttributeKey<Boolean> FORWARDED = AttributeKey.valueOf("raknetify2:proxy-v2-validated");
+    /**
+     * Marks only application channels whose identity came through the validated UDP trust boundary.
+     */
+    private static final AttributeKey<Boolean> FORWARDED =
+            AttributeKey.valueOf("raknetify2:proxy-v2-validated");
 
     /** Prevents instances of the listener construction utility. */
-    private ProxyProtocol() {
-    }
+    private ProxyProtocol() {}
 
     /**
      * Selects direct or required-PROXY transport before the new listener binds.
+     *
      * @param sockets factory preserving the platform's NIO or native transport and socket options
      * @return unregistered RakNet listener
      * @throws UncheckedIOException if the operator's configuration cannot be read
      */
-    public static RakNetServerChannel create(Supplier<? extends DatagramChannel> sockets) {
+    public static RakNetServerChannel create(final Supplier<? extends DatagramChannel> sockets) {
         try {
-            return create(sockets, ProxyProtocolConfig.load(Path.of("config", "raknetify2-proxy-protocol.json")));
+            return create(
+                    sockets,
+                    ProxyProtocolConfig.load(Path.of("config", "raknetify2-proxy-protocol.json")));
         } catch (IOException invalid) {
             throw new UncheckedIOException("Cannot load Raknetify2 PROXY protocol policy", invalid);
         }
     }
 
     /**
-     * Constructs an isolated listener with an already validated policy, also used by socket regression tests.
+     * Constructs an isolated listener with an already validated policy, also used by socket
+     * regression tests.
+     *
      * @param sockets platform datagram factory
      * @param config immutable trust policy
      * @return direct listener or a listener that requires validated proxy identities
      */
-    static RakNetServerChannel create(Supplier<? extends DatagramChannel> sockets, ProxyProtocolConfig config) {
-        sockets = VoiceTransport.decorate(sockets);
-        if (!config.enabled()) return new RakNetServerChannel(sockets);
-        return new ProxiedServer(sockets, config, new ProxySessions(System::nanoTime));
+    static RakNetServerChannel create(
+            final Supplier<? extends DatagramChannel> sockets, final ProxyProtocolConfig config) {
+        Supplier<? extends DatagramChannel> decorated = VoiceTransport.decorate(sockets);
+        if (!config.enabled()) {
+            return new RakNetServerChannel(decorated);
+        }
+        return new ProxiedServer(decorated, config, new ProxySessions(System::nanoTime));
     }
 
     /**
-     * Verifies that removing a platform's TCP-only HAProxy decoder cannot bypass its address requirement.
+     * Verifies that removing a platform's TCP-only HAProxy decoder cannot bypass its address
+     * requirement.
+     *
      * @param channel application channel initialized by the native server or proxy
      * @throws IllegalStateException if a required proxy identity has not been validated
      */
-    public static void requireForwarded(Channel channel) {
+    public static void requireForwarded(final Channel channel) {
         if (!Boolean.TRUE.equals(channel.attr(FORWARDED).get())) {
-            throw new IllegalStateException("Configure trustedProxies in config/raknetify2-proxy-protocol.json before using required PROXY headers with RakNet");
+            throw new IllegalStateException(
+                    "Configure trustedProxies in config/raknetify2-proxy-protocol.json before using"
+                            + " required PROXY headers with RakNet");
         }
     }
 
@@ -92,15 +108,19 @@ public final class ProxyProtocol {
 
         /**
          * Decorates every physical socket, including sockets created after the handshake completes.
+         *
          * @param sockets original transport factory
          * @param config trusted proxy address ranges
          * @param sessions listener-local identity state
          */
-        private ProxiedServer(Supplier<? extends DatagramChannel> sockets, ProxyProtocolConfig config,
-                              ProxySessions sessions) {
+        private ProxiedServer(
+                final Supplier<? extends DatagramChannel> sockets,
+                final ProxyProtocolConfig config,
+                final ProxySessions sessions) {
             super(() -> {
                 DatagramChannel socket = sockets.get();
-                socket.pipeline().addFirst("raknetify-proxy-v2", new ProxyDatagramHandler(config, sessions));
+                socket.pipeline()
+                        .addFirst("raknetify-proxy-v2", new ProxyDatagramHandler(config, sessions));
                 return socket;
             });
             this.sessions = sessions;
@@ -108,30 +128,44 @@ public final class ProxyProtocol {
 
         /**
          * Pins the decoded identity before registration and releases it when the transport closes.
+         *
          * @param remoteAddress actual proxy endpoint used for replies and connected UDP filtering
          * @param localAddress backend listener address
          * @param registerChannel native application registration callback
          * @return child whose application-visible remote address is the original client
          */
         @Override
-        protected RakNetChildChannel newChild(InetSocketAddress remoteAddress, InetSocketAddress localAddress,
-                                             Consumer<Channel> registerChannel) {
+        protected RakNetChildChannel newChild(
+                final InetSocketAddress remoteAddress,
+                final InetSocketAddress localAddress,
+                final Consumer<Channel> registerChannel) {
             ProxySessions.Session session = sessions.claim(remoteAddress);
-            RakNetChildChannel child = new ProxiedChild(ioChannelSupplier, this, remoteAddress, localAddress,
-                    registerChannel, session.source);
+            RakNetChildChannel child =
+                    new ProxiedChild(
+                            ioChannelSupplier,
+                            this,
+                            remoteAddress,
+                            localAddress,
+                            registerChannel,
+                            session.source);
             child.getApplicationChannel().attr(FORWARDED).set(true);
             child.closeFuture().addListener(ignored -> sessions.release(remoteAddress, session));
             return child;
         }
     }
 
-    /** The inherited physical endpoint still drives datagram writes, binds and connected socket filtering. */
+    /**
+     * The inherited physical endpoint still drives datagram writes, binds and connected socket
+     * filtering.
+     */
     private static final class ProxiedChild extends RakNetChildChannel {
         /** Stable address exposed to native login, IP bans, forwarding and plugin APIs. */
         private final InetSocketAddress client;
 
         /**
-         * Preserves the transport's physical peer while recording the separately validated client endpoint.
+         * Preserves the transport's physical peer while recording the separately validated client
+         * endpoint.
+         *
          * @param sockets decorated physical socket factory
          * @param parent owning RakNet listener
          * @param proxy physical proxy endpoint
@@ -139,15 +173,20 @@ public final class ProxyProtocol {
          * @param registration application registration callback
          * @param client validated original client endpoint
          */
-        private ProxiedChild(Supplier<? extends DatagramChannel> sockets, Channel parent,
-                             InetSocketAddress proxy, InetSocketAddress local, Consumer<Channel> registration,
-                             InetSocketAddress client) {
+        private ProxiedChild(
+                final Supplier<? extends DatagramChannel> sockets,
+                final Channel parent,
+                final InetSocketAddress proxy,
+                final InetSocketAddress local,
+                final Consumer<Channel> registration,
+                final InetSocketAddress client) {
             super(sockets, parent, proxy, local, registration);
             this.client = client;
         }
 
         /**
          * Exposes the client identity without changing the inherited physical socket destination.
+         *
          * @return original client endpoint asserted by the trusted proxy
          */
         @Override

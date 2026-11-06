@@ -25,33 +25,32 @@
 package com.ishland.raknetify.common.util;
 
 /**
- * Carries transport selection through synchronous platform connection and bootstrap hooks.
- * Callers must restore flags after initialization so later connections on the same thread
- * do not inherit a previous connection's transport choice.
+ * Carries transport selection through synchronous platform connection and bootstrap hooks. Callers
+ * must restore flags after initialization so later connections on the same thread do not inherit a
+ * previous connection's transport choice.
  */
 public class ThreadLocalUtil {
 
-    /**
-     * Prevents construction of the thread-local bootstrap-state utility.
-     */
-    private ThreadLocalUtil() {
-    }
+    /** Prevents construction of the thread-local bootstrap-state utility. */
+    private ThreadLocalUtil() {}
 
     /**
      * Whether the current thread is constructing a RakNet connection rather than a TCP connection.
      */
-    private static final ThreadLocal<Boolean> initializingRaknet = ThreadLocal.withInitial(() -> false);
-    /**
-     * Whether the current bootstrap selected the opt-in large MTU.
-     */
-    private static final ThreadLocal<Boolean> initializingRaknetLargeMTU = ThreadLocal.withInitial(() -> false);
+    private static final ThreadLocal<Boolean> initializingRaknet =
+            ThreadLocal.withInitial(() -> false);
+
+    /** Whether the current bootstrap selected the opt-in large MTU. */
+    private static final ThreadLocal<Boolean> initializingRaknetLargeMTU =
+            ThreadLocal.withInitial(() -> false);
 
     /**
      * Sets the transport choice observed by nested bootstrap hooks on this thread.
      *
-     * @param value true while initializing a RakNet connection, false when restoring normal behavior
+     * @param value true while initializing a RakNet connection, false when restoring normal
+     *     behavior
      */
-    public static void setInitializingRaknet(boolean value) {
+    public static void setInitializingRaknet(final boolean value) {
         initializingRaknet.set(value);
     }
 
@@ -60,7 +59,7 @@ public class ThreadLocalUtil {
      *
      * @param value true while initializing a large-MTU connection, false when restoring the default
      */
-    public static void setInitializingRaknetLargeMTU(boolean value) {
+    public static void setInitializingRaknetLargeMTU(final boolean value) {
         initializingRaknetLargeMTU.set(value);
     }
 
@@ -81,5 +80,4 @@ public class ThreadLocalUtil {
     public static boolean isInitializingRaknetLargeMTU() {
         return initializingRaknetLargeMTU.get();
     }
-
 }

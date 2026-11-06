@@ -24,11 +24,12 @@
 
 package com.ishland.raknetify.common.connection.multichannel;
 
-import com.ishland.raknetify.common.Constants;
 import com.ishland.raknetify.api.PacketOrdering;
+import com.ishland.raknetify.common.Constants;
 import com.ishland.raknetify.common.connection.PayloadOrderingNegotiation;
 import com.ishland.raknetify.common.connection.RakNetSimpleMultiChannelCodec;
 import com.ishland.raknetify.common.util.MathUtil;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 
@@ -37,22 +38,27 @@ import java.util.Objects;
 import java.util.function.IntPredicate;
 
 /**
- * Routes known mod payload identifiers onto the same ordering channels as their related vanilla traffic.
+ * Routes known mod payload identifiers onto the same ordering channels as their related vanilla
+ * traffic.
  */
 public class CustomPayloadChannel {
 
     /**
-     * Recognizes a protocol's custom-payload packets before looking up their namespaced identifiers.
+     * Recognizes a protocol's custom-payload packets before looking up their namespaced
+     * identifiers.
      */
     public static class OverrideHandler implements RakNetSimpleMultiChannelCodec.OverrideHandler {
 
-        /**
-         * Protocol-specific predicate identifying custom-payload packet IDs.
-         */
+        /** Protocol-specific predicate identifying custom-payload packet IDs. */
         private final IntPredicate isCustomPayload;
+
         /** Connection-local peer declarations, absent for classifiers used without a transport. */
         private final Channel channel;
-        /** Local declarations take precedence over peer preferences and stay fixed for this classifier. */
+
+        /**
+         * Local declarations take precedence over peer preferences and stay fixed for this
+         * classifier.
+         */
         private final Map<String, Integer> local;
 
         /**
@@ -60,7 +66,7 @@ public class CustomPayloadChannel {
          *
          * @param isCustomPayload predicate recognizing custom-payload packet IDs
          */
-        public OverrideHandler(IntPredicate isCustomPayload) {
+        public OverrideHandler(final IntPredicate isCustomPayload) {
             this(isCustomPayload, null);
         }
 
@@ -70,32 +76,36 @@ public class CustomPayloadChannel {
          * @param isCustomPayload predicate recognizing custom-payload packet IDs
          * @param channel owning connection, or null to use local registrations only
          */
-        public OverrideHandler(IntPredicate isCustomPayload, Channel channel) {
+        public OverrideHandler(final IntPredicate isCustomPayload, final Channel channel) {
             this.isCustomPayload = Objects.requireNonNull(isCustomPayload);
             this.channel = channel;
             this.local = PacketOrdering.snapshot();
         }
 
         /**
-         * Inspects modern identifier-prefixed custom payloads without consuming the original buffer.
+         * Inspects modern identifier-prefixed custom payloads without consuming the original
+         * buffer.
          *
          * @param origBuf Minecraft payload beginning with its packet ID
-         * @param suppressWarning unused because unrecognized identifiers silently defer to other classifiers
+         * @param suppressWarning unused because unrecognized identifiers silently defer to other
+         *     classifiers
          * @return configured ordering channel, or zero for unrelated or unregistered payloads
          */
         @Override
-        public int getChannelOverride(ByteBuf origBuf, boolean suppressWarning) {
+        public int getChannelOverride(final ByteBuf origBuf, final boolean suppressWarning) {
             ByteBuf buf = origBuf.slice();
             final int packetId = MathUtil.readVarInt(buf);
             if (isCustomPayload.test(packetId)) {
-                final String identifier = MathUtil.readString(buf); // we assume modern custom payloads
-                if (Constants.DEBUG) System.out.println("Raknetify: Handling custom payload: " + identifier);
-                return local.getOrDefault(identifier, PayloadOrderingNegotiation.remoteChannel(channel, identifier));
+                final String identifier =
+                        MathUtil.readString(buf); // we assume modern custom payloads
+                if (Constants.DEBUG) {
+                    System.out.println("Raknetify: Handling custom payload: " + identifier);
+                }
+                return local.getOrDefault(
+                        identifier, PayloadOrderingNegotiation.remoteChannel(channel, identifier));
             } else {
                 return 0;
             }
         }
-
     }
-
 }

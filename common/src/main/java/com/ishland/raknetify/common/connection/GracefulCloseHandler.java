@@ -33,17 +33,26 @@ import io.netty.util.concurrent.ScheduledFuture;
 import java.nio.channels.ClosedChannelException;
 import java.util.concurrent.TimeUnit;
 
-/** Keeps a normal transport close behind outstanding application writes, including their reliable retransmissions. */
+/**
+ * Keeps a normal transport close behind outstanding application writes, including their reliable
+ * retransmissions.
+ */
 public final class GracefulCloseHandler extends ChannelDuplexHandler {
 
     /** Maximum extra drain time before the existing transport close procedure takes over. */
     private final long timeoutNanos;
+
     /** Application promises still waiting for transport completion on this channel's event loop. */
     private int pendingWrites;
+
     /** First close request owns completion and causes subsequent writes to be rejected. */
     private ChannelPromise closingPromise;
-    /** Ensures drain completion, timeout and external closure cannot forward the same close twice. */
+
+    /**
+     * Ensures drain completion, timeout and external closure cannot forward the same close twice.
+     */
     private boolean closeForwarded;
+
     /** Bounded drain deadline, cancelled as soon as normal transport closing begins. */
     private ScheduledFuture<?> timeout;
 
@@ -54,22 +63,32 @@ public final class GracefulCloseHandler extends ChannelDuplexHandler {
 
     /**
      * Allows deterministic deadline tests without sleeping or changing the production timeout.
-     * @param timeoutNanos nonnegative drain budget, with zero expiring on the next scheduled-task run
+     *
+     * @param timeoutNanos nonnegative drain budget, with zero expiring on the next scheduled-task
+     *     run
      * @throws IllegalArgumentException if the requested duration is negative
      */
-    GracefulCloseHandler(long timeoutNanos) {
-        if (timeoutNanos < 0) throw new IllegalArgumentException("Negative close drain timeout");
+    GracefulCloseHandler(final long timeoutNanos) {
+        if (timeoutNanos < 0) {
+            throw new IllegalArgumentException("Negative close drain timeout");
+        }
         this.timeoutNanos = timeoutNanos;
     }
 
     /**
-     * Tracks actual write completion rather than queue acceptance. RakNet resolves reliable writes after acknowledgement.
+     * Tracks actual write completion rather than queue acceptance. RakNet resolves reliable writes
+     * after acknowledgement.
+     *
      * @param context application-side transport context
      * @param message owned outbound frame or control message
-     * @param promise caller's write result, preserved even when it originally discards completion notifications
+     * @param promise caller's write result, preserved even when it originally discards completion
+     *     notifications
      */
     @Override
-    public void write(ChannelHandlerContext context, Object message, ChannelPromise promise) {
+    public void write(
+            final ChannelHandlerContext context,
+            final Object message,
+            final ChannelPromise promise) {
         if (this.closingPromise != null) {
             ReferenceCountUtil.release(message);
             promise.tryFailure(new ClosedChannelException());
@@ -82,21 +101,27 @@ public final class GracefulCloseHandler extends ChannelDuplexHandler {
     }
 
     /**
-     * Releases a pending write and starts transport closing only after every earlier write has completed.
+     * Releases a pending write and starts transport closing only after every earlier write has
+     * completed.
+     *
      * @param context channel event loop receiving the write promise notification
      */
-    private void writeCompleted(ChannelHandlerContext context) {
+    private void writeCompleted(final ChannelHandlerContext context) {
         this.pendingWrites--;
-        if (this.pendingWrites == 0 && this.closingPromise != null) finishClose(context);
+        if (this.pendingWrites == 0 && this.closingPromise != null) {
+            finishClose(context);
+        }
     }
 
     /**
-     * Drains the existing writes before sending RakNet's close notification on its independent ordering channel.
+     * Drains the existing writes before sending RakNet's close notification on its independent
+     * ordering channel.
+     *
      * @param context application channel whose lower transport handlers perform the eventual close
      * @param promise close completion observed by the caller
      */
     @Override
-    public void close(ChannelHandlerContext context, ChannelPromise promise) {
+    public void close(final ChannelHandlerContext context, final ChannelPromise promise) {
         if (this.closingPromise != null) {
             relayClose(promise);
             return;
@@ -106,51 +131,76 @@ public final class GracefulCloseHandler extends ChannelDuplexHandler {
             finishClose(context);
             return;
         }
-        this.timeout = context.executor().schedule(() -> finishClose(context), this.timeoutNanos, TimeUnit.NANOSECONDS);
-        // Bypass application flush suppression so the last reason is sent before the drain deadline.
+        this.timeout =
+                context.executor()
+                        .schedule(
+                                () -> finishClose(context),
+                                this.timeoutNanos,
+                                TimeUnit.NANOSECONDS);
+        // Bypass application flush suppression so the last reason is sent before the drain
+        // deadline.
         context.flush();
     }
 
     /**
-     * Makes repeated close requests observe the first request's outcome without extending its deadline.
+     * Makes repeated close requests observe the first request's outcome without extending its
+     * deadline.
+     *
      * @param promise additional caller's close completion notification
      */
-    private void relayClose(ChannelPromise promise) {
+    private void relayClose(final ChannelPromise promise) {
         this.closingPromise.addListener(future -> {
-            if (future.isSuccess()) promise.trySuccess();
-            else promise.tryFailure(future.cause());
+            if (future.isSuccess()) {
+                promise.trySuccess();
+            } else {
+                promise.tryFailure(future.cause());
+            }
         });
     }
 
     /**
      * Forwards close once and removes the scheduled drain task on every completion path.
+     *
      * @param context lower pipeline entry point for the actual transport close
      */
-    private void finishClose(ChannelHandlerContext context) {
-        if (this.closeForwarded) return;
+    private void finishClose(final ChannelHandlerContext context) {
+        if (this.closeForwarded) {
+            return;
+        }
         this.closeForwarded = true;
-        if (this.timeout != null) this.timeout.cancel(false);
+        if (this.timeout != null) {
+            this.timeout.cancel(false);
+        }
         context.close(this.closingPromise);
     }
 
     /**
-     * Completes application cleanup when the peer or a lower transport handler closes independently.
-     * Threaded RakNet channels forward socket inactivity without closing their own application future.
+     * Completes application cleanup when the peer or a lower transport handler closes
+     * independently. Threaded RakNet channels forward socket inactivity without closing their own
+     * application future.
+     *
      * @param context inactive application channel
      */
     @Override
-    public void channelInactive(ChannelHandlerContext context) {
-        if (this.closingPromise != null) finishClose(context);
-        else context.close();
+    public void channelInactive(final ChannelHandlerContext context) {
+        if (this.closingPromise != null) {
+            finishClose(context);
+        } else {
+            context.close();
+        }
         context.fireChannelInactive();
     }
 
     /**
-     * Prevents removing this handler from stranding an already requested close or its scheduled task.
+     * Prevents removing this handler from stranding an already requested close or its scheduled
+     * task.
+     *
      * @param context removed handler's remaining connection to the outbound pipeline
      */
     @Override
-    public void handlerRemoved(ChannelHandlerContext context) {
-        if (this.closingPromise != null) finishClose(context);
+    public void handlerRemoved(final ChannelHandlerContext context) {
+        if (this.closingPromise != null) {
+            finishClose(context);
+        }
     }
 }

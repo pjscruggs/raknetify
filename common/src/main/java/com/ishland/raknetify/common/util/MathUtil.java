@@ -25,13 +25,15 @@
 package com.ishland.raknetify.common.util;
 
 import com.google.common.base.Charsets;
+
 import io.netty.buffer.ByteBuf;
 
 import java.text.CharacterIterator;
 import java.text.StringCharacterIterator;
 
 /**
- * Provides binary-unit formatting and the limited Minecraft wire decoding needed by packet classifiers.
+ * Provides binary-unit formatting and the limited Minecraft wire decoding needed by packet
+ * classifiers.
  */
 public class MathUtil {
 
@@ -41,7 +43,7 @@ public class MathUtil {
      * @param bytes byte count or byte rate to display
      * @return signed value with a binary unit, using two decimal places above the byte range
      */
-    public static String humanReadableByteCountBin(long bytes) {
+    public static String humanReadableByteCountBin(final long bytes) {
         long absB = bytes == Long.MIN_VALUE ? Long.MAX_VALUE : Math.abs(bytes);
         if (absB < 1024) {
             return bytes + " B";
@@ -63,7 +65,7 @@ public class MathUtil {
      * @return decoded 32-bit value
      * @throws RuntimeException if the encoded value continues beyond five bytes
      */
-    public static int readVarInt(ByteBuf buf) {
+    public static int readVarInt(final ByteBuf buf) {
         // TODO [VanillaCopy]
         int i = 0;
         int j = 0;
@@ -86,7 +88,7 @@ public class MathUtil {
      * @param buf buffer positioned at the string's VarInt byte length
      * @return decoded string, limited to Short.MAX_VALUE UTF-16 code units
      */
-    public static String readString(ByteBuf buf) {
+    public static String readString(final ByteBuf buf) {
         return readString(buf, Short.MAX_VALUE);
     }
 
@@ -96,23 +98,29 @@ public class MathUtil {
      * @param buf buffer positioned at the string's VarInt byte length
      * @param maxLen maximum decoded length in UTF-16 code units
      * @return decoded string after advancing past its encoded bytes
-     * @throws IllegalArgumentException if the byte length exceeds three times the limit or the decoded string exceeds it
+     * @throws IllegalArgumentException if the byte length exceeds three times the limit or the
+     *     decoded string exceeds it
      */
-    public static String readString(ByteBuf buf, int maxLen) {
+    public static String readString(final ByteBuf buf, final int maxLen) {
         // Copied from BungeeCord
         int len = readVarInt(buf);
         if (len > maxLen * 3) {
-            throw new IllegalArgumentException("Cannot receive string longer than " + maxLen * 3 + " (got " + len + " bytes)");
+            throw new IllegalArgumentException(
+                    "Cannot receive string longer than " + maxLen * 3 + " (got " + len + " bytes)");
         }
 
         String s = buf.toString(buf.readerIndex(), len, Charsets.UTF_8);
         buf.readerIndex(buf.readerIndex() + len);
 
         if (s.length() > maxLen) {
-            throw new IllegalArgumentException("Cannot receive string longer than " + maxLen + " (got " + s.length() + " characters)");
+            throw new IllegalArgumentException(
+                    "Cannot receive string longer than "
+                            + maxLen
+                            + " (got "
+                            + s.length()
+                            + " characters)");
         }
 
         return s;
     }
-
 }

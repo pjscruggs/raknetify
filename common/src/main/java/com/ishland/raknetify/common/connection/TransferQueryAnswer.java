@@ -24,17 +24,23 @@
 
 package com.ishland.raknetify.common.connection;
 
-/** Retains the wire-level handled flag that vanilla discards when decoding an unknown login query response. */
+/**
+ * Retains the wire-level handled flag that vanilla discards when decoding an unknown login query
+ * response.
+ */
 public interface TransferQueryAnswer {
 
     /**
      * Reads the exact empty handled response accepted by the version-one transfer query.
+     *
      * @return true only when the decoded payload consisted of a single handled byte with value one
      */
     boolean raknetify$isTransferSupported();
 
     /**
-     * Attaches the wire observation to its native packet without replacing another mod's payload decoder.
+     * Attaches the wire observation to its native packet without replacing another mod's payload
+     * decoder.
+     *
      * @param supported whether the original bytes contained an empty handled response
      */
     void raknetify$setTransferSupported(boolean supported);
