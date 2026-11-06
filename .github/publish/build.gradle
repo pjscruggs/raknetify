@@ -1,0 +1,64 @@
+import groovy.json.JsonSlurper
+
+/** Publishes one verified loader artifact without rebuilding it or changing the project's description. */
+plugins {
+    id 'me.modmuss50.mod-publish-plugin' version '2.2.1'
+}
+
+def releaseDirectory = file(providers.gradleProperty('releaseDirectory').get())
+def loader = providers.gradleProperty('loader').get()
+def destination = providers.gradleProperty('destination').get()
+validateTarget(loader, destination)
+def compatibility = new JsonSlurper().parse(new File(releaseDirectory, 'compatibility.json'))
+def nativeLoaders = new JsonSlurper().parse(file(providers.gradleProperty('nativeManifest').getOrElse('../../native-loaders.json')))
+def supportedGames = loader == 'fabric' ? compatibility.gameVersions : [nativeLoaders[loader].minecraft]
+def artifact = new File(releaseDirectory, "raknetify2-${loader}-${compatibility.version}.jar")
+def notes = providers.fileContents(layout.projectDirectory.file(providers.gradleProperty('changelogFile').get())).asText
+def preview = providers.gradleProperty('publishDryRun').map { it.toBoolean() }.getOrElse(true)
+
+if (!artifact.isFile()) throw new GradleException('Missing verified release artifact: ' + artifact.name)
+if (!preview && compatibility.version.contains('dirty')) throw new GradleException('Refusing to publish an uncommitted build')
+
+publishMods {
+    file = artifact
+    version = compatibility.version + '+' + loader
+    displayName = "Raknetify2 ${compatibility.version} (${loader})"
+    changelog = notes
+    type = ALPHA
+    modLoaders.add(loader)
+    dryRun = preview
+    // An uncertain upload must be reconciled before retrying, because creation is not an idempotent API operation.
+    maxRetries = 0
+
+    if (destination == 'modrinth') {
+        modrinth {
+            accessToken = providers.environmentVariable('MODRINTH_TOKEN')
+            projectId = 'eWU77Xdo'
+            minecraftVersions.addAll(supportedGames)
+            environment = CLIENT_AND_SERVER
+        }
+    }
+    if (destination == 'curseforge') {
+        curseforge {
+            accessToken = providers.environmentVariable('CURSEFORGE_TOKEN')
+            projectId = '1785937'
+            minecraftVersions.addAll(supportedGames.collect { it == '26.4-snapshot-7' ? '26.4-snapshot' : it })
+            javaVersions.addAll(loader == 'fabric'
+                    ? [JavaVersion.VERSION_17, JavaVersion.VERSION_21, JavaVersion.VERSION_25]
+                    : [JavaVersion.VERSION_25])
+            client = true
+            server = true
+        }
+    }
+}
+
+/**
+ * Rejects unknown targets before looking up loader metadata or selecting credential providers.
+ * @param loader mod distribution selected for this upload
+ * @param destination hosting service selected for this upload
+ * @throws GradleException if either selection is outside the supported publication targets
+ */
+static void validateTarget(String loader, String destination) {
+    if (!(loader in ['fabric', 'forge', 'neoforge'])) throw new GradleException('Unsupported publication loader')
+    if (!(destination in ['modrinth', 'curseforge'])) throw new GradleException('Unsupported publication destination')
+}

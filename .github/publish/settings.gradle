@@ -1,0 +1,2 @@
+/** Keeps publication independent of Minecraft compilation so uploads reuse verified release artifacts. */
+rootProject.name = 'raknetify2-publish'
