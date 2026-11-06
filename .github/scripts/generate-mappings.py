@@ -94,8 +94,9 @@ def main():
     shutil.copy2(jars[0], work / 'mods' / jars[0].name)
     for version in versions:
         generate_version(work, version)
-    shutil.copy2(work / 'channelMappings.json',
-                 root / 'common/src/main/resources/raknetify-channel-mappings.json')
+    mapping = (work / 'channelMappings.json').read_text(encoding='utf-8')
+    resource = root / 'common/src/main/resources/raknetify-channel-mappings.json'
+    resource.write_text(mapping.rstrip('\r\n') + '\n', encoding='utf-8', newline='\n')
 
 
 if __name__ == '__main__':

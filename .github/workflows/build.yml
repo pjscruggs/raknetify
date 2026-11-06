@@ -30,6 +30,11 @@ jobs:
           path: quality/build/reports/
           if-no-files-found: warn
 
+  mappings:
+    name: Regenerate packet mappings
+    needs: quality
+    uses: ./.github/workflows/checkMappings.yml
+
   build:
     name: Build and unit tests
     needs: quality
@@ -267,7 +272,7 @@ jobs:
 
   downloads:
     name: Verified downloads
-    needs: [quality, build, network]
+    needs: [quality, mappings, build, network]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
