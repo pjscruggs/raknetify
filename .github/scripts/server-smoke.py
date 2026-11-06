@@ -308,6 +308,7 @@ def arguments():
     parser.add_argument('--packetfixer-lock', type=Path)
     parser.add_argument('--versions', nargs='+')
     parser.add_argument('--port', type=int, default=25871)
+    parser.add_argument('--discard-runtime', action='store_true')
     parser.add_argument('--encryption-legacy', type=Path)
     parser.add_argument('--encryption-modern', type=Path)
     return parser.parse_args()
@@ -344,6 +345,17 @@ def select_java(args, version):
     return args.java_17
 
 
+def discard_runtime(folder):
+    """Remove regenerable server libraries after both runs pass, keeping worlds, mods and diagnostic logs."""
+    root = folder.resolve()
+    for name in ('.fabric', 'libraries', 'versions'):
+        target = folder / name
+        if target.is_symlink() or target.resolve().parent != root:
+            raise ValueError('Runtime cache is outside the isolated server folder')
+        if target.is_dir():
+            shutil.rmtree(target)
+
+
 def main():
     """Check both native and NIO transport settings for each selected or locked Minecraft version."""
     args = arguments()
@@ -357,6 +369,8 @@ def main():
         java = select_java(args, version)
         for native in (True, False):
             check_server(folder, version, native, java, args.probe_dir, bool(polymer), bool(krypton), bool(encryption_fixture(args, version)), bool(packetfixer), args.port)
+        if args.discard_runtime:
+            discard_runtime(folder)
 
 
 if __name__ == '__main__':

@@ -55,14 +55,14 @@ jobs:
         run: ./gradlew build :common:transportProbe
       - name: Linux server transports
         run: >-
-          python3 .github/scripts/server-smoke.py
+          python3 .github/scripts/server-smoke.py --discard-runtime
           --jar fabric-universal/build/libs/*.jar
           --work-dir "$RUNNER_TEMP/raknetify-smoke"
           --java-17 "${{ steps.java17.outputs.path }}/bin/java"
           --java-21 "${{ steps.java21.outputs.path }}/bin/java"
       - name: Polymer shared-port compatibility
         run: >-
-          python3 .github/scripts/server-smoke.py
+          python3 .github/scripts/server-smoke.py --discard-runtime
           --jar fabric-universal/build/libs/*.jar
           --work-dir "$RUNNER_TEMP/raknetify-smoke/polymer"
           --java-21 "${{ steps.java21.outputs.path }}/bin/java"
@@ -70,7 +70,7 @@ jobs:
           --polymer-lock .github/polymer-versions.json
       - name: Krypton version compatibility
         run: >-
-          python3 .github/scripts/server-smoke.py
+          python3 .github/scripts/server-smoke.py --discard-runtime
           --jar fabric-universal/build/libs/*.jar
           --work-dir "$RUNNER_TEMP/raknetify-smoke/krypton"
           --java-17 "${{ steps.java17.outputs.path }}/bin/java"
@@ -80,7 +80,7 @@ jobs:
           --encryption-modern transport-test-modern/build/libs/*.jar
       - name: Polymer and Krypton together
         run: >-
-          python3 .github/scripts/server-smoke.py
+          python3 .github/scripts/server-smoke.py --discard-runtime
           --jar fabric-universal/build/libs/*.jar
           --work-dir "$RUNNER_TEMP/raknetify-smoke/polymer-krypton"
           --java-21 "${{ steps.java21.outputs.path }}/bin/java"
@@ -91,7 +91,7 @@ jobs:
           --encryption-modern transport-test-modern/build/libs/*.jar
       - name: PacketFixer version compatibility
         run: >-
-          python3 .github/scripts/server-smoke.py
+          python3 .github/scripts/server-smoke.py --discard-runtime
           --jar fabric-universal/build/libs/*.jar
           --work-dir "$RUNNER_TEMP/raknetify-smoke/packetfixer"
           --java-17 "${{ steps.java17.outputs.path }}/bin/java"
@@ -101,7 +101,7 @@ jobs:
           --encryption-modern transport-test-modern/build/libs/*.jar
       - name: PacketFixer and Krypton together
         run: >-
-          python3 .github/scripts/server-smoke.py
+          python3 .github/scripts/server-smoke.py --discard-runtime
           --jar fabric-universal/build/libs/*.jar
           --work-dir "$RUNNER_TEMP/raknetify-smoke/packetfixer-krypton"
           --java-17 "${{ steps.java17.outputs.path }}/bin/java"
@@ -113,7 +113,7 @@ jobs:
           --encryption-modern transport-test-modern/build/libs/*.jar
       - name: PacketFixer with Polymer and Krypton
         run: >-
-          python3 .github/scripts/server-smoke.py
+          python3 .github/scripts/server-smoke.py --discard-runtime
           --jar fabric-universal/build/libs/*.jar
           --work-dir "$RUNNER_TEMP/raknetify-smoke/packetfixer-polymer-krypton"
           --java-21 "${{ steps.java21.outputs.path }}/bin/java"
