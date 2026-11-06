@@ -47,7 +47,7 @@ processResources {
     inputs.property 'minecraft', supported.minecraft
     inputs.property 'neoforge', supported.version
     filesMatching('META-INF/neoforge.mods.toml') {
-        expand version: project.version, minecraft: inputs.properties.minecraft, neoforge: inputs.properties.neoforge
+        expand version: inputs.properties.version, minecraft: inputs.properties.minecraft, neoforge: inputs.properties.neoforge
     }
     from rootProject.file('icon.png')
 }

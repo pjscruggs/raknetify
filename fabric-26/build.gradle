@@ -31,7 +31,7 @@ processResources {
     filesMatching('fabric.mod.json') {
         // Replace the quoted placeholder with a JSON string or array before expanding the other values.
         filter { line -> line.replace('"${minecraft}"', inputs.properties.minecraft) }
-        expand version: project.version,
+        expand version: inputs.properties.version,
                 loader: inputs.properties.loader, java: inputs.properties.java
     }
 }

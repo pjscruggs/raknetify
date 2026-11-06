@@ -29,6 +29,7 @@ def metadata = tasks.register('generateMetadata') {
     inputs.files(runtimes.values().collect { it.flatMap { task -> task.archiveFile } })
     inputs.file(rootProject.file('supported-versions.json'))
     inputs.property('version', project.version)
+    inputs.property('gameVersions', rootProject.supportedVersions.values().collectMany { it.gameVersions }.unique())
     outputs.dir(generated)
 
     doLast {
@@ -50,7 +51,7 @@ def metadata = tasks.register('generateMetadata') {
         // The required nested dependency makes Loader select one compatible runtime instead of skipping both.
         dependencies.raknetify_runtime = variants.collect { it.version }
         def mod = [
-                schemaVersion: 1, id: 'raknetify', version: project.version.toString(),
+                schemaVersion: 1, id: 'raknetify', version: inputs.properties.version.toString(),
                 name: 'Raknetify2', description: 'RakNet networking for Minecraft clients and servers.',
                 authors: ['ishland'], contributors: ['pjscruggs'], license: 'MIT', environment: '*',
                 icon: 'icon.png',
@@ -58,8 +59,8 @@ def metadata = tasks.register('generateMetadata') {
                           issues: 'https://github.com/pjscruggs/raknetify2/issues'],
                 jars: variants.collect { [file: it.file] }, depends: dependencies
         ]
-        def compatibility = [version: project.version.toString(),
-                             gameVersions: rootProject.supportedVersions.values().collectMany { it.gameVersions }.unique(),
+        def compatibility = [version: inputs.properties.version.toString(),
+                             gameVersions: inputs.properties.gameVersions,
                              runtimes: variants]
         def directory = generated.get().asFile
         directory.mkdirs()

@@ -55,7 +55,7 @@ processResources {
     inputs.property 'forge', supported.version.substring(supported.minecraft.length() + 1)
     inputs.property 'mixinJavaCompatibility', 'JAVA_21'
     filesMatching('META-INF/mods.toml') {
-        expand version: project.version, minecraft: inputs.properties.minecraft, forge: inputs.properties.forge
+        expand version: inputs.properties.version, minecraft: inputs.properties.minecraft, forge: inputs.properties.forge
     }
     filesMatching('raknetify-fabric.mixins.json') {
         filter { line -> line.replace('JAVA_25', inputs.properties.mixinJavaCompatibility) }

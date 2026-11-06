@@ -59,7 +59,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
       - name: Build and run unit tests
-        run: ./gradlew build :common:transportProbe --no-daemon --max-workers=2
+        run: ./gradlew build :common:transportProbe --warning-mode fail --no-daemon --max-workers=2
       - name: Preserve unit and quality reports
         if: always()
         uses: actions/upload-artifact@v7.0.2

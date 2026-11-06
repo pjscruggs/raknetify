@@ -37,7 +37,7 @@ subprojects {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-	version = project.mod_version + "." + getVersionSuffix()
+	version = project.mod_version + "." + rootProject.getVersionSuffix()
 	if (project.name == 'fabric') version += '.legacy'
 	if (project.name == 'fabric-26') version += '.modern'
 
@@ -48,9 +48,9 @@ subprojects {
 
 	repositories {
 		mavenCentral()
-		maven { url 'https://jitpack.io' }
-		maven { url 'https://repo.codemc.org/repository/maven-public' }
-		maven { url 'https://oss.sonatype.org/content/repositories/snapshots' }
+		maven { url = 'https://jitpack.io' }
+		maven { url = 'https://repo.codemc.org/repository/maven-public' }
+		maven { url = 'https://oss.sonatype.org/content/repositories/snapshots' }
 	}
 
 	plugins.withId('maven-publish') {

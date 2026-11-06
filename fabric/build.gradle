@@ -21,7 +21,7 @@ configurations {
 }
 
 repositories {
-	maven { url 'https://repo.codemc.io/repository/relativitymc/' }
+	maven { url = 'https://repo.codemc.io/repository/relativitymc/' }
 }
 
 dependencies {
@@ -47,7 +47,7 @@ processResources {
 	filesMatching("fabric.mod.json") {
 		// Replace the quoted placeholder with a JSON string or array before expanding the other values.
 		filter { line -> line.replace('"${minecraft}"', inputs.properties.minecraft) }
-		expand "version": project.version,
+		expand "version": inputs.properties.version,
 				"java": inputs.properties.java,
 				"loader": inputs.properties.loader
 	}

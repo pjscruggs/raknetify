@@ -23,11 +23,11 @@ group = project.maven_group + ".velocity"
 
 repositories {
     maven {
-        name 'papermc'
-        url 'https://repo.papermc.io/repository/maven-public/'
+        name = 'papermc'
+        url = 'https://repo.papermc.io/repository/maven-public/'
     }
     ivy {
-        url 'https://fill-data.papermc.io/v1/objects/af292ea5c9c330fc3b367e48c7d1d448b1b3216f597798bfbef662d002b1343b/'
+        url = 'https://fill-data.papermc.io/v1/objects/af292ea5c9c330fc3b367e48c7d1d448b1b3216f597798bfbef662d002b1343b/'
         patternLayout {
             artifact "[organization]-[module]-[revision](.[ext])"
         }
@@ -62,7 +62,7 @@ processResources {
     inputs.property "version", project.version
 
     filesMatching("velocity-plugin.json") {
-        expand "version": project.version
+        expand "version": inputs.properties.version
     }
 }
 

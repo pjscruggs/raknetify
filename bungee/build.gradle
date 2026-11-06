@@ -16,7 +16,7 @@ group = project.maven_group + ".bungee"
 
 repositories {
     ivy {
-        url 'https://ci.md-5.net/job/'
+        url = 'https://ci.md-5.net/job/'
         patternLayout {
 //            artifact "[organization]/versions/[module]/builds/[revision]/downloads/[organization]-[module]-[revision](.[ext])"
             // https://ci.md-5.net/job/BungeeCord/1636/artifact/bootstrap/target/BungeeCord.jar
@@ -44,7 +44,7 @@ processResources {
     inputs.property "version", project.version
 
     filesMatching("bungee.yml") {
-        expand "version": project.version
+        expand "version": inputs.properties.version
     }
 }
 
