@@ -25,6 +25,7 @@
 package com.ishland.raknetify.fabric.common.connection;
 
 import com.ishland.raknetify.common.connection.TransferSupport;
+
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.login.custom.CustomQueryPayload;
 import net.minecraft.resources.Identifier;
@@ -34,6 +35,7 @@ public final class TransferQuery implements CustomQueryPayload {
 
     /**
      * Returns the feature version understood by clients that can follow a RakNet transfer address.
+     *
      * @return fixed namespaced capability identifier
      */
     @Override
@@ -43,9 +45,9 @@ public final class TransferQuery implements CustomQueryPayload {
 
     /**
      * Writes no fields because the query identifier defines the complete version-one contract.
+     *
      * @param buffer native query payload output, deliberately left empty
      */
     @Override
-    public void write(FriendlyByteBuf buffer) {
-    }
+    public void write(final FriendlyByteBuf buffer) {}
 }

@@ -26,31 +26,33 @@ package com.ishland.raknetify.fabric.common.client;
 
 import com.ishland.raknetify.common.util.DebugHudFormatter;
 import com.ishland.raknetify.fabric.mixin.access.IClientConnection;
+
 import io.netty.channel.Channel;
 
-import java.util.function.Consumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.Connection;
 
-/**
- * Connects the active Minecraft client connection to the shared transport HUD formatter.
- */
+import java.util.function.Consumer;
+
+/** Connects the active Minecraft client connection to the shared transport HUD formatter. */
 public class DebugHudUtil {
 
     /**
-     * Emits transport diagnostics for the active connection or an inactive marker when no RakNet session exists.
+     * Emits transport diagnostics for the active connection or an inactive marker when no RakNet
+     * session exists.
      *
      * @param consumer destination receiving each complete HUD line in display order
      */
-    public static void getDebugString(Consumer<String> consumer) {
+    public static void getDebugString(final Consumer<String> consumer) {
         final ClientPacketListener networkHandler = Minecraft.getInstance().getConnection();
         if (networkHandler != null) {
             final Connection connection = networkHandler.getConnection();
             final Channel channel = ((IClientConnection) connection).getChannel();
-            if (DebugHudFormatter.append(consumer, channel)) return;
+            if (DebugHudFormatter.append(consumer, channel)) {
+                return;
+            }
         }
         consumer.accept("[Raknetify2] A: false");
     }
-
 }

@@ -25,6 +25,10 @@
 package com.ishland.raknetify.fabric.common.connection;
 
 import com.google.common.collect.Sets;
+import com.ishland.raknetify.fabric.common.util.MinecraftVersions;
+
+import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
+
 import net.minecraft.network.protocol.BundleDelimiterPacket;
 import net.minecraft.network.protocol.common.ClientboundClearDialogPacket;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
@@ -235,298 +239,288 @@ import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
 import net.minecraft.network.protocol.ping.ClientboundPongResponsePacket;
 import net.minecraft.network.protocol.ping.ServerboundPingRequestPacket;
-import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
-import com.ishland.raknetify.fabric.common.util.MinecraftVersions;
 
 import java.util.Set;
 
-/**
- * Defines packet delivery groups whose ordering dependencies stay within each RakNet channel.
- */
+/** Defines packet delivery groups whose ordering dependencies stay within each RakNet channel. */
 public class RakNetMultiChannel {
 
-    /**
-     * Prevents construction of the static packet-class routing table.
-     */
-    private RakNetMultiChannel() {
-    }
+    /** Prevents construction of the static packet-class routing table. */
+    private RakNetMultiChannel() {}
 
     /**
-     * Packets delivered reliably without an ordering-channel dependency, including keepalives and independent metadata.
+     * Packets delivered reliably without an ordering-channel dependency, including keepalives and
+     * independent metadata.
      */
-    private static final Set<Class<?>> unordered = Set.of(
-            ClientboundKeepAlivePacket.class,
-            ServerboundKeepAlivePacket.class,
-            ClientboundDisconnectPacket.class,
-            ClientboundPingPacket.class,
-            ServerboundPongPacket.class,
-            ClientboundResourcePackPushPacket.class,
-            ServerboundResourcePackPacket.class,
-            ClientboundResourcePackPopPacket.class,
-            ClientboundAwardStatsPacket.class,
-            ServerboundSeenAdvancementsPacket.class,
-            ClientboundSelectAdvancementsTabPacket.class,
-            ServerboundPingRequestPacket.class,
-            ClientboundPongResponsePacket.class,
-            ClientboundCustomReportDetailsPacket.class,
-            ClientboundServerLinksPacket.class
-    );
+    private static final Set<Class<?>> unordered =
+            Set.of(
+                    ClientboundKeepAlivePacket.class,
+                    ServerboundKeepAlivePacket.class,
+                    ClientboundDisconnectPacket.class,
+                    ClientboundPingPacket.class,
+                    ServerboundPongPacket.class,
+                    ClientboundResourcePackPushPacket.class,
+                    ServerboundResourcePackPacket.class,
+                    ClientboundResourcePackPopPacket.class,
+                    ClientboundAwardStatsPacket.class,
+                    ServerboundSeenAdvancementsPacket.class,
+                    ClientboundSelectAdvancementsTabPacket.class,
+                    ServerboundPingRequestPacket.class,
+                    ClientboundPongResponsePacket.class,
+                    ClientboundCustomReportDetailsPacket.class,
+                    ClientboundServerLinksPacket.class);
 
     /**
-     * Protocol-control packets kept on the default ordered channel during configuration transitions.
+     * Protocol-control packets kept on the default ordered channel during configuration
+     * transitions.
      */
-    private static final Set<Class<?>> channel0 = Set.of(
-            ClientboundStartConfigurationPacket.class,
-            ServerboundConfigurationAcknowledgedPacket.class,
-            ClientboundTransferPacket.class
-    );
+    private static final Set<Class<?>> channel0 =
+            Set.of(
+                    ClientboundStartConfigurationPacket.class,
+                    ServerboundConfigurationAcknowledgedPacket.class,
+                    ClientboundTransferPacket.class);
 
     // Primarily used for interactions independent to world
-    /**
-     * Mostly world-independent interaction and UI traffic that survives world synchronization.
-     */
-    private static final Set<Class<?>> channel1 = Set.of(
-            ClientboundLowDiskSpaceWarningPacket.class,
-            ServerboundSetGameRulePacket.class,
-            ClientboundGameRuleValuesPacket.class,
-            ClientboundBossEventPacket.class,
-            ClientboundClearTitlesPacket.class,
-            ClientboundSetSubtitleTextPacket.class,
-            ClientboundSetTitleTextPacket.class,
-            ClientboundSetTitlesAnimationPacket.class,
-            ClientboundPlayerCombatKillPacket.class,
-            ClientboundSystemChatPacket.class,
-            ClientboundDisguisedChatPacket.class,
-            ClientboundPlayerChatPacket.class,
-            ClientboundCustomChatCompletionsPacket.class,
-            ClientboundDeleteChatPacket.class,
-            ServerboundChatSessionUpdatePacket.class,
-            ServerboundChatAckPacket.class,
-            ClientboundServerDataPacket.class,
-            ClientboundSetActionBarTextPacket.class,
-            ClientboundSetExperiencePacket.class,
-            ClientboundSetHealthPacket.class,
-            ClientboundCooldownPacket.class,
-            ClientboundSetDisplayObjectivePacket.class,
-            ClientboundSetObjectivePacket.class,
-            ClientboundSetScorePacket.class,
-            ClientboundResetScorePacket.class,
-            ClientboundUpdateAdvancementsPacket.class,
-            ClientboundCommandsPacket.class,
-            ClientboundCommandSuggestionsPacket.class,
-            ServerboundCommandSuggestionPacket.class,
-            ServerboundChatCommandPacket.class,
-            ServerboundChatCommandSignedPacket.class,
-            ServerboundChatPacket.class,
-            ServerboundClientInformationPacket.class,
-            ServerboundChangeDifficultyPacket.class,
-            ServerboundLockDifficultyPacket.class,
-            ClientboundPlayerPositionPacket.class,
-            ClientboundPlayerLookAtPacket.class,
-            ClientboundSetTimePacket.class,
-            ClientboundChangeDifficultyPacket.class,
-            ClientboundSetPlayerTeamPacket.class,
-            ClientboundUpdateRecipesPacket.class,
-            ClientboundUpdateTagsPacket.class,
-            ClientboundPlayerInfoUpdatePacket.class,
-            ClientboundTabListPacket.class,
-            ClientboundPlayerInfoRemovePacket.class,
-            ClientboundCookieRequestPacket.class,
-            ClientboundStoreCookiePacket.class,
-            ServerboundCookieResponsePacket.class,
-            ClientboundDebugSamplePacket.class,
-            ServerboundDebugSubscriptionRequestPacket.class,
-            ClientboundTrackedWaypointPacket.class,
-            ClientboundClearDialogPacket.class,
-            ClientboundShowDialogPacket.class,
-            ServerboundCustomClickActionPacket.class
-    );
+    /** Mostly world-independent interaction and UI traffic that survives world synchronization. */
+    private static final Set<Class<?>> channel1 =
+            Set.of(
+                    ClientboundLowDiskSpaceWarningPacket.class,
+                    ServerboundSetGameRulePacket.class,
+                    ClientboundGameRuleValuesPacket.class,
+                    ClientboundBossEventPacket.class,
+                    ClientboundClearTitlesPacket.class,
+                    ClientboundSetSubtitleTextPacket.class,
+                    ClientboundSetTitleTextPacket.class,
+                    ClientboundSetTitlesAnimationPacket.class,
+                    ClientboundPlayerCombatKillPacket.class,
+                    ClientboundSystemChatPacket.class,
+                    ClientboundDisguisedChatPacket.class,
+                    ClientboundPlayerChatPacket.class,
+                    ClientboundCustomChatCompletionsPacket.class,
+                    ClientboundDeleteChatPacket.class,
+                    ServerboundChatSessionUpdatePacket.class,
+                    ServerboundChatAckPacket.class,
+                    ClientboundServerDataPacket.class,
+                    ClientboundSetActionBarTextPacket.class,
+                    ClientboundSetExperiencePacket.class,
+                    ClientboundSetHealthPacket.class,
+                    ClientboundCooldownPacket.class,
+                    ClientboundSetDisplayObjectivePacket.class,
+                    ClientboundSetObjectivePacket.class,
+                    ClientboundSetScorePacket.class,
+                    ClientboundResetScorePacket.class,
+                    ClientboundUpdateAdvancementsPacket.class,
+                    ClientboundCommandsPacket.class,
+                    ClientboundCommandSuggestionsPacket.class,
+                    ServerboundCommandSuggestionPacket.class,
+                    ServerboundChatCommandPacket.class,
+                    ServerboundChatCommandSignedPacket.class,
+                    ServerboundChatPacket.class,
+                    ServerboundClientInformationPacket.class,
+                    ServerboundChangeDifficultyPacket.class,
+                    ServerboundLockDifficultyPacket.class,
+                    ClientboundPlayerPositionPacket.class,
+                    ClientboundPlayerLookAtPacket.class,
+                    ClientboundSetTimePacket.class,
+                    ClientboundChangeDifficultyPacket.class,
+                    ClientboundSetPlayerTeamPacket.class,
+                    ClientboundUpdateRecipesPacket.class,
+                    ClientboundUpdateTagsPacket.class,
+                    ClientboundPlayerInfoUpdatePacket.class,
+                    ClientboundTabListPacket.class,
+                    ClientboundPlayerInfoRemovePacket.class,
+                    ClientboundCookieRequestPacket.class,
+                    ClientboundStoreCookiePacket.class,
+                    ServerboundCookieResponsePacket.class,
+                    ClientboundDebugSamplePacket.class,
+                    ServerboundDebugSubscriptionRequestPacket.class,
+                    ClientboundTrackedWaypointPacket.class,
+                    ClientboundClearDialogPacket.class,
+                    ClientboundShowDialogPacket.class,
+                    ServerboundCustomClickActionPacket.class);
 
     // Entities related stuff
     /**
-     * Entity lifecycle, movement, combat, and related player interactions that share an ordering dependency.
+     * Entity lifecycle, movement, combat, and related player interactions that share an ordering
+     * dependency.
      */
-    private static final Set<Class<?>> channel2 = Set.of(
-            // Item selection, inventory edits and player actions must arrive before the movement or use that follows.
-            ServerboundContainerButtonClickPacket.class,
-            ServerboundContainerClickPacket.class,
-            ServerboundPlayerCommandPacket.class,
-            ServerboundPlayerActionPacket.class,
-            ServerboundPlayerInputPacket.class,
-            ServerboundPickItemFromBlockPacket.class,
-            ServerboundPickItemFromEntityPacket.class,
-            ServerboundEditBookPacket.class,
-            ServerboundRenameItemPacket.class,
-            ServerboundContainerClosePacket.class,
-            ServerboundSetCreativeModeSlotPacket.class,
-            ServerboundPlaceRecipePacket.class,
-            ServerboundSelectTradePacket.class,
-            ServerboundSetBeaconPacket.class,
-            ServerboundPlayerAbilitiesPacket.class,
-            ServerboundSetCarriedItemPacket.class,
-            ServerboundContainerSlotStateChangedPacket.class,
-            ServerboundSelectBundleItemPacket.class,
-
-            ServerboundAttackPacket.class,
-            ClientboundPlayerCombatEndPacket.class,
-            ClientboundPlayerCombatEnterPacket.class,
-            ClientboundRemoveEntitiesPacket.class,
-            ClientboundAddEntityPacket.class,
-            ClientboundAnimatePacket.class,
-            ClientboundEntityEventPacket.class,
-            ClientboundMoveEntityPacket.Pos.class,
-            ClientboundMoveEntityPacket.Rot.class,
-            ClientboundMoveEntityPacket.PosRot.class,
-            ClientboundRotateHeadPacket.class,
-            ClientboundSetEntityDataPacket.class,
-            ClientboundSetEntityLinkPacket.class,
-            ClientboundSetEntityMotionPacket.class,
-            ClientboundSetEquipmentPacket.class,
-            ClientboundSetPassengersPacket.class,
-            ClientboundTeleportEntityPacket.class,
-            ClientboundEntityPositionSyncPacket.class,
-            ClientboundUpdateAttributesPacket.class,
-            ClientboundUpdateMobEffectPacket.class,
-            ClientboundRemoveMobEffectPacket.class,
-            ClientboundHurtAnimationPacket.class,
-            ClientboundDamageEventPacket.class,
-            ClientboundMoveMinecartPacket.class,
-            ServerboundUseItemOnPacket.class,
-            ServerboundUseItemPacket.class,
-            ServerboundInteractPacket.class,
-            ServerboundMovePlayerPacket.class,
-            ServerboundMovePlayerPacket.StatusOnly.class,
-            ServerboundMovePlayerPacket.Pos.class,
-            ServerboundMovePlayerPacket.PosRot.class,
-            ServerboundMovePlayerPacket.Rot.class,
-            ServerboundClientTickEndPacket.class,
-            ServerboundChangeGameModePacket.class,
-            ClientboundExplodePacket.class,
-            ClientboundLoginPacket.class,
-            ClientboundUpdateEnabledFeaturesPacket.class,
-            ClientboundGameEventPacket.class,
-            ClientboundSetDefaultSpawnPositionPacket.class,
-            ClientboundTakeItemEntityPacket.class,
-            ClientboundPlayerAbilitiesPacket.class,
-            ClientboundSetCameraPacket.class,
-            ClientboundMoveVehiclePacket.class,
-            ServerboundPaddleBoatPacket.class,
-            ServerboundMoveVehiclePacket.class,
-            ClientboundPlayerRotationPacket.class,
-            ClientboundMoveEntityPacket.class,
-            ClientboundProjectilePowerPacket.class,
-            ClientboundDebugEntityValuePacket.class,
-            ClientboundDebugEventPacket.class
-    );
+    private static final Set<Class<?>> channel2 =
+            Set.of(
+                    // Item selection, inventory edits and player actions must arrive before the
+                    // movement or use that follows.
+                    ServerboundContainerButtonClickPacket.class,
+                    ServerboundContainerClickPacket.class,
+                    ServerboundPlayerCommandPacket.class,
+                    ServerboundPlayerActionPacket.class,
+                    ServerboundPlayerInputPacket.class,
+                    ServerboundPickItemFromBlockPacket.class,
+                    ServerboundPickItemFromEntityPacket.class,
+                    ServerboundEditBookPacket.class,
+                    ServerboundRenameItemPacket.class,
+                    ServerboundContainerClosePacket.class,
+                    ServerboundSetCreativeModeSlotPacket.class,
+                    ServerboundPlaceRecipePacket.class,
+                    ServerboundSelectTradePacket.class,
+                    ServerboundSetBeaconPacket.class,
+                    ServerboundPlayerAbilitiesPacket.class,
+                    ServerboundSetCarriedItemPacket.class,
+                    ServerboundContainerSlotStateChangedPacket.class,
+                    ServerboundSelectBundleItemPacket.class,
+                    ServerboundAttackPacket.class,
+                    ClientboundPlayerCombatEndPacket.class,
+                    ClientboundPlayerCombatEnterPacket.class,
+                    ClientboundRemoveEntitiesPacket.class,
+                    ClientboundAddEntityPacket.class,
+                    ClientboundAnimatePacket.class,
+                    ClientboundEntityEventPacket.class,
+                    ClientboundMoveEntityPacket.Pos.class,
+                    ClientboundMoveEntityPacket.Rot.class,
+                    ClientboundMoveEntityPacket.PosRot.class,
+                    ClientboundRotateHeadPacket.class,
+                    ClientboundSetEntityDataPacket.class,
+                    ClientboundSetEntityLinkPacket.class,
+                    ClientboundSetEntityMotionPacket.class,
+                    ClientboundSetEquipmentPacket.class,
+                    ClientboundSetPassengersPacket.class,
+                    ClientboundTeleportEntityPacket.class,
+                    ClientboundEntityPositionSyncPacket.class,
+                    ClientboundUpdateAttributesPacket.class,
+                    ClientboundUpdateMobEffectPacket.class,
+                    ClientboundRemoveMobEffectPacket.class,
+                    ClientboundHurtAnimationPacket.class,
+                    ClientboundDamageEventPacket.class,
+                    ClientboundMoveMinecartPacket.class,
+                    ServerboundUseItemOnPacket.class,
+                    ServerboundUseItemPacket.class,
+                    ServerboundInteractPacket.class,
+                    ServerboundMovePlayerPacket.class,
+                    ServerboundMovePlayerPacket.StatusOnly.class,
+                    ServerboundMovePlayerPacket.Pos.class,
+                    ServerboundMovePlayerPacket.PosRot.class,
+                    ServerboundMovePlayerPacket.Rot.class,
+                    ServerboundClientTickEndPacket.class,
+                    ServerboundChangeGameModePacket.class,
+                    ClientboundExplodePacket.class,
+                    ClientboundLoginPacket.class,
+                    ClientboundUpdateEnabledFeaturesPacket.class,
+                    ClientboundGameEventPacket.class,
+                    ClientboundSetDefaultSpawnPositionPacket.class,
+                    ClientboundTakeItemEntityPacket.class,
+                    ClientboundPlayerAbilitiesPacket.class,
+                    ClientboundSetCameraPacket.class,
+                    ClientboundMoveVehiclePacket.class,
+                    ServerboundPaddleBoatPacket.class,
+                    ServerboundMoveVehiclePacket.class,
+                    ClientboundPlayerRotationPacket.class,
+                    ClientboundMoveEntityPacket.class,
+                    ClientboundProjectilePowerPacket.class,
+                    ClientboundDebugEntityValuePacket.class,
+                    ClientboundDebugEventPacket.class);
 
     // Primarily used for interactions dependent to world
     /**
      * World-dependent interactions such as containers, inventories, teleports, and custom payloads.
      */
-    private static final Set<Class<?>> channel3 = Set.of(
-            ServerboundTeleportToEntityPacket.class,
-            ServerboundAcceptTeleportationPacket.class,
-            ServerboundBlockEntityTagQueryPacket.class,
-            ServerboundEntityTagQueryPacket.class,
-            ClientboundTagQueryPacket.class,
-            ClientboundContainerClosePacket.class,
-            ClientboundMountScreenOpenPacket.class,
-            ClientboundOpenScreenPacket.class,
-            ClientboundContainerSetDataPacket.class,
-            ClientboundContainerSetSlotPacket.class,
-            ClientboundOpenBookPacket.class,
-            ClientboundContainerSetContentPacket.class,
-            ClientboundSetHeldSlotPacket.class,
-            ClientboundMerchantOffersPacket.class,
-            ClientboundRecipeBookAddPacket.class,
-            ClientboundRecipeBookRemovePacket.class,
-            ClientboundRecipeBookSettingsPacket.class,
-            ServerboundRecipeBookSeenRecipePacket.class,
-            ServerboundRecipeBookChangeSettingsPacket.class,
-            ServerboundSetCommandBlockPacket.class,
-            ServerboundSetCommandMinecartPacket.class,
-            ServerboundSetTestBlockPacket.class,
-            ServerboundTestInstanceBlockActionPacket.class,
-            ServerboundSetJigsawBlockPacket.class,
-            ServerboundSetStructureBlockPacket.class,
-            ClientboundPlaceGhostRecipePacket.class,
-            ClientboundSetCursorItemPacket.class,
-            ClientboundSetPlayerInventoryPacket.class,
-            ClientboundInitializeBorderPacket.class,
-            ClientboundSetBorderCenterPacket.class,
-            ClientboundSetBorderLerpSizePacket.class,
-            ClientboundSetBorderSizePacket.class,
-            ClientboundSetBorderWarningDelayPacket.class,
-            ClientboundSetBorderWarningDistancePacket.class,
-            ServerboundClientCommandPacket.class,
-            ClientboundRespawnPacket.class,
-            ServerboundCustomPayloadPacket.class,
-            ClientboundCustomPayloadPacket.class,
-            ClientboundTickingStepPacket.class,
-            ClientboundTickingStatePacket.class
-    );
+    private static final Set<Class<?>> channel3 =
+            Set.of(
+                    ServerboundTeleportToEntityPacket.class,
+                    ServerboundAcceptTeleportationPacket.class,
+                    ServerboundBlockEntityTagQueryPacket.class,
+                    ServerboundEntityTagQueryPacket.class,
+                    ClientboundTagQueryPacket.class,
+                    ClientboundContainerClosePacket.class,
+                    ClientboundMountScreenOpenPacket.class,
+                    ClientboundOpenScreenPacket.class,
+                    ClientboundContainerSetDataPacket.class,
+                    ClientboundContainerSetSlotPacket.class,
+                    ClientboundOpenBookPacket.class,
+                    ClientboundContainerSetContentPacket.class,
+                    ClientboundSetHeldSlotPacket.class,
+                    ClientboundMerchantOffersPacket.class,
+                    ClientboundRecipeBookAddPacket.class,
+                    ClientboundRecipeBookRemovePacket.class,
+                    ClientboundRecipeBookSettingsPacket.class,
+                    ServerboundRecipeBookSeenRecipePacket.class,
+                    ServerboundRecipeBookChangeSettingsPacket.class,
+                    ServerboundSetCommandBlockPacket.class,
+                    ServerboundSetCommandMinecartPacket.class,
+                    ServerboundSetTestBlockPacket.class,
+                    ServerboundTestInstanceBlockActionPacket.class,
+                    ServerboundSetJigsawBlockPacket.class,
+                    ServerboundSetStructureBlockPacket.class,
+                    ClientboundPlaceGhostRecipePacket.class,
+                    ClientboundSetCursorItemPacket.class,
+                    ClientboundSetPlayerInventoryPacket.class,
+                    ClientboundInitializeBorderPacket.class,
+                    ClientboundSetBorderCenterPacket.class,
+                    ClientboundSetBorderLerpSizePacket.class,
+                    ClientboundSetBorderSizePacket.class,
+                    ClientboundSetBorderWarningDelayPacket.class,
+                    ClientboundSetBorderWarningDistancePacket.class,
+                    ServerboundClientCommandPacket.class,
+                    ClientboundRespawnPacket.class,
+                    ServerboundCustomPayloadPacket.class,
+                    ClientboundCustomPayloadPacket.class,
+                    ClientboundTickingStepPacket.class,
+                    ClientboundTickingStatePacket.class);
 
     // Primarily for packets not very critical to interactions
     /**
      * Map, sound, particle, and other visual traffic separated from latency-sensitive interactions.
      */
-    private static final Set<Class<?>> channel4 = Set.of(
-            ClientboundMapItemDataPacket.class,
-            ClientboundSoundEntityPacket.class,
-            ClientboundSoundPacket.class,
-            ClientboundStopSoundPacket.class,
-            ClientboundLevelParticlesPacket.class
-    );
+    private static final Set<Class<?>> channel4 =
+            Set.of(
+                    ClientboundMapItemDataPacket.class,
+                    ClientboundSoundEntityPacket.class,
+                    ClientboundSoundPacket.class,
+                    ClientboundStopSoundPacket.class,
+                    ClientboundLevelParticlesPacket.class);
 
     // Used for worlds
     /**
-     * Chunk, block, lighting, and related world-stream traffic that can queue behind large transfers.
+     * Chunk, block, lighting, and related world-stream traffic that can queue behind large
+     * transfers.
      */
-    private static final Set<Class<?>> channel7 = Set.of(
-            ServerboundJigsawGeneratePacket.class,
-            ClientboundOpenSignEditorPacket.class,
-            ServerboundSignUpdatePacket.class,
-            ClientboundBlockEventPacket.class,
-            ClientboundSetChunkCacheCenterPacket.class,
-            ClientboundSetChunkCacheRadiusPacket.class,
-            ClientboundSetSimulationDistancePacket.class,
-            ClientboundForgetLevelChunkPacket.class,
-            ClientboundBlockUpdatePacket.class,
-            ClientboundSectionBlocksUpdatePacket.class,
-            ClientboundLevelEventPacket.class,
-            ClientboundBlockDestructionPacket.class,
-            ClientboundLevelChunkWithLightPacket.class,
-            ClientboundBlockEntityDataPacket.class,
-            ClientboundLightUpdatePacket.class,
-            ClientboundChunksBiomesPacket.class,
-            ClientboundChunkBatchFinishedPacket.class,
-            ClientboundChunkBatchStartPacket.class,
-            ServerboundChunkBatchReceivedPacket.class,
-            ClientboundBlockChangedAckPacket.class,
-            ServerboundPlayerLoadedPacket.class,
-            ClientboundTestInstanceBlockStatus.class,
-            ClientboundDebugBlockValuePacket.class,
-            ClientboundDebugChunkValuePacket.class,
-            ClientboundGameTestHighlightPosPacket.class
-    );
+    private static final Set<Class<?>> channel7 =
+            Set.of(
+                    ServerboundJigsawGeneratePacket.class,
+                    ClientboundOpenSignEditorPacket.class,
+                    ServerboundSignUpdatePacket.class,
+                    ClientboundBlockEventPacket.class,
+                    ClientboundSetChunkCacheCenterPacket.class,
+                    ClientboundSetChunkCacheRadiusPacket.class,
+                    ClientboundSetSimulationDistancePacket.class,
+                    ClientboundForgetLevelChunkPacket.class,
+                    ClientboundBlockUpdatePacket.class,
+                    ClientboundSectionBlocksUpdatePacket.class,
+                    ClientboundLevelEventPacket.class,
+                    ClientboundBlockDestructionPacket.class,
+                    ClientboundLevelChunkWithLightPacket.class,
+                    ClientboundBlockEntityDataPacket.class,
+                    ClientboundLightUpdatePacket.class,
+                    ClientboundChunksBiomesPacket.class,
+                    ClientboundChunkBatchFinishedPacket.class,
+                    ClientboundChunkBatchStartPacket.class,
+                    ServerboundChunkBatchReceivedPacket.class,
+                    ClientboundBlockChangedAckPacket.class,
+                    ServerboundPlayerLoadedPacket.class,
+                    ClientboundTestInstanceBlockStatus.class,
+                    ClientboundDebugBlockValuePacket.class,
+                    ClientboundDebugChunkValuePacket.class,
+                    ClientboundGameTestHighlightPosPacket.class);
 
-    /**
-     * Packet classes permitted to use unreliable delivery, currently empty.
-     */
+    /** Packet classes permitted to use unreliable delivery, currently empty. */
     private static final Set<Class<?>> unreliable = Set.of();
 
     /**
      * Bundle delimiters discarded because RakNet routing does not preserve vanilla packet bundles.
      */
-    private static final Set<Class<?>> theVoid = Set.of(
-            BundleDelimiterPacket.class,
-            ClientboundBundleDelimiterPacket.class
-    );
+    private static final Set<Class<?>> theVoid =
+            Set.of(BundleDelimiterPacket.class, ClientboundBundleDelimiterPacket.class);
 
-    /**
-     * Resolved packet-class policies, using Integer.MAX_VALUE to identify unregistered classes.
-     */
-    private static final Object2IntOpenHashMap<Class<?>> classToChannelIdOverride = new Object2IntOpenHashMap<>();
+    /** Resolved packet-class policies, using Integer.MAX_VALUE to identify unregistered classes. */
+    private static final Object2IntOpenHashMap<Class<?>> classToChannelIdOverride =
+            new Object2IntOpenHashMap<>();
 
     static {
         classToChannelIdOverride.defaultReturnValue(Integer.MAX_VALUE);
@@ -539,19 +533,31 @@ public class RakNetMultiChannel {
         channel7.forEach(clazz -> classToChannelIdOverride.put(clazz, 7));
         unreliable.forEach(clazz -> classToChannelIdOverride.put(clazz, -2));
         theVoid.forEach(clazz -> classToChannelIdOverride.put(clazz, Integer.MIN_VALUE));
-        // These older packet names are absent from the 26.3 compile target and must be resolved by name.
+        // These older packet names are absent from the 26.3 compile target and must be resolved by
+        // name.
         if (!MinecraftVersions.AT_LEAST_26_3) {
             addEarlierPacket("ServerboundSwingPacket", 2);
         }
         if (!MinecraftVersions.AT_LEAST_26_2) {
             addEarlierPacket("ServerboundSpectateEntityPacket", 3);
         }
-        // Keep newer class references inside their version guards so older runtimes never resolve them.
-        if (MinecraftVersions.AT_LEAST_26_3) classToChannelIdOverride.put(ServerboundPunchPacket.class, 2);
-        if (MinecraftVersions.AT_LEAST_26_3) classToChannelIdOverride.put(ClientboundSwingAnimationPacket.class, 2);
-        if (MinecraftVersions.AT_LEAST_26_2) classToChannelIdOverride.put(ServerboundSpectatorActionPacket.class, 3);
-        if (MinecraftVersions.AT_LEAST_26_3) classToChannelIdOverride.put(ClientboundPostEffectsPacket.class, 4);
-        if (MinecraftVersions.AT_LEAST_26_3) classToChannelIdOverride.put(ClientboundAddTransientBlockPacket.class, 7);
+        // Keep newer class references inside their version guards so older runtimes never resolve
+        // them.
+        if (MinecraftVersions.AT_LEAST_26_3) {
+            classToChannelIdOverride.put(ServerboundPunchPacket.class, 2);
+        }
+        if (MinecraftVersions.AT_LEAST_26_3) {
+            classToChannelIdOverride.put(ClientboundSwingAnimationPacket.class, 2);
+        }
+        if (MinecraftVersions.AT_LEAST_26_2) {
+            classToChannelIdOverride.put(ServerboundSpectatorActionPacket.class, 3);
+        }
+        if (MinecraftVersions.AT_LEAST_26_3) {
+            classToChannelIdOverride.put(ClientboundPostEffectsPacket.class, 4);
+        }
+        if (MinecraftVersions.AT_LEAST_26_3) {
+            classToChannelIdOverride.put(ClientboundAddTransientBlockPacket.class, 7);
+        }
     }
 
     /**
@@ -559,41 +565,49 @@ public class RakNetMultiChannel {
      *
      * @param name simple packet class name within the game protocol package
      * @param channel ordering channel assigned to the resolved packet
-     * @throws IllegalStateException if the expected packet is absent from a version that should provide it
+     * @throws IllegalStateException if the expected packet is absent from a version that should
+     *     provide it
      */
-    private static void addEarlierPacket(String name, int channel) {
+    private static void addEarlierPacket(final String name, final int channel) {
         try {
-            Class<?> packet = Class.forName("net.minecraft.network.protocol.game." + name, false,
-                    RakNetMultiChannel.class.getClassLoader());
+            Class<?> packet =
+                    Class.forName(
+                            "net.minecraft.network.protocol.game." + name,
+                            false,
+                            RakNetMultiChannel.class.getClassLoader());
             classToChannelIdOverride.put(packet, channel);
         } catch (ClassNotFoundException e) {
             throw new IllegalStateException("Missing expected packet " + name, e);
         }
     }
 
-    /**
-     * Unknown packet classes already reported, shared safely across connection threads.
-     */
+    /** Unknown packet classes already reported, shared safely across connection threads. */
     private static final Set<Class<?>> foundUnknownClasses = Sets.newConcurrentHashSet();
 
     /**
-     * Looks up a packet class and falls back to the world channel for unknown types.
-     * Missing captures use the default channel. Unknown-class diagnostics are emitted at most once per class.
+     * Looks up a packet class and falls back to the world channel for unknown types. Missing
+     * captures use the default channel. Unknown-class diagnostics are emitted at most once per
+     * class.
      *
      * @param clazz captured packet implementation class, or null when capture was unavailable
      * @param suppressWarning whether unknown packet classes should be handled without a diagnostic
-     * @return channel index, -1 for reliable unordered, -2 for unreliable, or Integer.MIN_VALUE to discard
+     * @return channel index, -1 for reliable unordered, -2 for unreliable, or Integer.MIN_VALUE to
+     *     discard
      */
-    public static int getPacketChannelOverride(Class<?> clazz, boolean suppressWarning) {
+    public static int getPacketChannelOverride(
+            final Class<?> clazz, final boolean suppressWarning) {
         if (clazz == null) {
-            System.err.println("Raknetify: Warning: Tried to send packet without setting packet class");
+            System.err.println(
+                    "Raknetify: Warning: Tried to send packet without setting packet class");
             return 0;
         }
         int channelOverride = classToChannelIdOverride.getInt(clazz);
         if (channelOverride == Integer.MAX_VALUE) {
             if (!suppressWarning) {
                 if (foundUnknownClasses.add(clazz)) {
-                    System.err.println("Raknetify: Warning: unknown packet type %s for raknet multi-channel".formatted(clazz.getName()));
+                    System.err.println(
+                            "Raknetify: Warning: unknown packet type %s for raknet multi-channel"
+                                    .formatted(clazz.getName()));
                 }
             }
             channelOverride = 7;
@@ -601,10 +615,6 @@ public class RakNetMultiChannel {
         return channelOverride;
     }
 
-    /**
-     * Forces packet-class resolution and routing-table initialization before connections begin.
-     */
-    public static void init() {
-    }
-
+    /** Forces packet-class resolution and routing-table initialization before connections begin. */
+    public static void init() {}
 }

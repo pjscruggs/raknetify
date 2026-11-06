@@ -31,31 +31,22 @@ import com.ishland.raknetify.minecraft.ModPlatform;
  */
 public final class MinecraftVersions {
 
-    /**
-     * Minecraft version reported by the active loader without initializing game classes.
-     */
+    /** Minecraft version reported by the active loader without initializing game classes. */
     private static final String CURRENT = ModPlatform.get().minecraftVersion();
 
-    /**
-     * Whether packet references introduced in Minecraft 26.2 may be resolved.
-     */
+    /** Whether packet references introduced in Minecraft 26.2 may be resolved. */
     public static final boolean AT_LEAST_26_2 = atLeast(26, 2);
-    /**
-     * Whether packet references introduced in Minecraft 26.3 may be resolved.
-     */
-    public static final boolean AT_LEAST_26_3 = atLeast(26, 3);
-    // Keep this exact snapshot predicate aligned with the Minecraft dependency in fabric.mod.json.
-    /**
-     * Whether the runtime matches the specifically supported 26.4 snapshot API.
-     */
-    public static final boolean IS_26_4_SNAPSHOT = CURRENT.equals("26.4-alpha.7")
-            || CURRENT.equals("26.4-snapshot-7");
 
-    /**
-     * Prevents construction of the immutable runtime-version flags.
-     */
-    private MinecraftVersions() {
-    }
+    /** Whether packet references introduced in Minecraft 26.3 may be resolved. */
+    public static final boolean AT_LEAST_26_3 = atLeast(26, 3);
+
+    // Keep this exact snapshot predicate aligned with the Minecraft dependency in fabric.mod.json.
+    /** Whether the runtime matches the specifically supported 26.4 snapshot API. */
+    public static final boolean IS_26_4_SNAPSHOT =
+            "26.4-alpha.7".equals(CURRENT) || "26.4-snapshot-7".equals(CURRENT);
+
+    /** Prevents construction of the immutable runtime-version flags. */
+    private MinecraftVersions() {}
 
     /**
      * Compares the numeric release family shared by the supported modern loader versions.
@@ -65,7 +56,7 @@ public final class MinecraftVersions {
      * @return whether the current runtime reaches this API boundary
      * @throws NumberFormatException if the loader supplies a nonnumeric release family
      */
-    private static boolean atLeast(int major, int minor) {
+    private static boolean atLeast(final int major, final int minor) {
         String[] components = CURRENT.split("[.\\-+]");
         int currentMajor = Integer.parseInt(components[0]);
         int currentMinor = Integer.parseInt(components[1]);

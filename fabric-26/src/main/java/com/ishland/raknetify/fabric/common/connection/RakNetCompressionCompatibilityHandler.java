@@ -25,9 +25,11 @@
 package com.ishland.raknetify.fabric.common.connection;
 
 import com.ishland.raknetify.fabric.common.util.MinecraftVersions;
+
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
+
 import net.minecraft.network.protocol.login.ClientboundLoginCompressionPacket;
 
 /**
@@ -36,8 +38,8 @@ import net.minecraft.network.protocol.login.ClientboundLoginCompressionPacket;
 public class RakNetCompressionCompatibilityHandler extends ChannelDuplexHandler {
 
     /**
-     * Completes the compression-setup promise immediately, forwards the packet, then removes this helper.
-     * Other writes retain their original promise and ordinary pipeline behavior.
+     * Completes the compression-setup promise immediately, forwards the packet, then removes this
+     * helper. Other writes retain their original promise and ordinary pipeline behavior.
      *
      * @param ctx outbound Minecraft context
      * @param msg compression-setup packet or unrelated outgoing message
@@ -45,11 +47,16 @@ public class RakNetCompressionCompatibilityHandler extends ChannelDuplexHandler 
      * @throws Exception if superclass forwarding of an unrelated message fails
      */
     @Override
-    public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
-        // The snapshot renamed this packet, so evaluate the old class reference only on earlier versions.
-        boolean setupCompression = MinecraftVersions.IS_26_4_SNAPSHOT
-                ? msg.getClass().getName().equals("net.minecraft.network.protocol.login.ClientboundSetupCompressionPacket")
-                : msg instanceof ClientboundLoginCompressionPacket;
+    public void write(
+            final ChannelHandlerContext ctx, final Object msg, final ChannelPromise promise)
+            throws Exception {
+        // The snapshot renamed this packet, so evaluate the old class reference only on earlier
+        // versions.
+        boolean setupCompression =
+                MinecraftVersions.IS_26_4_SNAPSHOT
+                        ? "net.minecraft.network.protocol.login.ClientboundSetupCompressionPacket"
+                                .equals(msg.getClass().getName())
+                        : msg instanceof ClientboundLoginCompressionPacket;
         if (setupCompression) {
             promise.trySuccess();
             ctx.write(msg);

@@ -25,39 +25,39 @@
 package com.ishland.raknetify.fabric.common.client;
 
 import net.minecraft.client.gui.components.debug.DebugScreenDisplayer;
+
 import java.lang.reflect.Method;
 
-// Load this adapter only on the snapshot, where DebugGroup replaces the identifier-based grouping API.
+// Load this adapter only on the snapshot, where DebugGroup replaces the identifier-based grouping
+// API.
 /**
  * Bridges the snapshot's DebugGroup-based HUD API without linking it on earlier modern releases.
  */
 final class DebugHudLines26_4 {
-    /**
-     * Snapshot HUD group built once for all Raknetify2 diagnostic lines.
-     */
+    /** Snapshot HUD group built once for all Raknetify2 diagnostic lines. */
     private static final Object GROUP;
-    /**
-     * Cached snapshot addToGroup method used on each HUD update.
-     */
+
+    /** Cached snapshot addToGroup method used on each HUD update. */
     private static final Method ADD_LINE;
 
     static {
         try {
             // Cache the reflected API once because debug lines are emitted on every HUD update.
-            Class<?> builderClass = Class.forName("net.minecraft.client.gui.components.debug.DebugGroup$Builder");
-            Object builder = builderClass.getMethod("titled", String.class).invoke(null, "Raknetify2");
+            Class<?> builderClass =
+                    Class.forName("net.minecraft.client.gui.components.debug.DebugGroup$Builder");
+            Object builder =
+                    builderClass.getMethod("titled", String.class).invoke(null, "Raknetify2");
             GROUP = builderClass.getMethod("build").invoke(builder);
-            ADD_LINE = DebugScreenDisplayer.class.getMethod("addToGroup", GROUP.getClass(), String.class);
+            ADD_LINE =
+                    DebugScreenDisplayer.class.getMethod(
+                            "addToGroup", GROUP.getClass(), String.class);
         } catch (ReflectiveOperationException exception) {
             throw new ExceptionInInitializerError(exception);
         }
     }
 
-    /**
-     * Prevents construction of the snapshot-only HUD adapter.
-     */
-    private DebugHudLines26_4() {
-    }
+    /** Prevents construction of the snapshot-only HUD adapter. */
+    private DebugHudLines26_4() {}
 
     /**
      * Adds one line to the cached snapshot HUD group through its runtime-resolved API.
@@ -66,11 +66,12 @@ final class DebugHudLines26_4 {
      * @param text complete diagnostic line to append
      * @throws IllegalStateException if the resolved HUD method cannot be invoked
      */
-    static void addLine(DebugScreenDisplayer lines, String text) {
+    static void addLine(final DebugScreenDisplayer lines, final String text) {
         try {
             ADD_LINE.invoke(lines, GROUP, text);
         } catch (ReflectiveOperationException exception) {
-            throw new IllegalStateException("Cannot display Raknetify2 debug information", exception);
+            throw new IllegalStateException(
+                    "Cannot display Raknetify2 debug information", exception);
         }
     }
 }

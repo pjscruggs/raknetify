@@ -32,24 +32,27 @@ import net.minecraft.network.UnconfiguredPipelineHandler;
 public class RakNetNetworkTransitionUtil {
 
     /**
-     * Wraps recognized configuration tasks to restore capture placement after the original task runs.
+     * Wraps recognized configuration tasks to restore capture placement after the original task
+     * runs.
      *
      * @param msg outgoing pipeline task or unrelated message
      * @return wrapped configuration task, or the unchanged message when no wrapper is needed
      */
-    static Object handleTransition(Object msg) {
+    static Object handleTransition(final Object msg) {
         if (msg instanceof UnconfiguredPipelineHandler.InboundConfigurationTask transitioner) {
-            return (UnconfiguredPipelineHandler.InboundConfigurationTask) context -> {
-                transitioner.run(context);
-                RakNetFabricConnectionUtil.onPipelineReorder(context.pipeline());
-            };
-        } else if (msg instanceof UnconfiguredPipelineHandler.OutboundConfigurationTask transitioner) {
-            return (UnconfiguredPipelineHandler.OutboundConfigurationTask) context -> {
-                transitioner.run(context);
-                RakNetFabricConnectionUtil.onPipelineReorder(context.pipeline());
-            };
+            return (UnconfiguredPipelineHandler.InboundConfigurationTask)
+                    context -> {
+                        transitioner.run(context);
+                        RakNetFabricConnectionUtil.onPipelineReorder(context.pipeline());
+                    };
+        } else if (msg
+                instanceof UnconfiguredPipelineHandler.OutboundConfigurationTask transitioner) {
+            return (UnconfiguredPipelineHandler.OutboundConfigurationTask)
+                    context -> {
+                        transitioner.run(context);
+                        RakNetFabricConnectionUtil.onPipelineReorder(context.pipeline());
+                    };
         }
         return msg;
     }
-
 }

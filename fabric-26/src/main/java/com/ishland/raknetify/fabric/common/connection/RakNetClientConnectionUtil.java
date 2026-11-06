@@ -26,24 +26,23 @@ package com.ishland.raknetify.fabric.common.connection;
 
 import com.ishland.raknetify.common.util.ThreadLocalUtil;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+
 import io.netty.channel.ChannelFuture;
-import java.net.InetSocketAddress;
+
 import net.minecraft.network.Connection;
 import net.minecraft.server.network.EventLoopGroupHolder;
 
-/**
- * Scopes RakNet bootstrap flags around the version-specific Minecraft connection factory.
- */
+import java.net.InetSocketAddress;
+
+/** Scopes RakNet bootstrap flags around the version-specific Minecraft connection factory. */
 public class RakNetClientConnectionUtil {
 
-    /**
-     * Prevents construction of the client connection-factory adapter.
-     */
-    private RakNetClientConnectionUtil() {
-    }
+    /** Prevents construction of the client connection-factory adapter. */
+    private RakNetClientConnectionUtil() {}
 
     /**
-     * Enables RakNet bootstrap selection for the wrapped connection call and clears both flags afterward.
+     * Enables RakNet bootstrap selection for the wrapped connection call and clears both flags
+     * afterward.
      *
      * @param address resolved remote server address
      * @param backend vanilla event-loop backend selection passed through to the original factory
@@ -51,7 +50,11 @@ public class RakNetClientConnectionUtil {
      * @param original intercepted Minecraft factory operation
      * @return Minecraft connection produced by the original factory
      */
-    public static Connection connect(InetSocketAddress address, EventLoopGroupHolder backend, boolean largeMTU, Operation<Connection> original) {
+    public static Connection connect(
+            final InetSocketAddress address,
+            final EventLoopGroupHolder backend,
+            final boolean largeMTU,
+            final Operation<Connection> original) {
         try {
             ThreadLocalUtil.setInitializingRaknet(true);
             ThreadLocalUtil.setInitializingRaknetLargeMTU(largeMTU);
@@ -63,7 +66,8 @@ public class RakNetClientConnectionUtil {
     }
 
     /**
-     * Enables RakNet bootstrap selection for the wrapped connection call and clears both flags afterward.
+     * Enables RakNet bootstrap selection for the wrapped connection call and clears both flags
+     * afterward.
      *
      * @param address resolved remote server address
      * @param backend vanilla event-loop backend selection passed through to the original factory
@@ -72,7 +76,12 @@ public class RakNetClientConnectionUtil {
      * @param connection existing Minecraft connection to bind to the new channel
      * @return channel future produced by the original factory
      */
-    public static ChannelFuture connect(InetSocketAddress address, EventLoopGroupHolder backend, boolean largeMTU, Operation<ChannelFuture> original, Connection connection) {
+    public static ChannelFuture connect(
+            final InetSocketAddress address,
+            final EventLoopGroupHolder backend,
+            final boolean largeMTU,
+            final Operation<ChannelFuture> original,
+            final Connection connection) {
         try {
             ThreadLocalUtil.setInitializingRaknet(true);
             ThreadLocalUtil.setInitializingRaknetLargeMTU(largeMTU);
@@ -82,5 +91,4 @@ public class RakNetClientConnectionUtil {
             ThreadLocalUtil.setInitializingRaknetLargeMTU(false);
         }
     }
-
 }

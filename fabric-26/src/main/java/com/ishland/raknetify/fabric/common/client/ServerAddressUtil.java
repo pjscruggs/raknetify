@@ -25,18 +25,14 @@
 package com.ishland.raknetify.fabric.common.client;
 
 import com.ishland.raknetify.fabric.common.util.MinecraftVersions;
+
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
 
-/**
- * Replaces a server address host and port while retaining snapshot-specific query properties.
- */
+/** Replaces a server address host and port while retaining snapshot-specific query properties. */
 public final class ServerAddressUtil {
 
-    /**
-     * Prevents construction of the server-address compatibility helper.
-     */
-    private ServerAddressUtil() {
-    }
+    /** Prevents construction of the server-address compatibility helper. */
+    private ServerAddressUtil() {}
 
     /**
      * Copies the address through the snapshot API when it carries additional connection properties.
@@ -48,12 +44,18 @@ public final class ServerAddressUtil {
      * @return equivalent address with the requested host and port
      * @throws IllegalStateException if the snapshot copy API cannot be invoked
      */
-    public static ServerAddress withAddress(ServerAddress original, String host, int port) {
-        if (!MinecraftVersions.IS_26_4_SNAPSHOT) return new ServerAddress(host, port);
+    public static ServerAddress withAddress(
+            final ServerAddress original, final String host, final int port) {
+        if (!MinecraftVersions.IS_26_4_SNAPSHOT) {
+            return new ServerAddress(host, port);
+        }
         try {
-            // Resolve the snapshot copy method at runtime to preserve query properties while compiling against 26.3.
-            return (ServerAddress) ServerAddress.class.getMethod("withHostAndPort", String.class, int.class)
-                    .invoke(original, host, port);
+            // Resolve the snapshot copy method at runtime to preserve query properties while
+            // compiling against 26.3.
+            return (ServerAddress)
+                    ServerAddress.class
+                            .getMethod("withHostAndPort", String.class, int.class)
+                            .invoke(original, host, port);
         } catch (ReflectiveOperationException exception) {
             throw new IllegalStateException("Cannot preserve server address properties", exception);
         }

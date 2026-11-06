@@ -26,9 +26,7 @@ package com.ishland.raknetify.fabric.common.util;
 
 import net.minecraft.network.ConnectionProtocol;
 
-/**
- * Supplies stable diagnostic labels for the common Minecraft network protocol phases.
- */
+/** Supplies stable diagnostic labels for the common Minecraft network protocol phases. */
 public class NetworkStates {
 
     /**
@@ -37,7 +35,7 @@ public class NetworkStates {
      * @param state current Minecraft connection phase
      * @return stable common-phase label or the phase's own string representation
      */
-    public static String getName(ConnectionProtocol state) {
+    public static String getName(final ConnectionProtocol state) {
         return switch (state) {
             case HANDSHAKING -> "HANDSHAKING";
             case PLAY -> "PLAY";
@@ -46,5 +44,4 @@ public class NetworkStates {
             default -> state.toString();
         };
     }
-
 }

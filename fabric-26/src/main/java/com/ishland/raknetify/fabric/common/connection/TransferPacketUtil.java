@@ -25,31 +25,40 @@
 package com.ishland.raknetify.fabric.common.connection;
 
 import com.ishland.raknetify.fabric.common.util.MinecraftVersions;
+
 import net.minecraft.network.protocol.common.ClientboundTransferPacket;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.Map;
 
-/** Preserves the transfer properties introduced in 26.4 while retaining the earlier packet constructor. */
+/**
+ * Preserves the transfer properties introduced in 26.4 while retaining the earlier packet
+ * constructor.
+ */
 public final class TransferPacketUtil {
 
     /** Prevents construction of the version-specific packet adapter. */
-    private TransferPacketUtil() {
-    }
+    private TransferPacketUtil() {}
 
     /**
-     * Changes only the transport address, carrying every native transfer property through unchanged.
+     * Changes only the transport address, carrying every native transfer property through
+     * unchanged.
+     *
      * @param original native transfer whose optional properties belong to Minecraft and other mods
      * @param host selected RakNet-prefixed destination
      * @param port selected UDP port
      * @return equivalent native transfer with the new transport address
      * @throws IllegalStateException if the supported snapshot's transfer constructor changes
      */
-    public static ClientboundTransferPacket replace(ClientboundTransferPacket original, String host, int port) {
-        if (!MinecraftVersions.IS_26_4_SNAPSHOT) return new ClientboundTransferPacket(host, port);
+    public static ClientboundTransferPacket replace(
+            final ClientboundTransferPacket original, final String host, final int port) {
+        if (!MinecraftVersions.IS_26_4_SNAPSHOT) {
+            return new ClientboundTransferPacket(host, port);
+        }
         try {
-            return Snapshot.CONSTRUCTOR.newInstance(host, port, Snapshot.PROPERTIES.invoke(original));
+            return Snapshot.CONSTRUCTOR.newInstance(
+                    host, port, Snapshot.PROPERTIES.invoke(original));
         } catch (ReflectiveOperationException failure) {
             throw new IllegalStateException("Cannot preserve native transfer properties", failure);
         }
@@ -60,12 +69,15 @@ public final class TransferPacketUtil {
 
         /** Constructor including the complete map of transfer properties. */
         private static final Constructor<ClientboundTransferPacket> CONSTRUCTOR;
+
         /** Record accessor returning the original immutable transfer metadata. */
         private static final Method PROPERTIES;
 
         static {
             try {
-                CONSTRUCTOR = ClientboundTransferPacket.class.getConstructor(String.class, int.class, Map.class);
+                CONSTRUCTOR =
+                        ClientboundTransferPacket.class.getConstructor(
+                                String.class, int.class, Map.class);
                 PROPERTIES = ClientboundTransferPacket.class.getMethod("properties");
             } catch (ReflectiveOperationException failure) {
                 throw new ExceptionInInitializerError(failure);
@@ -73,7 +85,6 @@ public final class TransferPacketUtil {
         }
 
         /** Prevents creating instances of the lazily resolved snapshot contract. */
-        private Snapshot() {
-        }
+        private Snapshot() {}
     }
 }

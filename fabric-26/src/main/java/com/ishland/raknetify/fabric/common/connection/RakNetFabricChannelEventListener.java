@@ -26,9 +26,11 @@ package com.ishland.raknetify.fabric.common.connection;
 
 import com.ishland.raknetify.common.connection.RakNetSimpleMultiChannelCodec;
 import com.ishland.raknetify.common.connection.SynchronizationLayer;
+
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
+
 import net.minecraft.network.UnconfiguredPipelineHandler;
 import net.minecraft.network.protocol.game.ClientboundCommandsPacket;
 import net.minecraft.network.protocol.game.ClientboundLoginPacket;
@@ -37,18 +39,18 @@ import net.minecraft.network.protocol.game.ClientboundStartConfigurationPacket;
 import net.minecraft.network.protocol.game.ServerboundConfigurationAcknowledgedPacket;
 
 /**
- * Coordinates RakNet ordering with Minecraft world changes, command availability, and codec transitions.
+ * Coordinates RakNet ordering with Minecraft world changes, command availability, and codec
+ * transitions.
  */
 public class RakNetFabricChannelEventListener extends ChannelDuplexHandler {
 
-    /**
-     * Pipeline name for the Minecraft packet and protocol-transition observer.
-     */
+    /** Pipeline name for the Minecraft packet and protocol-transition observer. */
     public static final String NAME = "raknetify-fabric-event-listener";
 
     /**
-     * Sends ordering-reset markers at world or configuration boundaries and starts multichannel delivery at commands.
-     * Codec-transition tasks are wrapped so packet capture remains adjacent to the replacement encoder.
+     * Sends ordering-reset markers at world or configuration boundaries and starts multichannel
+     * delivery at commands. Codec-transition tasks are wrapped so packet capture remains adjacent
+     * to the replacement encoder.
      *
      * @param ctx outbound Minecraft context
      * @param msg decoded packet or codec-configuration task
@@ -56,17 +58,21 @@ public class RakNetFabricChannelEventListener extends ChannelDuplexHandler {
      * @throws Exception if superclass outbound forwarding fails
      */
     @Override
-    public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+    public void write(
+            final ChannelHandlerContext ctx, final Object msg, final ChannelPromise promise)
+            throws Exception {
         if (msg instanceof ClientboundRespawnPacket || msg instanceof ClientboundLoginPacket) {
             ctx.write(SynchronizationLayer.SYNC_REQUEST_OBJECT);
         }
-        if (msg instanceof ClientboundStartConfigurationPacket || msg instanceof ServerboundConfigurationAcknowledgedPacket) {
+        if (msg instanceof ClientboundStartConfigurationPacket
+                || msg instanceof ServerboundConfigurationAcknowledgedPacket) {
             ctx.write(SynchronizationLayer.SYNC_REQUEST_OBJECT);
         }
         if (msg instanceof ClientboundCommandsPacket) {
             ctx.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL);
         }
-        if (msg instanceof UnconfiguredPipelineHandler.InboundConfigurationTask || msg instanceof UnconfiguredPipelineHandler.OutboundConfigurationTask) {
+        if (msg instanceof UnconfiguredPipelineHandler.InboundConfigurationTask
+                || msg instanceof UnconfiguredPipelineHandler.OutboundConfigurationTask) {
             ctx.write(RakNetNetworkTransitionUtil.handleTransition(msg), promise);
             return;
         }
