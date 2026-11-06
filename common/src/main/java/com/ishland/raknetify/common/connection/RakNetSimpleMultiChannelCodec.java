@@ -140,10 +140,7 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
     @Override
     public void handlerRemoved(ChannelHandlerContext ctx) throws Exception {
         super.handlerRemoved(ctx);
-        for (PendingWrite pendingWrite : pendingWrites) {
-            pendingWrite.promise.setFailure(new IllegalStateException("Channel closed"));
-            pendingWrite.frameData.release();
-        }
+        failPendingWrites(new IllegalStateException("Channel closed"));
     }
 
     /**
@@ -214,6 +211,11 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
             frameData.setOrderChannel(7);
             this.queuePendingWrites = true;
             ctx.write(frameData).addListener(future -> {
+                if (!future.isSuccess()) {
+                    failPendingWrites(future.cause());
+                    ctx.close();
+                    return;
+                }
                 isMultichannelEnabled = true;
                 if (Constants.DEBUG) System.out.println("Raknetify: [MultiChannellingDataCodec] Started multichannel");
                 flushPendingWrites(ctx);
@@ -231,13 +233,30 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
      * @param promise completion notification retained with an accepted frame
      */
     private void queueWrite(ChannelHandlerContext ctx, ByteBuf buf, ChannelPromise promise) {
-        final FrameData data = encode0(ctx, buf);
-        if (data != null) {
-            pendingWrites.add(new PendingWrite(data, promise));
-        } else {
-            promise.setSuccess();
+        try {
+            final FrameData data = encode0(ctx, buf);
+            if (data != null) {
+                pendingWrites.add(new PendingWrite(data, promise));
+            } else {
+                promise.setSuccess();
+            }
+        } finally {
+            buf.release();
         }
-        buf.release();
+    }
+
+    /**
+     * Removes and releases each held frame before notifying its caller, including already cancelled writes.
+     * Emptying the queue also prevents a late marker acknowledgement from forwarding released frames.
+     *
+     * @param failure negotiation or channel-removal cause preserved on every unfinished write
+     */
+    private void failPendingWrites(Throwable failure) {
+        PendingWrite pendingWrite;
+        while ((pendingWrite = this.pendingWrites.poll()) != null) {
+            pendingWrite.frameData.release();
+            pendingWrite.promise.tryFailure(failure);
+        }
     }
 
     /**

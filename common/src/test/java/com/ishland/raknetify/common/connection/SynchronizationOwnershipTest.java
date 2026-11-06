@@ -141,6 +141,73 @@ class SynchronizationOwnershipTest {
         }
     }
 
+    /** A failed marker must fail queued writes instead of sending packets on channels the peer never enabled. */
+    @Test
+    void failedNegotiationReleasesQueuedWrites() {
+        NegotiationGate gate = new NegotiationGate();
+        RakNetSimpleMultiChannelCodec codec = new RakNetSimpleMultiChannelCodec(Constants.RAKNET_GAME_PACKET_ID)
+                .addHandler((buffer, silent) -> 1);
+        EmbeddedChannel channel = new EmbeddedChannel(gate, codec);
+        ByteBuf payload = Unpooled.buffer().writeByte(1);
+        try {
+            channel.writeOutbound(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL);
+            var write = channel.write(payload);
+            IOException failure = new IOException("Fixture negotiation write failed");
+            gate.pending.setFailure(failure);
+            assertSame(failure, write.cause());
+            assertNull(channel.readOutbound());
+            assertEquals(0, payload.refCnt());
+            assertFalse(channel.isOpen());
+        } finally {
+            channel.finishAndReleaseAll();
+        }
+    }
+
+    /** Cancelling one queued promise cannot interrupt cleanup of later frames when the handler is removed. */
+    @Test
+    void removalDrainsCancelledWritesBeforeLateAcknowledgement() {
+        NegotiationGate gate = new NegotiationGate();
+        RakNetSimpleMultiChannelCodec codec = new RakNetSimpleMultiChannelCodec(Constants.RAKNET_GAME_PACKET_ID)
+                .addHandler((buffer, silent) -> 1);
+        EmbeddedChannel channel = new EmbeddedChannel(gate, codec);
+        ByteBuf first = Unpooled.buffer().writeByte(1);
+        ByteBuf second = Unpooled.buffer().writeByte(2);
+        try {
+            channel.writeOutbound(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL);
+            var cancelled = channel.write(first);
+            var remaining = channel.write(second);
+            assertTrue(cancelled.cancel(false));
+            channel.pipeline().remove(codec);
+            assertTrue(remaining.isDone());
+            assertFalse(remaining.isSuccess());
+            assertEquals(0, first.refCnt());
+            assertEquals(0, second.refCnt());
+            gate.pending.setSuccess();
+            assertNull(channel.readOutbound(), "Removed frames cannot be forwarded by a late acknowledgement");
+        } finally {
+            channel.finishAndReleaseAll();
+        }
+    }
+
+    /** A classifier exception while negotiation is pending still releases the input buffer and fails its write. */
+    @Test
+    void queuedClassifierFailureReleasesInput() {
+        NegotiationGate gate = new NegotiationGate();
+        IllegalArgumentException failure = new IllegalArgumentException("Fixture classifier rejected packet");
+        RakNetSimpleMultiChannelCodec codec = new RakNetSimpleMultiChannelCodec(Constants.RAKNET_GAME_PACKET_ID)
+                .addHandler((buffer, silent) -> { throw failure; });
+        EmbeddedChannel channel = new EmbeddedChannel(gate, codec);
+        ByteBuf payload = Unpooled.buffer().writeByte(1);
+        try {
+            channel.writeOutbound(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL);
+            assertSame(failure, channel.write(payload).cause());
+            assertEquals(0, payload.refCnt());
+            gate.pending.setSuccess();
+        } finally {
+            channel.finishAndReleaseAll();
+        }
+    }
+
     /**
      * Builds the real transport handlers whose queues and cursors are inspected by synchronization.
      *
