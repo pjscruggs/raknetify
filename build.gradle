@@ -48,6 +48,7 @@ subprojects {
 
 	repositories {
 		mavenCentral()
+		maven { url = 'https://maven.maxhenkel.de/repository/public' }
 		maven { url = 'https://jitpack.io' }
 		maven { url = 'https://repo.codemc.org/repository/maven-public' }
 		maven { url = 'https://oss.sonatype.org/content/repositories/snapshots' }

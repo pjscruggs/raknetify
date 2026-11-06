@@ -38,6 +38,7 @@ public final class RaknetifySpigotPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         ProtocolMultiChannelMappings.init();
+        if (getServer().getPluginManager().isPluginEnabled("voicechat")) SpigotVoice.register(this);
         getServer().getScheduler().runTask(this, this::startListeners);
     }
 

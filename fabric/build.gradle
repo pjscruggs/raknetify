@@ -125,7 +125,8 @@ shadowJar {
 	}
 	exclude "META-INF/LICENSE.txt"
 	exclude "META-INF/NOTICE.txt"
-	minimize()
+	// Optional mod entrypoints are discovered from metadata rather than Java call sites.
+	minimize { exclude(project(':common')) }
 	archiveClassifier = "all-dev"
 	configurations = [ project.configurations.shadowInclude ]
 	from "../LICENSE"

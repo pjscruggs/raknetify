@@ -51,7 +51,8 @@ shadowJar {
         exclude(dependency('it.unimi.dsi:fastutil'))
     }
     exclude 'META-INF/LICENSE.txt', 'META-INF/NOTICE.txt'
-    minimize()
+    // Optional mod entrypoints are discovered from metadata rather than Java call sites.
+    minimize { exclude(project(':common')) }
     archiveClassifier = 'all'
     configurations = [project.configurations.shadowInclude]
     from '../LICENSE'
