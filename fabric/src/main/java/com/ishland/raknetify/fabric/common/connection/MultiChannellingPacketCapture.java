@@ -26,11 +26,13 @@ package com.ishland.raknetify.fabric.common.connection;
 
 import com.ishland.raknetify.common.connection.RakNetSimpleMultiChannelCodec;
 import com.ishland.raknetify.common.connection.multichannel.CustomPayloadChannel;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
+
 import net.minecraft.network.packet.c2s.common.CustomPayloadC2SPacket;
 import net.minecraft.network.packet.s2c.common.CustomPayloadS2CPacket;
 
@@ -41,13 +43,12 @@ import net.minecraft.network.packet.s2c.common.CustomPayloadS2CPacket;
 @ChannelHandler.Sharable
 public class MultiChannellingPacketCapture extends ChannelOutboundHandlerAdapter {
 
-    /**
-     * Class of the packet currently traversing the encoder, or null outside a captured write.
-     */
-    private Class<?> packetClass = null;
+    /** Class of the packet currently traversing the encoder, or null outside a captured write. */
+    private Class<?> packetClass;
 
     /**
-     * Exposes the decoded packet class while downstream encoding runs and clears it in a finally block.
+     * Exposes the decoded packet class while downstream encoding runs and clears it in a finally
+     * block.
      *
      * @param ctx outbound context positioned before packet encoding in write order
      * @param msg decoded Minecraft packet being serialized
@@ -55,7 +56,9 @@ public class MultiChannellingPacketCapture extends ChannelOutboundHandlerAdapter
      * @throws Exception reserved by the Netty write callback contract
      */
     @Override
-    public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+    public void write(
+            final ChannelHandlerContext ctx, final Object msg, final ChannelPromise promise)
+            throws Exception {
         this.packetClass = msg.getClass();
         try {
             ctx.write(msg, promise);
@@ -78,7 +81,7 @@ public class MultiChannellingPacketCapture extends ChannelOutboundHandlerAdapter
      *
      * @param packetClass current decoded packet class, or null to clear the capture
      */
-    public void setPacketClass(Class<?> packetClass) {
+    public void setPacketClass(final Class<?> packetClass) {
         this.packetClass = packetClass;
     }
 
@@ -92,18 +95,22 @@ public class MultiChannellingPacketCapture extends ChannelOutboundHandlerAdapter
     }
 
     /**
-     * Creates an identifier-aware classifier that activates only for captured custom-payload packets.
+     * Creates an identifier-aware classifier that activates only for captured custom-payload
+     * packets.
      *
      * @param channel owning RakNet connection
      * @return custom-payload classifier tied to this capture instance and its peer declarations
      */
-    public RakNetSimpleMultiChannelCodec.OverrideHandler getCustomPayloadHandler(io.netty.channel.Channel channel) {
-        return new CustomPayloadChannel.OverrideHandler(value -> packetClass == CustomPayloadS2CPacket.class || packetClass == CustomPayloadC2SPacket.class, channel);
+    public RakNetSimpleMultiChannelCodec.OverrideHandler getCustomPayloadHandler(
+            final io.netty.channel.Channel channel) {
+        return new CustomPayloadChannel.OverrideHandler(
+                value ->
+                        packetClass == CustomPayloadS2CPacket.class
+                                || packetClass == CustomPayloadC2SPacket.class,
+                channel);
     }
 
-    /**
-     * Reads the enclosing capture instead of decoding a protocol-dependent packet ID.
-     */
+    /** Reads the enclosing capture instead of decoding a protocol-dependent packet ID. */
     private class CaptureBasedHandler implements RakNetSimpleMultiChannelCodec.OverrideHandler {
 
         /**
@@ -114,10 +121,8 @@ public class MultiChannellingPacketCapture extends ChannelOutboundHandlerAdapter
          * @return ordering channel or special delivery policy from the vanilla class table
          */
         @Override
-        public int getChannelOverride(ByteBuf buf, boolean suppressWarning) {
+        public int getChannelOverride(final ByteBuf buf, final boolean suppressWarning) {
             return RakNetMultiChannel.getPacketChannelOverride(packetClass, suppressWarning);
         }
-
     }
-
 }

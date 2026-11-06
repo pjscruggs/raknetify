@@ -27,6 +27,7 @@ package com.ishland.raknetify.fabric.common.connection;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
+
 import net.minecraft.network.packet.s2c.login.LoginCompressionS2CPacket;
 
 /**
@@ -35,8 +36,8 @@ import net.minecraft.network.packet.s2c.login.LoginCompressionS2CPacket;
 public class RakNetCompressionCompatibilityHandler extends ChannelDuplexHandler {
 
     /**
-     * Completes the compression-setup promise immediately, forwards the packet, then removes this helper.
-     * Other writes retain their original promise and ordinary pipeline behavior.
+     * Completes the compression-setup promise immediately, forwards the packet, then removes this
+     * helper. Other writes retain their original promise and ordinary pipeline behavior.
      *
      * @param ctx outbound Minecraft context
      * @param msg compression-setup packet or unrelated outgoing message
@@ -44,7 +45,9 @@ public class RakNetCompressionCompatibilityHandler extends ChannelDuplexHandler 
      * @throws Exception if superclass forwarding of an unrelated message fails
      */
     @Override
-    public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+    public void write(
+            final ChannelHandlerContext ctx, final Object msg, final ChannelPromise promise)
+            throws Exception {
         if (msg instanceof LoginCompressionS2CPacket) {
             promise.trySuccess();
             ctx.write(msg);

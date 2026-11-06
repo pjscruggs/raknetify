@@ -29,10 +29,10 @@ import com.ishland.raknetify.common.connection.MultiChannelingStreamingCompressi
 import com.ishland.raknetify.common.connection.RakNetConnectionUtil;
 import com.ishland.raknetify.common.connection.RakNetSimpleMultiChannelCodec;
 import com.ishland.raknetify.fabric.common.compat.viafabric.ViaFabricCompatInjector;
+
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.epoll.EpollDatagramChannel;
 import io.netty.channel.epoll.EpollSocketChannel;
@@ -42,33 +42,36 @@ import io.netty.channel.socket.DatagramChannel;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
+
 import network.ycc.raknet.RakNet;
 
-/**
- * Adapts Minecraft's channel pipeline to RakNet framing and class-based packet routing.
- */
+/** Adapts Minecraft's channel pipeline to RakNet framing and class-based packet routing. */
 public class RakNetFabricConnectionUtil {
 
     /**
-     * Pipeline name used to reposition the packet-class capture whenever Minecraft replaces its encoder.
+     * Pipeline name used to reposition the packet-class capture whenever Minecraft replaces its
+     * encoder.
      */
-    public static final String NAME_RAKNETIFY_MULTI_CHANNEL_PACKET_CATURE = "raknetify-multi-channel-packet-cature";
+    public static final String NAME_RAKNETIFY_MULTI_CHANNEL_PACKET_CATURE =
+            "raknetify-multi-channel-packet-cature";
+
+    /** Prevents construction of the Fabric channel-initialization utility. */
+    private RakNetFabricConnectionUtil() {}
 
     /**
-     * Prevents construction of the Fabric channel-initialization utility.
-     */
-    private RakNetFabricConnectionUtil() {
-    }
-
-    /**
-     * Installs the shared RakNet transport handlers and Minecraft frame codec before vanilla initialization.
+     * Installs the shared RakNet transport handlers and Minecraft frame codec before vanilla
+     * initialization.
      *
      * @param channel newly created application channel, left unchanged for non-RakNet transports
      */
-    public static void initChannel(Channel channel) {
+    public static void initChannel(final Channel channel) {
         if (channel.config() instanceof RakNet.Config) {
             RakNetConnectionUtil.initChannel(channel);
-            channel.pipeline().addAfter(MultiChannelingStreamingCompression.NAME, RakNetSimpleMultiChannelCodec.NAME, new RakNetSimpleMultiChannelCodec(Constants.RAKNET_GAME_PACKET_ID));
+            channel.pipeline()
+                    .addAfter(
+                            MultiChannelingStreamingCompression.NAME,
+                            RakNetSimpleMultiChannelCodec.NAME,
+                            new RakNetSimpleMultiChannelCodec(Constants.RAKNET_GAME_PACKET_ID));
         }
     }
 
@@ -79,39 +82,54 @@ public class RakNetFabricConnectionUtil {
      * @param channel initialized Minecraft application channel
      * @param isClientSide whether this endpoint is a Minecraft client rather than a server
      */
-    public static void postInitChannel(Channel channel, boolean isClientSide) {
+    public static void postInitChannel(final Channel channel, final boolean isClientSide) {
         if (channel.config() instanceof RakNet.Config) {
             RakNetConnectionUtil.removeTcpOnlyHandlers(channel);
             ViaFabricCompatInjector.inject(channel, isClientSide);
             channel.pipeline().replace("timeout", "timeout", new ChannelDuplexHandler()); // no-op
             channel.pipeline().replace("splitter", "splitter", new ChannelDuplexHandler()); // no-op
-            channel.pipeline().replace("prepender", "prepender", new ChannelDuplexHandler()); // no-op
+            channel.pipeline()
+                    .replace("prepender", "prepender", new ChannelDuplexHandler()); // no-op
             final MultiChannellingPacketCapture handler = new MultiChannellingPacketCapture();
             channel.pipeline().addLast(NAME_RAKNETIFY_MULTI_CHANNEL_PACKET_CATURE, handler);
             onPipelineReorder(channel.pipeline());
-            channel.pipeline().get(RakNetSimpleMultiChannelCodec.class)
+            channel.pipeline()
+                    .get(RakNetSimpleMultiChannelCodec.class)
                     .addHandler(handler.getCustomPayloadHandler(channel))
                     .addHandler(handler.getCaptureBasedHandler());
-            channel.pipeline().addLast("raknetify-handle-compression-compatibility", new RakNetCompressionCompatibilityHandler());
-            channel.pipeline().addBefore("packet_handler", RakNetFabricChannelEventListener.NAME, new RakNetFabricChannelEventListener());
+            channel.pipeline()
+                    .addLast(
+                            "raknetify-handle-compression-compatibility",
+                            new RakNetCompressionCompatibilityHandler());
+            channel.pipeline()
+                    .addBefore(
+                            "packet_handler",
+                            RakNetFabricChannelEventListener.NAME,
+                            new RakNetFabricChannelEventListener());
         }
     }
 
     /**
-     * Moves class capture next to the current encoder so each write is classified before serialization.
-     * A configuration-phase pipeline without an encoder is left alone until its transition completes.
+     * Moves class capture next to the current encoder so each write is classified before
+     * serialization. A configuration-phase pipeline without an encoder is left alone until its
+     * transition completes.
      *
      * @param pipeline Minecraft pipeline whose encoder may have just been replaced
      */
-    static void onPipelineReorder(ChannelPipeline pipeline) {
+    static void onPipelineReorder(final ChannelPipeline pipeline) {
         if (pipeline.get("encoder") == null) {
-//            System.out.println("Reordering failed: no encoder");
+            //            System.out.println("Reordering failed: no encoder");
             return;
         }
-//        System.out.println("Reordering");
-        ChannelHandler handler = pipeline.remove(RakNetFabricConnectionUtil.NAME_RAKNETIFY_MULTI_CHANNEL_PACKET_CATURE);
+        //        System.out.println("Reordering");
+        ChannelHandler handler =
+                pipeline.remove(
+                        RakNetFabricConnectionUtil.NAME_RAKNETIFY_MULTI_CHANNEL_PACKET_CATURE);
         if (handler != null) {
-            pipeline.addAfter("encoder", RakNetFabricConnectionUtil.NAME_RAKNETIFY_MULTI_CHANNEL_PACKET_CATURE, handler);
+            pipeline.addAfter(
+                    "encoder",
+                    RakNetFabricConnectionUtil.NAME_RAKNETIFY_MULTI_CHANNEL_PACKET_CATURE,
+                    handler);
         }
     }
 
@@ -120,9 +138,10 @@ public class RakNetFabricConnectionUtil {
      *
      * @param clazz NIO, epoll, or kqueue socket-channel implementation selected by Minecraft
      * @return new, unregistered datagram channel using the corresponding backend
-     * @throws UnsupportedOperationException if the socket implementation has no supported UDP counterpart
+     * @throws UnsupportedOperationException if the socket implementation has no supported UDP
+     *     counterpart
      */
-    public static DatagramChannel fromSocketChannel(Class<? extends SocketChannel> clazz) {
+    public static DatagramChannel fromSocketChannel(final Class<? extends SocketChannel> clazz) {
         if (clazz == NioSocketChannel.class) {
             return new NioDatagramChannel();
         } else if (clazz == EpollSocketChannel.class) {
@@ -133,5 +152,4 @@ public class RakNetFabricConnectionUtil {
             throw new UnsupportedOperationException(clazz.getName());
         }
     }
-
 }

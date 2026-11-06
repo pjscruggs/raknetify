@@ -26,16 +26,15 @@ package com.ishland.raknetify.fabric.common.connection.encryption;
 
 import io.netty.channel.ChannelHandlerContext;
 
-/**
- * Lets encryption mixins associate a Minecraft cipher manager with its active Netty channel.
- */
+/** Lets encryption mixins associate a Minecraft cipher manager with its active Netty channel. */
+@FunctionalInterface
 public interface PacketEncryptionManagerInterface {
 
     /**
-     * Supplies the channel context used to distinguish per-frame RakNet encryption from TCP streaming.
+     * Supplies the channel context used to distinguish per-frame RakNet encryption from TCP
+     * streaming.
      *
      * @param ctx active encryption or decryption handler context
      */
     void setContext(ChannelHandlerContext ctx);
-
 }

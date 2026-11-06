@@ -25,12 +25,11 @@
 package com.ishland.raknetify.fabric.common.util;
 
 import com.ishland.raknetify.fabric.mixin.RaknetifyFabricMixinPlugin;
+
 import net.minecraft.entity.Entity;
 import net.minecraft.world.World;
 
-/**
- * Bridges legacy Minecraft methods whose signatures are absent from the current compile target.
- */
+/** Bridges legacy Minecraft methods whose signatures are absent from the current compile target. */
 public class LegacySupportUtil {
 
     /**
@@ -40,7 +39,7 @@ public class LegacySupportUtil {
      * @return world currently containing the entity
      * @throws RuntimeException if the legacy world accessor cannot be invoked
      */
-    public static World getEntityWorld(Entity entity) {
+    public static World getEntityWorld(final Entity entity) {
         if (RaknetifyFabricMixinPlugin.AFTER_1_21_8) {
             return entity.getEntityWorld();
         } else {
@@ -51,5 +50,4 @@ public class LegacySupportUtil {
             }
         }
     }
-
 }

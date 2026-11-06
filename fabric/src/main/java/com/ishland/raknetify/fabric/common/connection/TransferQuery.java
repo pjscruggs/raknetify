@@ -25,6 +25,7 @@
 package com.ishland.raknetify.fabric.common.connection;
 
 import com.ishland.raknetify.common.connection.TransferSupport;
+
 import net.minecraft.network.PacketByteBuf;
 import net.minecraft.network.packet.s2c.login.LoginQueryRequestPayload;
 import net.minecraft.util.Identifier;
@@ -34,6 +35,7 @@ public final class TransferQuery implements LoginQueryRequestPayload {
 
     /**
      * Returns the feature version understood by clients that can follow a RakNet transfer address.
+     *
      * @return fixed namespaced capability identifier
      */
     @Override
@@ -43,9 +45,9 @@ public final class TransferQuery implements LoginQueryRequestPayload {
 
     /**
      * Writes no fields because the query identifier defines the complete version-one contract.
+     *
      * @param buffer native query payload output, deliberately left empty
      */
     @Override
-    public void write(PacketByteBuf buffer) {
-    }
+    public void write(final PacketByteBuf buffer) {}
 }

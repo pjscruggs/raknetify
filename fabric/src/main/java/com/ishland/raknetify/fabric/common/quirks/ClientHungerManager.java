@@ -26,10 +26,10 @@ package com.ishland.raknetify.fabric.common.quirks;
 
 import com.ishland.raknetify.fabric.common.util.MultiVersionUtil;
 import com.ishland.raknetify.fabric.mixin.RaknetifyFabricMixinPlugin;
+
 import net.minecraft.component.type.FoodComponent;
 import net.minecraft.entity.player.HungerManager;
 import net.minecraft.nbt.NbtCompound;
-import net.minecraft.storage.NbtReadView;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -40,27 +40,35 @@ import java.lang.reflect.Modifier;
 public class ClientHungerManager extends HungerManager {
 
     /**
-     * Copies existing hunger state into a client-only replacement using the runtime's supported layout.
-     * Older versions use NBT serialization. Newer versions copy accessible mutable public fields.
+     * Copies existing hunger state into a client-only replacement using the runtime's supported
+     * layout. Older versions use NBT serialization. Newer versions copy accessible mutable public
+     * fields.
      *
      * @param hungerManager existing client hunger state to preserve
      * @return replacement that ignores local food-consumption increments
      * @throws RuntimeException if a legacy hunger-state serialization method cannot be invoked
      */
-    public static ClientHungerManager from(HungerManager hungerManager) {
+    public static ClientHungerManager from(final HungerManager hungerManager) {
         ClientHungerManager clientHungerManager = new ClientHungerManager();
         if (RaknetifyFabricMixinPlugin.AFTER_1_21_5) {
             for (Field field : HungerManager.class.getFields()) {
-                if ((field.getModifiers() & Modifier.STATIC) == 0 && (field.getModifiers() & Modifier.FINAL) == 0) {
+                if ((field.getModifiers() & Modifier.STATIC) == 0
+                        && (field.getModifiers() & Modifier.FINAL) == 0) {
                     if (!field.trySetAccessible()) {
-                        System.err.println("Failed to set field " + field.getName() + " accessible in HungerManager");
+                        System.err.println(
+                                "Failed to set field "
+                                        + field.getName()
+                                        + " accessible in HungerManager");
                         continue;
                     }
                     try {
                         Object value = field.get(hungerManager);
                         field.set(clientHungerManager, value);
                     } catch (Throwable e) {
-                        System.err.println("Failed to copy field " + field.getName() + " from HungerManager to ClientHungerManager");
+                        System.err.println(
+                                "Failed to copy field "
+                                        + field.getName()
+                                        + " from HungerManager to ClientHungerManager");
                         e.printStackTrace();
                     }
                 }
@@ -87,7 +95,7 @@ public class ClientHungerManager extends HungerManager {
      * @param food food-level increment intentionally ignored
      * @param saturationModifier saturation increment factor intentionally ignored
      */
-    public void add(int food, float saturationModifier) {
+    public void add(final int food, final float saturationModifier) {
         // nop
     }
 
@@ -96,8 +104,7 @@ public class ClientHungerManager extends HungerManager {
      *
      * @param foodComponent food properties whose local hunger increment is intentionally suppressed
      */
-    public void eat(FoodComponent foodComponent) {
+    public void eat(final FoodComponent foodComponent) {
         // nop
     }
-
 }

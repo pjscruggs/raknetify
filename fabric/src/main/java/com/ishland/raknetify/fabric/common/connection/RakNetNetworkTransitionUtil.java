@@ -32,24 +32,26 @@ import net.minecraft.network.handler.NetworkStateTransitions;
 public class RakNetNetworkTransitionUtil {
 
     /**
-     * Wraps recognized configuration tasks to restore capture placement after the original task runs.
+     * Wraps recognized configuration tasks to restore capture placement after the original task
+     * runs.
      *
      * @param msg outgoing pipeline task or unrelated message
      * @return wrapped configuration task, or the unchanged message when no wrapper is needed
      */
-    static Object handleTransition(Object msg) {
+    static Object handleTransition(final Object msg) {
         if (msg instanceof NetworkStateTransitions.DecoderTransitioner transitioner) {
-            return (NetworkStateTransitions.DecoderTransitioner) context -> {
-                transitioner.run(context);
-                RakNetFabricConnectionUtil.onPipelineReorder(context.pipeline());
-            };
+            return (NetworkStateTransitions.DecoderTransitioner)
+                    context -> {
+                        transitioner.run(context);
+                        RakNetFabricConnectionUtil.onPipelineReorder(context.pipeline());
+                    };
         } else if (msg instanceof NetworkStateTransitions.EncoderTransitioner transitioner) {
-            return (NetworkStateTransitions.EncoderTransitioner) context -> {
-                transitioner.run(context);
-                RakNetFabricConnectionUtil.onPipelineReorder(context.pipeline());
-            };
+            return (NetworkStateTransitions.EncoderTransitioner)
+                    context -> {
+                        transitioner.run(context);
+                        RakNetFabricConnectionUtil.onPipelineReorder(context.pipeline());
+                    };
         }
         return msg;
     }
-
 }
