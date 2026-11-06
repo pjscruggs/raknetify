@@ -30,6 +30,7 @@ import io.netty.buffer.Unpooled;
 import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.channel.ChannelConfig;
 import io.netty.channel.embedded.EmbeddedChannel;
+import io.netty.handler.codec.CorruptedFrameException;
 import io.netty.handler.codec.TooLongFrameException;
 
 import network.ycc.raknet.config.DefaultConfig;
@@ -66,19 +67,47 @@ class ReliableFrameDeduplicatorTest {
     @Test
     void continuousRunSurvivesFullSerialWrap() throws Exception {
         var decoder = new ReliableFrameDeduplicator();
+        var channel = new EmbeddedChannel(decoder);
+        var context = channel.pipeline().context(decoder);
         var output = new ArrayList<Object>(1);
         Frame packet = frame(0);
         try {
             for (int index = 0; index <= 0x1000010; index++) {
                 packet.setReliableIndex(index & 0xffffff);
-                decoder.decode(null, packet, output);
+                decoder.decode(context, packet, output);
                 assertEquals(1, output.size());
                 ((Frame) output.remove(0)).release();
             }
-            decoder.decode(null, packet, output);
+            decoder.decode(context, packet, output);
             assertTrue(output.isEmpty());
         } finally {
             packet.release();
+            channel.finishAndReleaseAll();
+        }
+    }
+
+    /**
+     * Rejects malformed channel IDs before reassembly and ordering can index their fixed queues.
+     */
+    @Test
+    void invalidOrderingChannelClosesAndReleasesFrame() {
+        for (int ordering : new int[] {-1, 8, 255}) {
+            EmbeddedChannel channel = transport();
+            var payload = Unpooled.buffer().writeByte(1);
+            FrameData data = FrameData.create(channel.alloc(), 0xfe, payload);
+            payload.release();
+            data.setReliability(FrameData.Reliability.RELIABLE_ORDERED);
+            data.setOrderChannel(ordering);
+            Frame packet = Frame.createOrdered(data, 0, 0);
+            data.release();
+            try {
+                assertThrows(CorruptedFrameException.class, () -> channel.writeInbound(packet));
+                assertFalse(channel.isOpen());
+                assertEquals(0, packet.refCnt());
+                assertNull(channel.readInbound());
+            } finally {
+                channel.finishAndReleaseAll();
+            }
         }
     }
 

@@ -26,10 +26,12 @@ package com.ishland.raknetify.common.connection;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.ishland.raknetify.common.Constants;
 import com.ishland.raknetify.test.TransportTestPayload;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.embedded.EmbeddedChannel;
+import io.netty.handler.codec.CorruptedFrameException;
 
 import network.ycc.raknet.frame.FrameData;
 import network.ycc.raknet.packet.FramedPacket;
@@ -44,6 +46,70 @@ class LargePayloadCompressionTest {
 
     /** Compressed application frame identifier reserved for this isolated codec pair. */
     private static final int COMPRESSED = 252;
+
+    /** Rejects invalid channel metadata without leaking incoming payloads or control frames. */
+    @Test
+    void invalidIncomingChannelsReleasePayloadAndControlFrames() {
+        for (int id :
+                new int[] {
+                    RAW, COMPRESSED, Constants.RAKNET_STREAMING_COMPRESSION_HANDSHAKE_PACKET_ID
+                }) {
+            for (int ordering : new int[] {-1, 8, 255}) {
+                EmbeddedChannel channel =
+                        new EmbeddedChannel(
+                                new MultiChannelingStreamingCompression(RAW, COMPRESSED));
+                FrameData frame = invalidFrame(channel, id, ordering);
+                try {
+                    assertThrows(CorruptedFrameException.class, () -> channel.writeInbound(frame));
+                    assertEquals(0, frame.refCnt());
+                    assertNull(channel.readInbound());
+                } finally {
+                    channel.finishAndReleaseAll();
+                }
+            }
+        }
+    }
+
+    /** Rejects invalid local output while releasing the message whose write promise fails. */
+    @Test
+    void invalidOutgoingChannelsReleasePayloads() {
+        for (int ordering : new int[] {-1, 8, 255}) {
+            EmbeddedChannel channel =
+                    new EmbeddedChannel(new MultiChannelingStreamingCompression(RAW, COMPRESSED));
+            FrameData frame = invalidFrame(channel, RAW, ordering);
+            try {
+                assertThrows(CorruptedFrameException.class, () -> channel.writeOutbound(frame));
+                assertEquals(0, frame.refCnt());
+            } finally {
+                channel.finishAndReleaseAll();
+            }
+        }
+    }
+
+    /**
+     * Creates a frame that reaches channel validation with a complete control-sized payload.
+     *
+     * @param channel allocator owner for the isolated test pipeline
+     * @param id wire identifier selecting payload or compression control handling
+     * @param ordering invalid channel under test
+     * @return owned frame transferred to the handler
+     */
+    private static FrameData invalidFrame(
+            final EmbeddedChannel channel, final int id, final int ordering) {
+        ByteBuf payload =
+                channel.alloc()
+                        .buffer()
+                        .writeLong(MultiChannelingStreamingCompression.CHANNEL_START);
+        FrameData frame;
+        try {
+            frame = FrameData.create(channel.alloc(), id, payload);
+        } finally {
+            payload.release();
+        }
+        frame.setReliability(FramedPacket.Reliability.RELIABLE_ORDERED);
+        frame.setOrderChannel(ordering);
+        return frame;
+    }
 
     /**
      * Preserves every byte and ordering policy through repeated independent streams in both

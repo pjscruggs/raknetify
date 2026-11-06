@@ -24,7 +24,11 @@
 
 package com.ishland.raknetify.common.connection;
 
+import com.ishland.raknetify.common.Constants;
+
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.CorruptedFrameException;
+import io.netty.handler.codec.DecoderException;
 import io.netty.handler.codec.MessageToMessageDecoder;
 import io.netty.handler.codec.TooLongFrameException;
 
@@ -73,17 +77,23 @@ final class ReliableFrameDeduplicator extends MessageToMessageDecoder<Frame> {
      * @param output frames that have not already been delivered
      * @throws TooLongFrameException if excessive disjoint received ranges exhaust the bounded
      *     history
+     * @throws CorruptedFrameException if the frame addresses an unsupported ordering queue
      */
     @Override
     protected void decode(
             final ChannelHandlerContext ctx, final Frame frame, final List<Object> output) {
         try {
+            if (frame.getOrderChannel() < 0
+                    || frame.getOrderChannel() >= Constants.ORDER_CHANNEL_COUNT) {
+                throw new CorruptedFrameException(
+                        "Invalid ordering channel: " + frame.getOrderChannel());
+            }
             if (!frame.getReliability().isReliable || remember(frame.getReliableIndex())) {
                 output.add(frame.retain());
             }
-        } catch (TooLongFrameException excessive) {
+        } catch (DecoderException invalid) {
             ctx.close();
-            throw excessive;
+            throw invalid;
         }
     }
 
@@ -224,7 +234,7 @@ final class ReliableFrameDeduplicator extends MessageToMessageDecoder<Frame> {
             initialized = true;
             newest = index;
         }
-        long absolute = newest + UINT.B3.minusWrap(index, (int) newest & UINT.B3.MAX_VALUE);
+        long absolute = newest + UINT.B3.minusWrap(index, (int) (newest & UINT.B3.MAX_VALUE));
         if (absolute > newest) {
             newest = absolute;
             retireHistory();

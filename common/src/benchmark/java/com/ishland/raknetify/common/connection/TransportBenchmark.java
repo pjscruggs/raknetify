@@ -27,6 +27,8 @@ package com.ishland.raknetify.common.connection;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.buffer.UnpooledByteBufAllocator;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.embedded.EmbeddedChannel;
 
 import network.ycc.raknet.frame.Frame;
 import network.ycc.raknet.frame.FrameData;
@@ -61,6 +63,12 @@ public class TransportBenchmark {
     /** Received-ID history persists across warmup, measurements and wire-counter wraps. */
     private ReliableFrameDeduplicator dedup;
 
+    /** Owns the decoder's real lifecycle without including socket operations in measurements. */
+    private EmbeddedChannel transport;
+
+    /** Supplies a valid context for the same failure handling used by live connections. */
+    private ChannelHandlerContext context;
+
     /** Reused frame isolates history allocation from ordinary packet allocation. */
     private Frame frame;
 
@@ -85,6 +93,8 @@ public class TransportBenchmark {
         frame = Frame.create(data);
         data.release();
         dedup = new ReliableFrameDeduplicator();
+        transport = new EmbeddedChannel(dedup);
+        context = transport.pipeline().context(dedup);
     }
 
     /** Releases fixture ownership after JMH finishes the trial. */
@@ -92,6 +102,7 @@ public class TransportBenchmark {
     public void close() {
         frame.release();
         buffer.release();
+        transport.finishAndReleaseAll();
     }
 
     /**
@@ -160,7 +171,7 @@ public class TransportBenchmark {
      */
     private int accept(final int identity) {
         frame.setReliableIndex(identity & 0xffffff);
-        dedup.decode(null, frame, output);
+        dedup.decode(context, frame, output);
         int count = output.size();
         if (count != 0) {
             ((Frame) output.remove(0)).release();

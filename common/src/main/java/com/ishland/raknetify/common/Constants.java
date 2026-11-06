@@ -59,6 +59,9 @@ public class Constants {
     /** Maximum queued transport payload, in bytes, before the RakNet queue limit is reached. */
     public static final int MAX_QUEUED_SIZE = 256 * 1024 * 1024;
 
+    /** Number of ordering queues supported by the transport and streaming dictionaries. */
+    public static final int ORDER_CHANNEL_COUNT = 8;
+
     /** Normal RakNet MTU in bytes, leaving room below common Ethernet MTUs. */
     public static final int DEFAULT_MTU = 1400;
 
