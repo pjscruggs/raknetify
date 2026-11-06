@@ -64,7 +64,8 @@ final class ProxySessions {
         }
         if (session != null) return session.matches(header) ? session : null;
         if (header == null) return null;
-        sessions.values().removeIf(value -> value.expired(now));
+        // Resolve the requested tuple eagerly, but sweep unrelated tuples only when capacity is needed.
+        if (sessions.size() >= MAX_SESSIONS) sessions.values().removeIf(value -> value.expired(now));
         if (sessions.size() >= MAX_SESSIONS) return null;
         session = new Session(header.source(), header.destination(), now);
         sessions.put(physical, session);
