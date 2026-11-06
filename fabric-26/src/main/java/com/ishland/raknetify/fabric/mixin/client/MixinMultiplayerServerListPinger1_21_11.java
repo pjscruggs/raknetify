@@ -28,36 +28,53 @@ import com.ishland.raknetify.common.util.PrefixUtil;
 import com.ishland.raknetify.fabric.common.connection.RakNetClientConnectionUtil;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.injection.At;
 
-import java.net.InetSocketAddress;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.multiplayer.ServerStatusPinger;
 import net.minecraft.network.Connection;
 import net.minecraft.server.network.EventLoopGroupHolder;
 import net.minecraft.util.debugchart.LocalSampleLogger;
 
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+
+import java.net.InetSocketAddress;
+
 /**
- * Selects RakNet for server-list probes using the connection-factory signature available in this version.
+ * Selects RakNet for server-list probes using the connection-factory signature available in this
+ * version.
  */
 @Mixin(ServerStatusPinger.class)
 public class MixinMultiplayerServerListPinger1_21_11 {
 
     /**
-     * Chooses the server-list probe transport from the saved address prefix without changing normal TCP entries.
+     * Chooses the server-list probe transport from the saved address prefix without changing normal
+     * TCP entries.
      *
      * @param address resolved remote server address
      * @param backend vanilla event-loop backend passed to the factory
-     * @param packetSizeLog vanilla bandwidth logger argument, replaced with null for this status probe
+     * @param packetSizeLog vanilla bandwidth logger argument, replaced with null for this status
+     *     probe
      * @param original intercepted vanilla connection factory
      * @param entry saved server-list record retaining the user's transport prefix
      * @return status connection using RakNet or ordinary TCP as requested
      */
-    @WrapOperation(method = "pingServer", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/Connection;connectToServer(Ljava/net/InetSocketAddress;Lnet/minecraft/server/network/EventLoopGroupHolder;Lnet/minecraft/util/debugchart/LocalSampleLogger;)Lnet/minecraft/network/Connection;"))
-    private Connection redirectConnect(InetSocketAddress address, EventLoopGroupHolder backend, LocalSampleLogger packetSizeLog, Operation<Connection> original, ServerData entry) {
+    @WrapOperation(
+            method = "pingServer",
+            at =
+                    @At(
+                            value = "INVOKE",
+                            target =
+                                    "Lnet/minecraft/network/Connection;connectToServer(Ljava/net/InetSocketAddress;Lnet/minecraft/server/network/EventLoopGroupHolder;Lnet/minecraft/util/debugchart/LocalSampleLogger;)Lnet/minecraft/network/Connection;"))
+    private Connection redirectConnect(
+            final InetSocketAddress address,
+            final EventLoopGroupHolder backend,
+            final LocalSampleLogger packetSizeLog,
+            final Operation<Connection> original,
+            final ServerData entry) {
         final PrefixUtil.Info info = PrefixUtil.getInfo(entry.ip);
-        return info.useRakNet() ? RakNetClientConnectionUtil.connect(address, backend, info.largeMTU(), original) : original.call(address, backend, null);
+        return info.useRakNet()
+                ? RakNetClientConnectionUtil.connect(address, backend, info.largeMTU(), original)
+                : original.call(address, backend, null);
     }
-
 }

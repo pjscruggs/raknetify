@@ -27,16 +27,15 @@ package com.ishland.raknetify.fabric.mixin.client;
 import com.ishland.raknetify.common.util.PrefixUtil;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import org.spongepowered.asm.mixin.Dynamic;
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.injection.At;
 
 import net.minecraft.client.multiplayer.ServerStatusPinger;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
 
-/**
- * Removes transport selection syntax before Minecraft resolves a server-list address.
- */
+import org.spongepowered.asm.mixin.Dynamic;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+
+/** Removes transport selection syntax before Minecraft resolves a server-list address. */
 @Mixin(ServerStatusPinger.class)
 public abstract class MixinMultiplayerServerListPinger {
 
@@ -48,10 +47,16 @@ public abstract class MixinMultiplayerServerListPinger {
      * @return parsed address without transport selection syntax
      */
     @Dynamic
-    @WrapOperation(method = "pingServer", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/resolver/ServerAddress;parseString(Ljava/lang/String;)Lnet/minecraft/client/multiplayer/resolver/ServerAddress;"))
-    private ServerAddress modifyRaknetAddress(String address, Operation<ServerAddress> original) {
+    @WrapOperation(
+            method = "pingServer",
+            at =
+                    @At(
+                            value = "INVOKE",
+                            target =
+                                    "Lnet/minecraft/client/multiplayer/resolver/ServerAddress;parseString(Ljava/lang/String;)Lnet/minecraft/client/multiplayer/resolver/ServerAddress;"))
+    private ServerAddress modifyRaknetAddress(
+            final String address, final Operation<ServerAddress> original) {
         final PrefixUtil.Info info = PrefixUtil.getInfo(address);
         return original.call(info.stripped());
     }
-
 }

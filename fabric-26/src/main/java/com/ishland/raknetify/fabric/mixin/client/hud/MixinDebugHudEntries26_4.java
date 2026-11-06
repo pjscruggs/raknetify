@@ -25,21 +25,22 @@
 package com.ishland.raknetify.fabric.mixin.client.hud;
 
 import com.ishland.raknetify.fabric.common.client.DebugHudUtil1_21_9;
+
 import net.minecraft.client.gui.components.debug.DebugScreenEntries;
 import net.minecraft.client.gui.components.debug.DebugScreenEntry;
 import net.minecraft.core.Registry;
+
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-/**
- * Registers transport diagnostics through the snapshot's registry bootstrap API.
- */
+/** Registers transport diagnostics through the snapshot's registry bootstrap API. */
 @Mixin(DebugScreenEntries.class)
 public class MixinDebugHudEntries26_4 {
 
-    // Register through the snapshot's registry bootstrap instead of the removed static registration API.
+    // Register through the snapshot's registry bootstrap instead of the removed static registration
+    // API.
     /**
      * Adds the Raknetify debug entry after vanilla populates the snapshot debug registry.
      *
@@ -47,7 +48,8 @@ public class MixinDebugHudEntries26_4 {
      * @param ci return callback, unused because registration mutates the supplied registry
      */
     @Inject(method = "bootstrap", at = @At("RETURN"))
-    private static void registerDebugEntry(Registry<DebugScreenEntry> registry, CallbackInfoReturnable<Object> ci) {
+    private static void registerDebugEntry(
+            final Registry<DebugScreenEntry> registry, final CallbackInfoReturnable<Object> ci) {
         Registry.register(registry, DebugHudUtil1_21_9.ID, DebugHudUtil1_21_9.createEntry());
     }
 }

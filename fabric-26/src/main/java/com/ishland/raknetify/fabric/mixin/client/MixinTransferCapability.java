@@ -25,10 +25,12 @@
 package com.ishland.raknetify.fabric.mixin.client;
 
 import com.ishland.raknetify.common.connection.TransferSupport;
+
 import net.minecraft.client.multiplayer.ClientHandshakePacketListenerImpl;
 import net.minecraft.network.Connection;
-import net.minecraft.network.protocol.login.ServerboundCustomQueryAnswerPacket;
 import net.minecraft.network.protocol.login.ClientboundCustomQueryPacket;
+import net.minecraft.network.protocol.login.ServerboundCustomQueryAnswerPacket;
+
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -44,14 +46,21 @@ public abstract class MixinTransferCapability {
     @Shadow @Final private Connection connection;
 
     /**
-     * Sends a handled empty reply for version one and leaves every other login query to its normal handler.
-     * @param packet decoded native query, including unknown payload identifiers preserved by Minecraft
+     * Sends a handled empty reply for version one and leaves every other login query to its normal
+     * handler.
+     *
+     * @param packet decoded native query, including unknown payload identifiers preserved by
+     *     Minecraft
      * @param callback cancels the fallback unhandled response after sending our single reply
      */
     @Inject(method = "handleCustomQuery", at = @At("HEAD"), cancellable = true)
-    private void raknetify$answerTransferQuery(ClientboundCustomQueryPacket packet, CallbackInfo callback) {
-        if (!TransferSupport.QUERY_ID.equals(packet.payload().id().toString())) return;
-        this.connection.send(new ServerboundCustomQueryAnswerPacket(packet.transactionId(), buffer -> {}));
+    private void raknetify$answerTransferQuery(
+            final ClientboundCustomQueryPacket packet, final CallbackInfo callback) {
+        if (!TransferSupport.QUERY_ID.equals(packet.payload().id().toString())) {
+            return;
+        }
+        this.connection.send(
+                new ServerboundCustomQueryAnswerPacket(packet.transactionId(), buffer -> {}));
         callback.cancel();
     }
 }

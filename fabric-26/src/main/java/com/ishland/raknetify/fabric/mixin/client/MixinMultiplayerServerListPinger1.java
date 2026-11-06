@@ -26,8 +26,18 @@ package com.ishland.raknetify.fabric.mixin.client;
 
 import com.ishland.raknetify.fabric.mixin.access.IClientConnection;
 import com.llamalad7.mixinextras.injector.v2.WrapWithCondition;
+
 import io.netty.channel.Channel;
+
+import net.minecraft.client.multiplayer.ServerData;
+import net.minecraft.client.multiplayer.ServerStatusPinger;
+import net.minecraft.client.multiplayer.resolver.ServerAddress;
+import net.minecraft.network.Connection;
+import net.minecraft.network.protocol.status.ClientStatusPacketListener;
+import net.minecraft.server.network.EventLoopGroupHolder;
+
 import network.ycc.raknet.RakNet;
+
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -36,40 +46,27 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.net.InetSocketAddress;
-import net.minecraft.client.multiplayer.ServerData;
-import net.minecraft.client.multiplayer.ServerStatusPinger;
-import net.minecraft.client.multiplayer.resolver.ServerAddress;
-import net.minecraft.network.Connection;
-import net.minecraft.network.protocol.status.ClientStatusPacketListener;
-import net.minecraft.server.network.EventLoopGroupHolder;
 
-/**
- * Shows transport RTT in the server list and prevents TCP fallback probing for RakNet entries.
- */
+/** Shows transport RTT in the server list and prevents TCP fallback probing for RakNet entries. */
 @Mixin(targets = "net/minecraft/client/multiplayer/ServerStatusPinger$1")
 public abstract class MixinMultiplayerServerListPinger1 implements ClientStatusPacketListener {
 
-    /**
-     * Status connection captured by vanilla's anonymous response listener.
-     */
-    @Shadow
-    @Final
-    Connection val$connection; // synthetic
+    /** Status connection captured by vanilla's anonymous response listener. */
+    @Shadow @Final Connection val$connection; // synthetic
 
-    /**
-     * Server-list record receiving the measured RakNet ping.
-     */
-    @Shadow
-    @Final
-    ServerData val$data; // synthetic
+    /** Server-list record receiving the measured RakNet ping. */
+    @Shadow @Final ServerData val$data; // synthetic
 
     /**
      * Publishes the RakNet RTT in milliseconds after a valid server-status response.
      *
      * @param ci return callback after vanilla processes the status response
      */
-    @Inject(method = "handleStatusResponse(Lnet/minecraft/network/protocol/status/ClientboundStatusResponsePacket;)V", at = @At("RETURN"))
-    private void setPingImmediately(CallbackInfo ci) {
+    @Inject(
+            method =
+                    "handleStatusResponse(Lnet/minecraft/network/protocol/status/ClientboundStatusResponsePacket;)V",
+            at = @At("RETURN"))
+    private void setPingImmediately(final CallbackInfo ci) {
         final Channel channel = ((IClientConnection) val$connection).getChannel();
         if (channel.config() instanceof RakNet.Config config) {
             val$data.ping = config.getRTTNanos() / 1_000_000;
@@ -86,10 +83,21 @@ public abstract class MixinMultiplayerServerListPinger1 implements ClientStatusP
      * @param backend vanilla event-loop backend for the fallback connection
      * @return false for RakNet status connections, true to preserve TCP fallback
      */
-    @WrapWithCondition(method = "onDisconnect", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/ServerStatusPinger;pingLegacyServer(Ljava/net/InetSocketAddress;Lnet/minecraft/client/multiplayer/resolver/ServerAddress;Lnet/minecraft/client/multiplayer/ServerData;Lnet/minecraft/server/network/EventLoopGroupHolder;)V"), require = 0)
-    private boolean noPingRaknet(ServerStatusPinger instance, InetSocketAddress socketAddress, ServerAddress address, ServerData serverInfo, EventLoopGroupHolder backend) {
+    @WrapWithCondition(
+            method = "onDisconnect",
+            at =
+                    @At(
+                            value = "INVOKE",
+                            target =
+                                    "Lnet/minecraft/client/multiplayer/ServerStatusPinger;pingLegacyServer(Ljava/net/InetSocketAddress;Lnet/minecraft/client/multiplayer/resolver/ServerAddress;Lnet/minecraft/client/multiplayer/ServerData;Lnet/minecraft/server/network/EventLoopGroupHolder;)V"),
+            require = 0)
+    private boolean noPingRaknet(
+            final ServerStatusPinger instance,
+            final InetSocketAddress socketAddress,
+            final ServerAddress address,
+            final ServerData serverInfo,
+            final EventLoopGroupHolder backend) {
         final Channel channel = ((IClientConnection) val$connection).getChannel();
         return !(channel.config() instanceof RakNet.Config);
     }
-
 }

@@ -26,35 +26,45 @@ package com.ishland.raknetify.fabric.mixin.client;
 
 import com.ishland.raknetify.common.connection.RakNetSimpleMultiChannelCodec;
 import com.ishland.raknetify.fabric.mixin.access.IClientConnection;
+
 import io.netty.channel.Channel;
+
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.protocol.game.ClientboundLoginPacket;
+
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Starts the client's multichannel negotiation after Minecraft has processed the initial join packet.
+ * Starts the client's multichannel negotiation after Minecraft has processed the initial join
+ * packet.
  */
 @Mixin(ClientPacketListener.class)
 public class MixinClientPlayNetworkHandler {
 
     /**
-     * Schedules the negotiation marker on the channel event loop once client join state is initialized.
+     * Schedules the negotiation marker on the channel event loop once client join state is
+     * initialized.
      *
      * @param packet initial game-join packet, already processed by vanilla
      * @param ci return injection callback, unused because negotiation follows vanilla processing
      */
     @Inject(method = "handleLogin", at = @At("RETURN"))
-    private void postGameJoin(ClientboundLoginPacket packet, CallbackInfo ci) {
-        final Channel channel = ((IClientConnection) ((ClientPacketListener) (Object) this).getConnection()).getChannel();
+    private void postGameJoin(final ClientboundLoginPacket packet, final CallbackInfo ci) {
+        final Channel channel =
+                ((IClientConnection) ((ClientPacketListener) (Object) this).getConnection())
+                        .getChannel();
         if (channel == null) {
             //noinspection RedundantStringFormatCall
-            System.err.println("Raknetify: Warning: %s don't have valid channel when logged in, not sending sync packet".formatted(this));
+            System.err.println(
+                    "Raknetify: Warning: %s don't have valid channel when logged in, not sending sync packet"
+                            .formatted(this));
             return;
         }
-        channel.eventLoop().execute(() -> channel.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL));
+        channel.eventLoop()
+                .execute(() ->
+                        channel.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL));
     }
-
 }
