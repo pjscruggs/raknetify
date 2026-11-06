@@ -101,6 +101,7 @@ public class RakNetConnectionUtil {
 
 //            channel.pipeline().addLast("raknetify-flush-enforcer", new FlushEnforcer());
 //            channel.pipeline().addLast("raknetify-flush-consolidation", new FlushConsolidationHandler(Integer.MAX_VALUE, true));
+            channel.pipeline().addLast("raknetify-graceful-close", new GracefulCloseHandler());
             channel.pipeline().addLast("raknetify-no-flush", new NoFlush());
             channel.pipeline().addLast(MultiChannelingStreamingCompression.NAME, new MultiChannelingStreamingCompression(Constants.RAKNET_GAME_PACKET_ID, Constants.RAKNET_STREAMING_COMPRESSION_PACKET_ID));
             channel.pipeline().addLast(PayloadOrderingNegotiation.NAME, new PayloadOrderingNegotiation(PacketOrdering.snapshot()));
