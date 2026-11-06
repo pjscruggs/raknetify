@@ -42,6 +42,7 @@ import java.net.SocketException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -104,6 +105,8 @@ class SpigotListenersTest {
 
     /**
      * Reserves both protocols instead of assuming an ephemeral TCP port is also free for UDP.
+     * Independent retry candidates avoid walking consecutive ports in a protocol-specific exclusion
+     * range.
      *
      * @param group fixture-owned Netty event loop
      * @return simultaneously bound loopback sockets owned by the caller
@@ -112,7 +115,14 @@ class SpigotListenersTest {
      */
     private static PortPair reservePortPair(final NioEventLoopGroup group) throws SocketException {
         for (int attempt = 0; attempt < 20; attempt++) {
-            DatagramSocket udp = new DatagramSocket(new InetSocketAddress("127.0.0.1", 0));
+            final int candidate =
+                    attempt == 0 ? 0 : ThreadLocalRandom.current().nextInt(49152, 65536);
+            final DatagramSocket udp;
+            try {
+                udp = new DatagramSocket(new InetSocketAddress("127.0.0.1", candidate));
+            } catch (BindException unavailable) {
+                continue;
+            }
             ChannelFuture tcp = tcpListener(group, udp.getLocalPort());
             tcp.awaitUninterruptibly();
             if (tcp.isSuccess()) {
