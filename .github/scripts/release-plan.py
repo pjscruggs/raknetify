@@ -13,13 +13,20 @@ import zipfile
 
 def validate_run(run, repository):
     """Accept only a completed successful build of this repository's main branch, never a pull-request artifact."""
-    assert repository == 'pjscruggs/raknetify2', 'Unexpected publication repository'
-    assert run['head_repository']['full_name'] == repository, 'Build belongs to another repository'
-    assert run['path'] == '.github/workflows/build.yml', 'Not the release-gating build workflow'
-    assert run['event'] in ('push', 'workflow_dispatch'), 'Untrusted build event'
-    assert run['head_branch'] == 'main', 'Only main builds may be published'
-    assert run['status'] == 'completed' and run['conclusion'] == 'success', 'Build has not passed'
-    assert re.fullmatch('[0-9a-f]{40}', run['head_sha']), 'Malformed source revision'
+    if repository != 'pjscruggs/raknetify2':
+        raise ValueError('Unexpected publication repository')
+    if run['head_repository']['full_name'] != repository:
+        raise ValueError('Build belongs to another repository')
+    if run['path'] != '.github/workflows/build.yml':
+        raise ValueError('Not the release-gating build workflow')
+    if run['event'] not in ('push', 'workflow_dispatch'):
+        raise ValueError('Untrusted build event')
+    if run['head_branch'] != 'main':
+        raise ValueError('Only main builds may be published')
+    if run['status'] != 'completed' or run['conclusion'] != 'success':
+        raise ValueError('Build has not passed')
+    if not re.fullmatch('[0-9a-f]{40}', run['head_sha']):
+        raise ValueError('Malformed source revision')
     return run['head_sha']
 
 
@@ -27,10 +34,18 @@ def publication_matrix(loader, destination):
     """Select independent upload jobs so a failed destination can be retried without replaying successful jobs."""
     loaders = ['fabric', 'forge', 'neoforge'] if loader in ('all', 'all-mods') else [loader]
     destinations = ['modrinth', 'curseforge'] if destination == 'both' else [destination]
-    assert all(item in ('fabric', 'forge', 'neoforge', 'spigot') for item in loaders), 'Unknown loader'
-    assert all(item in ('modrinth', 'curseforge') for item in destinations), 'Unknown destination'
-    assert not ('spigot' in loaders and 'curseforge' in destinations), 'Spigot requires a separate CurseForge Bukkit project'
+    validate_targets(loaders, destinations)
     return {'include': [{'loader': item, 'destination': target} for item in loaders for target in destinations]}
+
+
+def validate_targets(loaders, destinations):
+    """Reject unknown destinations and prevent a server plugin from being uploaded to a mod-only project."""
+    if not all(item in ('fabric', 'forge', 'neoforge', 'spigot') for item in loaders):
+        raise ValueError('Unknown loader')
+    if not all(item in ('modrinth', 'curseforge') for item in destinations):
+        raise ValueError('Unknown destination')
+    if 'spigot' in loaders and 'curseforge' in destinations:
+        raise ValueError('Spigot requires a separate CurseForge Bukkit project')
 
 
 def verify_checksums(folder):
@@ -38,15 +53,20 @@ def verify_checksums(folder):
     checked = set()
     for line in (folder / 'SHA256SUMS').read_text(encoding='utf-8').splitlines():
         match = re.fullmatch(r'([0-9a-f]{64})  \./([A-Za-z0-9_.+-]+)', line)
-        assert match, 'Invalid checksum entry'
+        if not match:
+            raise ValueError('Invalid checksum entry')
         digest, name = match.groups()
-        assert name not in checked, 'Duplicate artifact checksum'
+        if name in checked:
+            raise ValueError('Duplicate artifact checksum')
         path = folder / name
-        assert path.is_file() and not path.is_symlink(), 'Missing or indirect artifact: ' + name
-        assert hashlib.sha256(path.read_bytes()).hexdigest() == digest, 'Changed artifact: ' + name
+        if not path.is_file() or path.is_symlink():
+            raise ValueError('Missing or indirect artifact: ' + name)
+        if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+            raise ValueError('Changed artifact: ' + name)
         checked.add(name)
     actual = {path.name for path in folder.iterdir() if path.name != 'SHA256SUMS'}
-    assert actual == checked, 'Artifact inventory differs from its checksums'
+    if actual != checked:
+        raise ValueError('Artifact inventory differs from its checksums')
     return checked
 
 
@@ -55,7 +75,8 @@ def verify_mod_version(path, loader, version):
     with zipfile.ZipFile(path) as archive:
         if loader == 'fabric':
             metadata = json.loads(archive.read('fabric.mod.json'))
-            assert metadata['id'] == 'raknetify', 'Wrong Fabric mod'
+            if metadata['id'] != 'raknetify':
+                raise ValueError('Wrong Fabric mod')
             verify_fabric_entrypoints(archive)
         elif loader == 'spigot':
             metadata = spigot_metadata(archive)
@@ -63,8 +84,10 @@ def verify_mod_version(path, loader, version):
             filename = 'mods.toml' if loader == 'forge' else 'neoforge.mods.toml'
             metadata = next(item for item in tomllib.loads(archive.read('META-INF/' + filename).decode())['mods']
                             if item['modId'] == 'raknetify')
-        assert metadata['version'] == version, 'JAR metadata version does not match the release'
-        assert not any(name.startswith('com/ishland/raknetify/test/') for name in archive.namelist()), 'Test fixture in release'
+        if metadata['version'] != version:
+            raise ValueError('JAR metadata version does not match the release')
+        if any(name.startswith('com/ishland/raknetify/test/') for name in archive.namelist()):
+            raise ValueError('Test fixture in release')
 
 
 def verify_fabric_entrypoints(archive):
@@ -74,7 +97,8 @@ def verify_fabric_entrypoints(archive):
         for entry in entries:
             name = entry if isinstance(entry, str) else entry['value']
             path = name.split('::')[0].replace('.', '/') + '.class'
-            assert path in archive.namelist(), 'Missing Fabric entrypoint: ' + name
+            if path not in archive.namelist():
+                raise ValueError('Missing Fabric entrypoint: ' + name)
     for nested in metadata.get('jars', []):
         with zipfile.ZipFile(io.BytesIO(archive.read(nested['file']))) as dependency:
             verify_fabric_entrypoints(dependency)
@@ -83,12 +107,16 @@ def verify_fabric_entrypoints(archive):
 def spigot_metadata(archive):
     """Read the generated Bukkit metadata strictly and reject ambiguous versions or another plugin entry point."""
     lines = archive.read('plugin.yml').decode('utf-8').splitlines()
-    assert 'name: Raknetify2' in lines, 'Wrong Spigot plugin'
-    assert 'main: com.ishland.raknetify.spigot.RaknetifySpigotPlugin' in lines, 'Wrong Spigot entry point'
+    if 'name: Raknetify2' not in lines:
+        raise ValueError('Wrong Spigot plugin')
+    if 'main: com.ishland.raknetify.spigot.RaknetifySpigotPlugin' not in lines:
+        raise ValueError('Wrong Spigot entry point')
     versions = [line for line in lines if line.startswith('version:')]
-    assert len(versions) == 1, 'Ambiguous Spigot version'
+    if len(versions) != 1:
+        raise ValueError('Ambiguous Spigot version')
     match = re.fullmatch(r"version: '([^']+)'", versions[0])
-    assert match, 'Malformed Spigot version'
+    if not match:
+        raise ValueError('Malformed Spigot version')
     return {'version': match.group(1)}
 
 
@@ -97,15 +125,18 @@ def verify_artifacts(folder):
     checked = verify_checksums(folder)
     metadata = json.loads((folder / 'compatibility.json').read_text(encoding='utf-8'))
     version = metadata['version']
-    assert re.fullmatch(r'\d+\.\d+\.\d+-alpha\.\d+\.\d+', version), 'Not a clean release version'
+    if not re.fullmatch(r'\d+\.\d+\.\d+-alpha\.\d+\.\d+', version):
+        raise ValueError('Not a clean release version')
     for loader in ('fabric', 'forge', 'neoforge'):
         name = 'raknetify2-' + loader + '-' + version + '.jar'
-        assert name in checked, 'Missing release loader: ' + loader
+        if name not in checked:
+            raise ValueError('Missing release loader: ' + loader)
         verify_mod_version(folder / name, loader, version)
     plugins = [name for name in checked if name.startswith('raknetify2-spigot-')]
     if plugins:
         expected = 'raknetify2-spigot-' + version + '.jar'
-        assert plugins == [expected], 'Unexpected Spigot artifact'
+        if plugins != [expected]:
+            raise ValueError('Unexpected Spigot artifact')
         verify_mod_version(folder / expected, 'spigot', version)
     return version
 
@@ -132,7 +163,8 @@ def main():
     if args.artifacts:
         write_outputs({'version': verify_artifacts(args.artifacts)})
         return
-    assert args.run_id and args.run_id.isdecimal(), 'A numeric build run ID is required'
+    if not (args.run_id and args.run_id.isdecimal()):
+        raise ValueError('A numeric build run ID is required')
     output = subprocess.check_output(['gh', 'api', 'repos/' + args.repository + '/actions/runs/' + args.run_id], encoding='utf-8')
     revision = validate_run(json.loads(output), args.repository)
     matrix = publication_matrix(args.loader, args.destination)

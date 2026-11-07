@@ -4,6 +4,8 @@ import io
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 import zipfile
@@ -74,7 +76,7 @@ class ReleasePlanTests(unittest.TestCase):
                 if present:
                     self.guard.verify_fabric_entrypoints(artifact)
                 else:
-                    with self.assertRaisesRegex(AssertionError, 'Missing Fabric entrypoint'):
+                    with self.assertRaisesRegex(ValueError, 'Missing Fabric entrypoint'):
                         self.guard.verify_fabric_entrypoints(artifact)
 
     def test_rejects_untrusted_or_incomplete_runs(self):
@@ -86,7 +88,7 @@ class ReleasePlanTests(unittest.TestCase):
             with self.subTest(key=key):
                 run = self.trusted_run()
                 run[key] = value
-                with self.assertRaises(AssertionError):
+                with self.assertRaises(ValueError):
                     self.guard.validate_run(run, 'pjscruggs/raknetify2')
 
     def test_accepts_exact_bundle(self):
@@ -94,31 +96,52 @@ class ReleasePlanTests(unittest.TestCase):
         self.make_bundle()
         self.assertEqual(self.version, self.guard.verify_artifacts(self.folder))
 
+    def test_optimized_python_still_validates_release_bytes(self):
+        """Run the actual publication CLI with optimization and require both valid acceptance and corrupt rejection."""
+        self.make_bundle()
+        script = Path(__file__).resolve().parents[1] / '.github/scripts/release-plan.py'
+        command = [sys.executable, '-O', str(script), '--artifacts', str(self.folder)]
+        accepted = subprocess.run(command, capture_output=True, text=True, check=False, timeout=15)
+        self.assertEqual(0, accepted.returncode, accepted.stderr)
+        self.assertEqual({'version': self.version}, json.loads(accepted.stdout))
+        (self.folder / 'compatibility.json').write_text('{}', encoding='utf-8')
+        rejected = subprocess.run(command, capture_output=True, text=True, check=False, timeout=15)
+        self.assertNotEqual(0, rejected.returncode)
+        self.assertIn('Changed artifact', rejected.stderr)
+
+    def test_invalid_run_is_rejected_before_network_access_when_optimized(self):
+        """Reject a malformed run identifier under optimization before it can select a remote API resource."""
+        script = Path(__file__).resolve().parents[1] / '.github/scripts/release-plan.py'
+        result = subprocess.run([sys.executable, '-O', str(script), '--run-id', '../other'],
+                                capture_output=True, text=True, check=False, timeout=15)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn('A numeric build run ID is required', result.stderr)
+
     def test_rejects_changed_bytes(self):
         """Fail before publication if any artifact changes after the build produced its checksum inventory."""
         self.make_bundle()
         (self.folder / 'compatibility.json').write_text('{}', encoding='utf-8')
-        with self.assertRaisesRegex(AssertionError, 'Changed artifact'):
+        with self.assertRaisesRegex(ValueError, 'Changed artifact'):
             self.guard.verify_artifacts(self.folder)
 
     def test_rejects_unlisted_files(self):
         """Prevent an accidental fixture or stale extra JAR from entering the verified release directory."""
         self.make_bundle()
         (self.folder / 'unexpected.jar').write_bytes(b'not a release artifact')
-        with self.assertRaisesRegex(AssertionError, 'inventory'):
+        with self.assertRaisesRegex(ValueError, 'inventory'):
             self.guard.verify_artifacts(self.folder)
 
     def test_rejects_path_traversal(self):
         """Reject checksum entries pointing outside the artifact directory even if their digest is well formed."""
         (self.folder / 'SHA256SUMS').write_text('a' * 64 + '  ./../outside.jar\n', encoding='utf-8')
-        with self.assertRaisesRegex(AssertionError, 'Invalid checksum'):
+        with self.assertRaisesRegex(ValueError, 'Invalid checksum'):
             self.guard.verify_checksums(self.folder)
 
     def test_rejects_dirty_release(self):
         """Keep local uncommitted development builds out of live publication."""
         self.version += '-dirty'
         self.make_bundle()
-        with self.assertRaisesRegex(AssertionError, 'clean release'):
+        with self.assertRaisesRegex(ValueError, 'clean release'):
             self.guard.verify_artifacts(self.folder)
 
     def test_rejects_stale_embedded_version(self):
@@ -128,7 +151,7 @@ class ReleasePlanTests(unittest.TestCase):
         with zipfile.ZipFile(path, 'w') as archive:
             archive.writestr('META-INF/mods.toml', '[[mods]]\nmodId="raknetify"\nversion="old"\n')
         self.checksums()
-        with self.assertRaisesRegex(AssertionError, 'metadata version'):
+        with self.assertRaisesRegex(ValueError, 'metadata version'):
             self.guard.verify_artifacts(self.folder)
 
     def test_rejects_packaged_fixture(self):
@@ -138,7 +161,7 @@ class ReleasePlanTests(unittest.TestCase):
         with zipfile.ZipFile(path, 'a') as archive:
             archive.writestr('com/ishland/raknetify/test/NativeClientTests.class', b'fixture')
         self.checksums()
-        with self.assertRaisesRegex(AssertionError, 'Test fixture'):
+        with self.assertRaisesRegex(ValueError, 'Test fixture'):
             self.guard.verify_artifacts(self.folder)
 
     def test_selective_retry_matrix(self):
@@ -159,7 +182,7 @@ class ReleasePlanTests(unittest.TestCase):
             if embedded == self.version:
                 self.assertEqual(self.version, self.guard.verify_artifacts(self.folder))
             else:
-                with self.assertRaisesRegex(AssertionError, 'metadata version'):
+                with self.assertRaisesRegex(ValueError, 'metadata version'):
                     self.guard.verify_artifacts(self.folder)
 
     def test_spigot_publication_does_not_target_a_mod_project(self):
@@ -167,7 +190,7 @@ class ReleasePlanTests(unittest.TestCase):
         self.assertEqual({'include': [{'loader': 'spigot', 'destination': 'modrinth'}]},
                          self.guard.publication_matrix('spigot', 'modrinth'))
         for destination in ('curseforge', 'both'):
-            with self.assertRaisesRegex(AssertionError, 'Bukkit project'):
+            with self.assertRaisesRegex(ValueError, 'Bukkit project'):
                 self.guard.publication_matrix('spigot', destination)
 
     def test_all_mods_excludes_server_plugins(self):
