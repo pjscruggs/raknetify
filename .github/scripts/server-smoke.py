@@ -299,10 +299,11 @@ def check_server(run):
         check_mappings(run.folder, metadata)
         check_tcp_when_ready(run.port, metadata)
         with proxy.transport(run.features.proxy_protocol, run.port, repeated=not run.native) as frontend:
-            check_udp(frontend)
-            check_connected_udp(frontend, metadata, run.java, run.probe_dir)
+            # Check silence before a closed RakNet probe's source port can be reused by this socket.
             if run.features.voicechat:
                 voice_fixture().check(run.folder, log, run.port, frontend)
+            check_udp(frontend)
+            check_connected_udp(frontend, metadata, run.java, run.probe_dir)
             if run.features.encryption:
                 check_encryption(frontend, metadata, run.java, run.probe_dir, run.features.packetfixer)
             if run.features.proxy_protocol:
