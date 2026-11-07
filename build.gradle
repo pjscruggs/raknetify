@@ -58,6 +58,12 @@ tasks.register('qualityChecks') {
 subprojects {
 	apply plugin: 'java'
 	apply plugin: 'java-library'
+    dependencies {
+        compileOnly 'org.jspecify:jspecify:1.0.1'
+        testCompileOnly 'org.jspecify:jspecify:1.0.1'
+        compileOnly 'com.google.errorprone:error_prone_annotations:2.52.0'
+        testCompileOnly 'com.google.errorprone:error_prone_annotations:2.52.0'
+    }
 	// Integration fixtures must never become Maven release artifacts.
 	if (!project.name.startsWith('transport-test-')) apply plugin: 'maven-publish'
 	apply plugin: 'dev.yumi.gradle.licenser'
