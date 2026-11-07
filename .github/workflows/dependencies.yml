@@ -29,5 +29,5 @@ jobs:
       - uses: ./.github/actions/setup-checks
       - uses: gradle/actions/dependency-submission@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
-          dependency-resolution-task: build :common:benchmarkClasses
+          dependency-resolution-task: build :common:benchmarkClasses :common:pitest
           additional-arguments: --no-daemon --max-workers=2
