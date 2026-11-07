@@ -65,11 +65,12 @@ def configure(folder, direct, maintenance, port, proxy_protocol=False):
 
 
 def ready(process, log):
-    """Wait for actual proxy startup while rejecting early exit and retaining the diagnostic log."""
+    """Wait for TCP startup and the asynchronous RakNet bind before issuing network probes."""
     deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
         assert process.poll() is None, log.read_text(encoding='utf-8', errors='replace')
-        if 'Done (' in log.read_text(encoding='utf-8', errors='replace'):
+        output = log.read_text(encoding='utf-8', errors='replace')
+        if 'Done (' in output and 'Raknetify server started on ' in output:
             return
         time.sleep(0.25)
     raise TimeoutError('Velocity startup deadline')
