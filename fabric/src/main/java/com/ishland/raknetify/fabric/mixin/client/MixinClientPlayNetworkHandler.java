@@ -63,10 +63,8 @@ public class MixinClientPlayNetworkHandler {
                                         .get((ClientPlayNetworkHandler) (Object) this))
                         .getChannel();
         if (channel == null) {
-            //noinspection RedundantStringFormatCall
             System.err.println(
-                    "Raknetify: Warning: %s don't have valid channel when logged in, not sending sync packet"
-                            .formatted(this));
+                    "Raknetify: Cannot negotiate ordered transport without a login channel");
             return;
         }
         channel.eventLoop()

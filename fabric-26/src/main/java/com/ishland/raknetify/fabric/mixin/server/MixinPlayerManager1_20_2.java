@@ -85,10 +85,8 @@ public class MixinPlayerManager1_20_2 {
             final CallbackInfo ci) {
         final Channel channel = ((IClientConnection) connection).getChannel();
         if (channel == null) {
-            //noinspection RedundantStringFormatCall
             System.err.println(
-                    "Raknetify: Warning: %s don't have valid channel when logged in, not sending sync packet"
-                            .formatted(this));
+                    "Raknetify: Cannot negotiate ordered transport without a login channel");
             return;
         }
         channel.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL)
