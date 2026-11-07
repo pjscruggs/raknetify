@@ -24,6 +24,7 @@
 
 package com.ishland.raknetify.test.mixin;
 
+import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
@@ -51,7 +52,7 @@ public final class FixtureMixinPlugin implements IMixinConfigPlugin {
      * @return null to keep the configured reference map
      */
     @Override
-    public String getRefMapperConfig() {
+    public @Nullable String getRefMapperConfig() {
         return null;
     }
 
@@ -84,7 +85,7 @@ public final class FixtureMixinPlugin implements IMixinConfigPlugin {
      * @return null to use the JSON mixin list
      */
     @Override
-    public List<String> getMixins() {
+    public @Nullable List<String> getMixins() {
         return null;
     }
 

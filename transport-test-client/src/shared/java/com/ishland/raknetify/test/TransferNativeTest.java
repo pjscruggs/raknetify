@@ -204,7 +204,8 @@ final class TransferNativeTest {
      * @param connection real connection retained by the login handler
      * @return suitable constructor value, normally null for unused client services
      */
-    private static Object loginArgument(final Class<?> type, final Object connection) {
+    private static @org.jspecify.annotations.Nullable Object loginArgument(
+            final Class<?> type, final Object connection) {
         if (type.isInstance(connection)) {
             return connection;
         }
@@ -344,7 +345,8 @@ final class TransferNativeTest {
      * @param completions counter shared with the witness
      * @return callback implementing the version's native completion contract
      */
-    private static Object completion(final Class<?> type, final AtomicInteger completions) {
+    private static @org.jspecify.annotations.Nullable Object completion(
+            final Class<?> type, final AtomicInteger completions) {
         if (type == ChannelFutureListener.class) {
             return (ChannelFutureListener) future -> completions.incrementAndGet();
         }

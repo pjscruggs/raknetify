@@ -309,8 +309,8 @@ public final class ClientAddressTest implements PreLaunchEntrypoint {
          * @return argument accepted by the vanilla thread constructor
          * @throws ReflectiveOperationException if the inert parent screen cannot be constructed
          */
-        private Object argument(final Class<?> type, final Object parsed)
-                throws ReflectiveOperationException {
+        private @org.jspecify.annotations.Nullable Object argument(
+                final Class<?> type, final Object parsed) throws ReflectiveOperationException {
             if (type == connector.getEnclosingClass()) {
                 // The enclosing screen is only captured, never run. Avoid its graphics-dependent
                 // constructor.

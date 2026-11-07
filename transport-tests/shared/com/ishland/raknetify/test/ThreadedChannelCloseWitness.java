@@ -46,11 +46,11 @@ public final class ThreadedChannelCloseWitness {
     /**
      * A lower transport can close before an application drain has requested its own close.
      *
-     * @throws Exception if socket registration or bounded cleanup fails
+     * @throws InterruptedException if socket registration or bounded cleanup fails
      * @throws IllegalStateException if the application channel remains open after its physical
      *     socket closes
      */
-    public static void verify() throws Exception {
+    public static void verify() throws InterruptedException {
         NioEventLoopGroup group = new NioEventLoopGroup(1);
         Channel client = null;
         try {
@@ -80,17 +80,8 @@ public final class ThreadedChannelCloseWitness {
      * @return independently owned application initializer
      */
     private static ChannelInitializer<Channel> initializer() {
-        return new ChannelInitializer<>() {
-            /**
-             * Preserves the real threaded channel lifecycle while installing the application close
-             * policy.
-             *
-             * @param channel application channel owned by the fixture
-             */
-            @Override
-            protected void initChannel(final Channel channel) {
-                channel.pipeline().addLast(new GracefulCloseHandler());
-            }
-        };
+        return new com.ishland.raknetify.test.ChannelSetup(channel -> {
+            channel.pipeline().addLast(new GracefulCloseHandler());
+        });
     }
 }

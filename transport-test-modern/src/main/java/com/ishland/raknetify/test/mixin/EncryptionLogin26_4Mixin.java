@@ -56,7 +56,7 @@ public abstract class EncryptionLogin26_4Mixin {
     /**
      * Secret already decrypted and challenge-validated by Minecraft before the digest invocation.
      */
-    @Unique private SecretKey fixtureSecret;
+    @Unique private @org.jspecify.annotations.Nullable SecretKey fixtureSecret;
 
     /**
      * Invokes the native options request instead of fabricating a cipher installation in the test.
@@ -103,7 +103,10 @@ public abstract class EncryptionLogin26_4Mixin {
     private void requestFixtureOptions(final CallbackInfo callback)
             throws ReflectiveOperationException {
         EncryptionExchange.requireTestConnection(EncryptionExchange.channel(connection));
-        requestOptions(new GameProfile(new UUID(0, 1), "EncryptionProbe"), fixtureSecret);
+        requestOptions(
+                new GameProfile(new UUID(0, 1), "EncryptionProbe"),
+                java.util.Objects.requireNonNull(
+                        fixtureSecret, "Native login secret was not captured"));
         fixtureSecret = null;
         callback.cancel();
     }

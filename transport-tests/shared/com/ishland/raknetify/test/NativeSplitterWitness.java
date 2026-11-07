@@ -75,7 +75,7 @@ public final class NativeSplitterWitness {
      * @param type native frame-decoder class
      * @return accessible helper field, or null for versions without a persistent helper
      */
-    private static Field helperField(final Class<?> type) {
+    private static @org.jspecify.annotations.Nullable Field helperField(final Class<?> type) {
         for (Field field : type.getDeclaredFields()) {
             if (field.getType() == ByteBuf.class && !Modifier.isStatic(field.getModifiers())) {
                 field.setAccessible(true);
@@ -124,12 +124,16 @@ public final class NativeSplitterWitness {
         try {
             channel.writeInbound(Unpooled.buffer().writeByte(1).writeByte(42));
             verifyDecoded(channel);
-            if (previous != field.get(handler) && previous.refCnt() != 0) {
+            if (!com.google.common.base.Equivalence.identity()
+                            .equivalent(previous, field.get(handler))
+                    && previous.refCnt() != 0) {
                 throw new IllegalStateException(
                         "Native frame decoder abandoned an unreleased helper");
             }
         } finally {
-            if (previous != field.get(handler) && previous.refCnt() != 0) {
+            if (!com.google.common.base.Equivalence.identity()
+                            .equivalent(previous, field.get(handler))
+                    && previous.refCnt() != 0) {
                 previous.release();
             }
         }
