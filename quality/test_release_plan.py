@@ -3,6 +3,7 @@ import hashlib
 import io
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -101,11 +102,14 @@ class ReleasePlanTests(unittest.TestCase):
         self.make_bundle()
         script = Path(__file__).resolve().parents[1] / '.github/scripts/release-plan.py'
         command = [sys.executable, '-O', str(script), '--artifacts', str(self.folder)]
-        accepted = subprocess.run(command, capture_output=True, text=True, check=False, timeout=15)
+        environment = os.environ.copy()
+        # Require local JSON output without writing fixture metadata into the enclosing workflow.
+        environment.pop('GITHUB_OUTPUT', None)
+        accepted = subprocess.run(command, capture_output=True, text=True, check=False, timeout=15, env=environment)
         self.assertEqual(0, accepted.returncode, accepted.stderr)
         self.assertEqual({'version': self.version}, json.loads(accepted.stdout))
         (self.folder / 'compatibility.json').write_text('{}', encoding='utf-8')
-        rejected = subprocess.run(command, capture_output=True, text=True, check=False, timeout=15)
+        rejected = subprocess.run(command, capture_output=True, text=True, check=False, timeout=15, env=environment)
         self.assertNotEqual(0, rejected.returncode)
         self.assertIn('Changed artifact', rejected.stderr)
 
