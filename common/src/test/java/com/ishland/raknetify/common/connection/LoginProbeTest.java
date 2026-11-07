@@ -80,9 +80,10 @@ class LoginProbeTest {
     void declinesOnlyOptionalQueries() {
         ByteBuf response = RaknetProxyProbe.declineQuery(new byte[] {4, (byte) 0xac, 2, 0});
         try {
+            org.junit.jupiter.api.Assertions.assertNotNull(response);
             assertEquals("02ac0200", ByteBufUtil.hexDump(response));
         } finally {
-            response.release();
+            io.netty.util.ReferenceCountUtil.release(response);
         }
         assertNull(RaknetProxyProbe.declineQuery(new byte[] {0, 2, 123, 125}));
         assertNull(RaknetProxyProbe.declineQuery(new byte[] {1}));

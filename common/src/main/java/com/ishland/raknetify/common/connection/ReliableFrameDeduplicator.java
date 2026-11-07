@@ -35,6 +35,8 @@ import io.netty.handler.codec.TooLongFrameException;
 import network.ycc.raknet.frame.Frame;
 import network.ycc.raknet.utils.UINT;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.List;
 import java.util.TreeMap;
 
@@ -56,10 +58,10 @@ final class ReliableFrameDeduplicator extends MessageToMessageDecoder<Frame> {
     private final java.util.NavigableMap<Long, Range> received = new TreeMap<>();
 
     /** Cached highest interval permits sequential traffic without tree lookup or allocation. */
-    private Range lastRange;
+    private @Nullable Range lastRange;
 
     /** Cached oldest interval makes retirement checks constant time until a whole run expires. */
-    private Range firstRange;
+    private @Nullable Range firstRange;
 
     /** Largest unwrapped reliable ID observed on this transport. */
     private long newest;
@@ -92,7 +94,8 @@ final class ReliableFrameDeduplicator extends MessageToMessageDecoder<Frame> {
                 output.add(frame.retain());
             }
         } catch (DecoderException invalid) {
-            ctx.close();
+            ctx.close()
+                    .addListener(io.netty.channel.ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
             throw invalid;
         }
     }
@@ -153,11 +156,11 @@ final class ReliableFrameDeduplicator extends MessageToMessageDecoder<Frame> {
      * @param absolute identity being inserted
      * @return nearest preceding interval, or null before the first accepted identity
      */
-    private Range previousRange(final long absolute) {
+    private @Nullable Range previousRange(final long absolute) {
         if (firstRange == null || absolute < firstRange.start) {
             return null;
         }
-        if (absolute >= lastRange.start) {
+        if (lastRange != null && absolute >= lastRange.start) {
             return lastRange;
         }
         return received.floorEntry(absolute).getValue();
@@ -169,11 +172,11 @@ final class ReliableFrameDeduplicator extends MessageToMessageDecoder<Frame> {
      * @param absolute identity being inserted
      * @return nearest following interval, or null beyond the newest run
      */
-    private Range nextRange(final long absolute) {
+    private @Nullable Range nextRange(final long absolute) {
         if (lastRange == null || absolute > lastRange.start) {
             return null;
         }
-        if (absolute <= firstRange.start) {
+        if (firstRange != null && absolute <= firstRange.start) {
             return firstRange;
         }
         return received.ceilingEntry(absolute).getValue();
@@ -187,7 +190,8 @@ final class ReliableFrameDeduplicator extends MessageToMessageDecoder<Frame> {
      * @param next following run, if any
      * @param absolute newly accepted identity
      */
-    private void extendRange(final Range previous, final Range next, final long absolute) {
+    private void extendRange(
+            final Range previous, final @Nullable Range next, final long absolute) {
         previous.end = absolute;
         if (next != null && next.start == absolute + 1) {
             previous.end = next.end;

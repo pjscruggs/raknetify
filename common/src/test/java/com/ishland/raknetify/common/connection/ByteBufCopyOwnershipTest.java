@@ -49,6 +49,7 @@ class ByteBufCopyOwnershipTest {
         try {
             assertThrows(ReadOnlyBufferException.class, () -> channel.writeInbound(input));
             assertEquals(0, input.refCnt());
+            assertNotNull(allocator.allocated);
             assertEquals(0, allocator.allocated.refCnt());
         } finally {
             if (input.refCnt() > 0) {
@@ -64,7 +65,7 @@ class ByteBufCopyOwnershipTest {
     /** Injects a write failure after allocation so both ownership obligations are observable. */
     private static final class ReadOnlyAllocator extends AbstractByteBufAllocator {
         /** Replacement allocation retained only for observing its reference count. */
-        private ByteBuf allocated;
+        private @org.jspecify.annotations.Nullable ByteBuf allocated;
 
         /**
          * Supplies the deliberately unwritable direct buffer.

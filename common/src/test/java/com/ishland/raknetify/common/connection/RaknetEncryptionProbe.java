@@ -122,35 +122,27 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
                         Integer.parseInt(args[1]),
                         args.length > 2 ? Integer.parseInt(args[2]) : 8,
                         mode);
-        NioEventLoopGroup group = new NioEventLoopGroup(1);
-        Channel channel = null;
-        try {
-            channel =
+        try (ProbeLoop loop = new ProbeLoop(new NioEventLoopGroup(1))) {
+            final Channel connected =
                     new Bootstrap()
-                            .group(group)
+                            .group(loop.group())
                             .channel(RakNetClient.THREADED_CHANNEL)
                             .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5000)
                             .handler(probe.initializer())
                             .connect("127.0.0.1", port)
                             .sync()
                             .channel();
-            channel.writeAndFlush(RaknetStatusProbe.handshake(port, probe.protocol, 2));
-            if (!"rejected-throttle".equals(mode)) {
-                channel.writeAndFlush(probe.hello());
-            }
-            probe.result.get(30, TimeUnit.SECONDS);
-            System.out.println(
-                    "echo".equals(mode)
-                            ? "PASS native RSA and bidirectional RakNet encryption"
-                            : "PASS native authentication " + mode);
-        } finally {
-            try {
-                if (channel != null && !channel.close().await(5, TimeUnit.SECONDS)) {
-                    throw new IllegalStateException(
-                            "Encryption probe channel did not close within five seconds");
+            try (ProbeChannel owned = new ProbeChannel(connected)) {
+                final Channel channel = owned.channel();
+                channel.writeAndFlush(RaknetStatusProbe.handshake(port, probe.protocol, 2)).sync();
+                if (!"rejected-throttle".equals(mode)) {
+                    channel.writeAndFlush(probe.hello()).sync();
                 }
-            } finally {
-                group.shutdownGracefully(0, 5, TimeUnit.SECONDS).sync();
+                probe.result.get(30, TimeUnit.SECONDS);
+                System.out.println(
+                        "echo".equals(mode)
+                                ? "PASS native RSA and bidirectional RakNet encryption"
+                                : "PASS native authentication " + mode);
             }
         }
     }
@@ -161,21 +153,13 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
      * @return initializer used for this connection only
      */
     private ChannelInitializer<Channel> initializer() {
-        return new ChannelInitializer<>() {
-            /**
-             * Adds the unencrypted framing used before Minecraft's key exchange.
-             *
-             * @param channel newly registered loopback connection
-             */
-            @Override
-            protected void initChannel(final Channel channel) {
-                ((RakNet.Config) channel.config()).setMaxQueuedBytes(Constants.MAX_QUEUED_SIZE);
-                // Metrics are transport control traffic handled before application encryption.
-                channel.pipeline().addLast("metrics", new MetricsSynchronizationHandler());
-                channel.pipeline().addLast("game", new UserDataCodec(0xFD));
-                channel.pipeline().addLast("probe", RaknetEncryptionProbe.this);
-            }
-        };
+        return new com.ishland.raknetify.test.ChannelSetup(channel -> {
+            ((RakNet.Config) channel.config()).setMaxQueuedBytes(Constants.MAX_QUEUED_SIZE);
+            // Metrics are transport control traffic handled before application encryption.
+            channel.pipeline().addLast("metrics", new MetricsSynchronizationHandler());
+            channel.pipeline().addLast("game", new UserDataCodec(0xFD));
+            channel.pipeline().addLast("probe", RaknetEncryptionProbe.this);
+        });
     }
 
     /**
@@ -261,7 +245,8 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
             reply.writeBoolean(true);
         }
         writeBytes(reply, encrypt(key, nonce));
-        context.writeAndFlush(reply);
+        context.writeAndFlush(reply)
+                .addListener(io.netty.channel.ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
         answered = true;
         if ("rejected-nonce".equals(mode)) {
             return;
@@ -284,7 +269,8 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
                 || request.isReadable()) {
             throw new IllegalArgumentException("Expected encryption options request");
         }
-        context.writeAndFlush(Unpooled.buffer(1).writeByte(5));
+        context.writeAndFlush(Unpooled.buffer(1).writeByte(5))
+                .addListener(io.netty.channel.ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
         enableEncryption(context);
     }
 
@@ -300,7 +286,8 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
         }
         ByteBuf challenge = TransportTestPayload.create(context.alloc(), payloadSize, CHALLENGE);
         try {
-            context.writeAndFlush(FrameData.create(context.alloc(), 0xF7, challenge));
+            context.writeAndFlush(FrameData.create(context.alloc(), 0xF7, challenge))
+                    .addListener(io.netty.channel.ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
         } finally {
             challenge.release();
         }
@@ -409,6 +396,45 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
     @Override
     public void exceptionCaught(final ChannelHandlerContext context, final Throwable cause) {
         result.completeExceptionally(cause);
-        context.close();
+        context.close()
+                .addListener(io.netty.channel.ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
+    }
+
+    /**
+     * Owns event-loop shutdown so cleanup failures are suppressed onto an earlier probe failure.
+     *
+     * @param group dedicated probe threads, never shared with a running game
+     */
+    private record ProbeLoop(NioEventLoopGroup group) implements AutoCloseable {
+        /**
+         * Waits for termination after all channel cleanup has completed or failed.
+         *
+         * @throws InterruptedException if the controlling thread is interrupted during shutdown
+         */
+        @Override
+        public void close() throws InterruptedException {
+            group.shutdownGracefully(0, 5, TimeUnit.SECONDS).sync();
+        }
+    }
+
+    /**
+     * Bounds socket cleanup without replacing a failure from the encrypted exchange.
+     *
+     * @param channel exclusively owned connected probe transport
+     */
+    private record ProbeChannel(Channel channel) implements AutoCloseable {
+        /**
+         * Requires the application channel to close within the fixture's shutdown budget.
+         *
+         * @throws InterruptedException if the shutdown wait is interrupted
+         * @throws IllegalStateException if the transport does not close within five seconds
+         */
+        @Override
+        public void close() throws InterruptedException {
+            if (!channel.close().await(5, TimeUnit.SECONDS)) {
+                throw new IllegalStateException(
+                        "Encryption probe channel did not close within five seconds");
+            }
+        }
     }
 }

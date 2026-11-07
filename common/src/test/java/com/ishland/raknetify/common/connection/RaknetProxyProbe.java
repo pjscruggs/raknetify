@@ -83,7 +83,7 @@ public final class RaknetProxyProbe {
             if (mode.startsWith("ban")) {
                 bannedLogin(channel, packets, protocol);
             } else if ("reject".equals(mode)) {
-                rejection(channel, packets);
+                rejection(packets);
             } else {
                 status(channel, packets);
             }
@@ -174,7 +174,7 @@ public final class RaknetProxyProbe {
      * @param response complete login-state packet
      * @return owned query reply or null for a packet that must be validated by the caller
      */
-    static ByteBuf declineQuery(final byte[] response) {
+    static @org.jspecify.annotations.Nullable ByteBuf declineQuery(final byte[] response) {
         ByteBuf input = Unpooled.wrappedBuffer(response);
         try {
             if (RaknetStatusProbe.readVarint(input) != 4) {
@@ -223,38 +223,10 @@ public final class RaknetProxyProbe {
      */
     private static ChannelInitializer<Channel> initializer(
             final java.util.concurrent.BlockingQueue<byte[]> packets) {
-        return new ChannelInitializer<>() {
-            /**
-             * Installs legacy RakNet game framing without multichannel negotiation.
-             *
-             * @param channel newly accepted client channel
-             */
-            @Override
-            protected void initChannel(final Channel channel) {
-                channel.pipeline().addLast(new UserDataCodec(0xFD));
-                channel.pipeline()
-                        .addLast(
-                                new SimpleChannelInboundHandler<Object>() {
-                                    /**
-                                     * Retains packet bytes independently of Netty's message
-                                     * lifetime.
-                                     *
-                                     * @param context inbound transport context
-                                     * @param message game bytes or an ignored extension frame
-                                     */
-                                    @Override
-                                    protected void channelRead0(
-                                            final ChannelHandlerContext context,
-                                            final Object message) {
-                                        if (message instanceof ByteBuf buffer) {
-                                            byte[] copy = new byte[buffer.readableBytes()];
-                                            buffer.readBytes(copy);
-                                            packets.add(copy);
-                                        }
-                                    }
-                                });
-            }
-        };
+        return new com.ishland.raknetify.test.ChannelSetup(channel -> {
+            channel.pipeline().addLast(new UserDataCodec(0xFD));
+            channel.pipeline().addLast(new PacketReceiver(packets));
+        });
     }
 
     /**
@@ -285,13 +257,11 @@ public final class RaknetProxyProbe {
     /**
      * Requires a valid login disconnect carrying the maintenance message before any login start.
      *
-     * @param channel client rejected by the proxy handshake handler
      * @param packets decoded application responses
      * @throws Exception if rejection is missing or malformed
      * @throws IllegalArgumentException if the configured maintenance reason was not received
      */
-    private static void rejection(
-            final Channel channel, final java.util.concurrent.BlockingQueue<byte[]> packets)
+    private static void rejection(final java.util.concurrent.BlockingQueue<byte[]> packets)
             throws Exception {
         byte[] response = next(packets);
         if (!textPacket(response).contains("Transport maintenance fixture")) {
@@ -339,6 +309,38 @@ public final class RaknetProxyProbe {
             return buffer.readCharSequence(length, StandardCharsets.UTF_8).toString();
         } finally {
             buffer.release();
+        }
+    }
+
+    /**
+     * Copies decoded responses into the bounded probe inbox before Netty releases their buffers.
+     */
+    private static final class PacketReceiver extends SimpleChannelInboundHandler<Object> {
+        /** Destination owned by the probe thread and completed by its network callback. */
+        private final java.util.concurrent.BlockingQueue<byte[]> packets;
+
+        /**
+         * Captures the connection's result destination before inbound packets arrive.
+         *
+         * @param packets destination used to report decoded responses
+         */
+        private PacketReceiver(final java.util.concurrent.BlockingQueue<byte[]> packets) {
+            this.packets = packets;
+        }
+
+        /**
+         * Retains packet bytes independently of Netty's message lifetime.
+         *
+         * @param context inbound transport context
+         * @param message game bytes or an ignored extension frame
+         */
+        @Override
+        protected void channelRead0(final ChannelHandlerContext context, final Object message) {
+            if (message instanceof ByteBuf buffer) {
+                byte[] copy = new byte[buffer.readableBytes()];
+                buffer.readBytes(copy);
+                packets.add(copy);
+            }
         }
     }
 }

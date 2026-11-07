@@ -37,6 +37,8 @@ import network.ycc.raknet.frame.FrameData;
 import network.ycc.raknet.server.channel.RakNetApplicationChannel;
 import network.ycc.raknet.server.channel.RakNetChildChannel;
 
+import org.jspecify.annotations.Nullable;
+
 import java.security.GeneralSecurityException;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -89,13 +91,13 @@ public class MultiChannellingEncryption extends ChannelDuplexHandler {
     private final boolean outbound;
 
     /** Explicit endpoint role for adapters, or null to infer it from a RakNet channel. */
-    private final Boolean clientSide;
+    private final @Nullable Boolean clientSide;
 
     /** Inbound payload transformer created when the handler joins a channel. */
-    private AuthenticatedFrameCipher decryption;
+    private @Nullable AuthenticatedFrameCipher decryption;
 
     /** Outbound payload transformer created when the handler joins a channel. */
-    private AuthenticatedFrameCipher encryption;
+    private @Nullable AuthenticatedFrameCipher encryption;
 
     /**
      * Creates authenticated frame encryption with a role determined from the native RakNet channel.
@@ -138,7 +140,7 @@ public class MultiChannellingEncryption extends ChannelDuplexHandler {
             final SecretKey key,
             final boolean inbound,
             final boolean outbound,
-            final Boolean clientSide) {
+            final @Nullable Boolean clientSide) {
         this.key = Objects.requireNonNull(key);
         this.inbound = inbound;
         this.outbound = outbound;
@@ -185,7 +187,8 @@ public class MultiChannellingEncryption extends ChannelDuplexHandler {
                 encryption = new AuthenticatedFrameCipher(key, true, client);
             }
         } catch (GeneralSecurityException | IllegalArgumentException failure) {
-            ctx.close();
+            ctx.close()
+                    .addListener(io.netty.channel.ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
             throw failure;
         }
     }
@@ -232,11 +235,13 @@ public class MultiChannellingEncryption extends ChannelDuplexHandler {
                 resFrame = FrameData.create(ctx.alloc(), data.getPacketId(), res);
                 resFrame.setOrderChannel(data.getOrderChannel());
                 resFrame.setReliability(data.getReliability());
-                ctx.write(resFrame, promise);
+                super.write(ctx, resFrame, promise);
                 resFrame = null;
                 return;
             } catch (GeneralSecurityException failure) {
-                ctx.close();
+                ctx.close()
+                        .addListener(
+                                io.netty.channel.ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
                 throw failure;
             } finally {
                 buf.release();
@@ -279,7 +284,9 @@ public class MultiChannellingEncryption extends ChannelDuplexHandler {
                 resFrame = null;
                 return;
             } catch (GeneralSecurityException failure) {
-                ctx.close();
+                ctx.close()
+                        .addListener(
+                                io.netty.channel.ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
                 throw failure;
             } finally {
                 buf.release();

@@ -35,6 +35,7 @@ import io.netty.handler.codec.CorruptedFrameException;
 import network.ycc.raknet.frame.FrameData;
 
 import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
+import org.jspecify.annotations.Nullable;
 
 import java.util.Objects;
 import java.util.concurrent.ScheduledFuture;
@@ -78,19 +79,23 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
     private final int compressedPacketId;
 
     /** Cumulative outgoing payload bytes before compression, excluding frame identifiers. */
-    private volatile long outBytesRaw;
+    private final java.util.concurrent.atomic.AtomicLong outBytesRaw =
+            new java.util.concurrent.atomic.AtomicLong();
 
     /**
      * Cumulative outgoing payload bytes after compression, including small payloads passed through
      * raw.
      */
-    private volatile long outBytesCompressed;
+    private final java.util.concurrent.atomic.AtomicLong outBytesCompressed =
+            new java.util.concurrent.atomic.AtomicLong();
 
     /** Cumulative compressed payload bytes consumed by inbound inflaters. */
-    private volatile long inBytesCompressed;
+    private final java.util.concurrent.atomic.AtomicLong inBytesCompressed =
+            new java.util.concurrent.atomic.AtomicLong();
 
     /** Cumulative payload bytes produced by inbound inflaters. */
-    private volatile long inBytesRaw;
+    private final java.util.concurrent.atomic.AtomicLong inBytesRaw =
+            new java.util.concurrent.atomic.AtomicLong();
 
     /** Whether the peer has advertised compatible streaming compression. */
     private volatile boolean active;
@@ -120,7 +125,7 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
                             ctx.alloc(),
                             Constants.RAKNET_STREAMING_COMPRESSION_HANDSHAKE_PACKET_ID,
                             buf);
-            ctx.write(data);
+            ctx.write(data).addListener(network.ycc.raknet.RakNet.INTERNAL_WRITE_LISTENER);
         } finally {
             buf.release();
         }
@@ -145,7 +150,7 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
                                 Constants.RAKNET_STREAMING_COMPRESSION_HANDSHAKE_PACKET_ID,
                                 buf);
                 data.setOrderChannel(i);
-                ctx.write(data);
+                ctx.write(data).addListener(network.ycc.raknet.RakNet.INTERNAL_WRITE_LISTENER);
                 initDeflater(i);
             }
         } finally {
@@ -249,7 +254,7 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
     public void write(
             final ChannelHandlerContext ctx, final Object msg, final ChannelPromise promise)
             throws Exception {
-        if (msg == SynchronizationLayer.SYNC_REQUEST_OBJECT) {
+        if (msg instanceof SynchronizationLayer.SyncRequest) {
             super.write(ctx, msg, promise);
             doChannelStart(ctx);
             return;
@@ -262,9 +267,9 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
                     && !rawFrameData.getReliability().isSequenced
                     && deflaters[channel] != null) {
                 if (rawFrameData.getDataSize() < 16 + 1) {
-                    outBytesRaw += rawFrameData.getDataSize() - 1;
-                    outBytesCompressed += rawFrameData.getDataSize() - 1;
-                    ctx.write(rawFrameData, promise);
+                    outBytesRaw.addAndGet(rawFrameData.getDataSize() - 1);
+                    outBytesCompressed.addAndGet(rawFrameData.getDataSize() - 1);
+                    super.write(ctx, rawFrameData, promise);
                     return;
                 }
 
@@ -342,7 +347,7 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
         try {
             inflater.setInput(data.nioBuffer());
 
-            inBytesCompressed += data.readableBytes();
+            inBytesCompressed.addAndGet(data.readableBytes());
 
             out = ctx.alloc().buffer();
             {
@@ -352,7 +357,7 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
                 }
             }
 
-            inBytesRaw += out.writerIndex();
+            inBytesRaw.addAndGet(out.writerIndex());
 
             rawFrameData = FrameData.create(ctx.alloc(), rawPacketId, out);
             rawFrameData.setReliability(compressedFrameData.getReliability());
@@ -378,11 +383,13 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
      * @param ctx outbound pipeline context that receives the compressed replacement
      * @param rawFrameData owned raw frame, released after encoding or failure
      * @param promise completion notification transferred to the replacement frame
+     * @throws Exception if downstream forwarding of the compressed replacement fails
      */
     private void deflateFrame(
             final ChannelHandlerContext ctx,
             final FrameData rawFrameData,
-            final ChannelPromise promise) {
+            final ChannelPromise promise)
+            throws Exception {
         final int orderChannel =
                 Objects.checkIndex(rawFrameData.getOrderChannel(), deflaters.length);
         final Deflater deflater = deflaters[orderChannel];
@@ -393,7 +400,7 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
         try {
             deflater.setInput(data.nioBuffer());
 
-            outBytesRaw += data.readableBytes();
+            outBytesRaw.addAndGet(data.readableBytes());
 
             out = ctx.alloc().buffer();
             {
@@ -409,12 +416,12 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
                 }
             }
 
-            outBytesCompressed += out.writerIndex();
+            outBytesCompressed.addAndGet(out.writerIndex());
 
             compressedFrameData = FrameData.create(ctx.alloc(), compressedPacketId, out);
             compressedFrameData.setReliability(rawFrameData.getReliability());
             compressedFrameData.setOrderChannel(orderChannel);
-            ctx.write(compressedFrameData, promise);
+            super.write(ctx, compressedFrameData, promise);
             compressedFrameData = null;
             return;
         } finally {
@@ -435,7 +442,7 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
      * @return cumulative compressed bytes, excluding RakNet frame identifiers
      */
     public long getInBytesCompressed() {
-        return inBytesCompressed;
+        return inBytesCompressed.get();
     }
 
     /**
@@ -444,7 +451,7 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
      * @return cumulative decompressed inbound bytes
      */
     public long getInBytesRaw() {
-        return inBytesRaw;
+        return inBytesRaw.get();
     }
 
     /**
@@ -453,7 +460,7 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
      * @return cumulative compressed bytes plus small eligible payloads sent without compression
      */
     public long getOutBytesCompressed() {
-        return outBytesCompressed;
+        return outBytesCompressed.get();
     }
 
     /**
@@ -462,7 +469,7 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
      * @return cumulative outgoing bytes before compression or small-payload bypass
      */
     public long getOutBytesRaw() {
-        return outBytesRaw;
+        return outBytesRaw.get();
     }
 
     /**
@@ -475,7 +482,7 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
     }
 
     /** Once-per-second event-loop task that updates compression ratios. */
-    private ScheduledFuture<?> future;
+    private @Nullable ScheduledFuture<?> future;
 
     /**
      * Starts periodic compression sampling on the connection's event loop.
@@ -538,10 +545,10 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
      * Samples interval byte ratios, skips idle directions, and publishes rolling means for the HUD.
      */
     private void tickMetrics() {
-        long deltaInBytesCompressed = this.inBytesCompressed - this.lastInBytesCompressed;
-        long deltaInBytesRaw = this.inBytesRaw - this.lastInBytesRaw;
-        long deltaOutBytesCompressed = this.outBytesCompressed - this.lastOutBytesCompressed;
-        long deltaOutBytesRaw = this.outBytesRaw - this.lastOutBytesRaw;
+        long deltaInBytesCompressed = this.inBytesCompressed.get() - this.lastInBytesCompressed;
+        long deltaInBytesRaw = this.inBytesRaw.get() - this.lastInBytesRaw;
+        long deltaOutBytesCompressed = this.outBytesCompressed.get() - this.lastOutBytesCompressed;
+        long deltaOutBytesRaw = this.outBytesRaw.get() - this.lastOutBytesRaw;
 
         if (deltaInBytesRaw != 0) {
             double currentInCompressionRatio = deltaInBytesCompressed / (double) deltaInBytesRaw;
@@ -556,10 +563,10 @@ public class MultiChannelingStreamingCompression extends ChannelDuplexHandler {
         this.inCompressionRatio = inCompressionRatioStats.getMean();
         this.outCompressionRatio = outCompressionRatioStats.getMean();
 
-        this.lastInBytesCompressed = this.inBytesCompressed;
-        this.lastInBytesRaw = this.inBytesRaw;
-        this.lastOutBytesCompressed = this.outBytesCompressed;
-        this.lastOutBytesRaw = this.outBytesRaw;
+        this.lastInBytesCompressed = this.inBytesCompressed.get();
+        this.lastInBytesRaw = this.inBytesRaw.get();
+        this.lastOutBytesCompressed = this.outBytesCompressed.get();
+        this.lastOutBytesRaw = this.outBytesRaw.get();
     }
 
     /**

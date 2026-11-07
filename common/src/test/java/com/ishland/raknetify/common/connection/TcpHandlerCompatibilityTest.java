@@ -119,7 +119,7 @@ class TcpHandlerCompatibilityTest {
          * Lazily initialized because EmbeddedChannel asks for its configuration during
          * construction.
          */
-        private ChannelConfig transportConfig;
+        private @org.jspecify.annotations.Nullable ChannelConfig transportConfig;
 
         /**
          * Selects the same configuration marker used by the production RakNet channel

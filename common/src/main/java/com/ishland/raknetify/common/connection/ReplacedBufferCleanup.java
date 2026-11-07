@@ -24,6 +24,8 @@
 
 package com.ishland.raknetify.common.connection;
 
+import com.google.common.base.Equivalence;
+
 import io.netty.buffer.ByteBuf;
 
 /** Preserves ownership when an optional native codec replaces its private reusable buffer. */
@@ -43,7 +45,9 @@ public final class ReplacedBufferCleanup {
      */
     public static void releaseAbandoned(
             final ByteBuf previous, final ByteBuf current, final int references) {
-        if (previous != current && references > 0 && previous.refCnt() == references) {
+        if (!Equivalence.identity().equivalent(previous, current)
+                && references > 0
+                && previous.refCnt() == references) {
             previous.release();
         }
     }

@@ -95,52 +95,10 @@ public final class RaknetStatusProbe {
      */
     private static ChannelInitializer<Channel> initializer(
             final CompletableFuture<String> response) {
-        return new ChannelInitializer<>() {
-            /**
-             * Installs game-frame decoding and consumes unsupported extension frames safely.
-             *
-             * @param channel newly registered probe connection
-             */
-            @Override
-            protected void initChannel(final Channel channel) {
-                channel.pipeline().addLast(new UserDataCodec(0xFD));
-                channel.pipeline()
-                        .addLast(
-                                new SimpleChannelInboundHandler<Object>() {
-                                    /**
-                                     * Accepts the status payload while automatically releasing
-                                     * every inbound message.
-                                     *
-                                     * @param context inbound pipeline context
-                                     * @param message decoded Minecraft bytes or an unsupported
-                                     *     extension frame
-                                     */
-                                    @Override
-                                    protected void channelRead0(
-                                            final ChannelHandlerContext context,
-                                            final Object message) {
-                                        if (message instanceof ByteBuf buffer) {
-                                            response.complete(readStatus(buffer));
-                                        }
-                                    }
-
-                                    /**
-                                     * Reports protocol failures immediately instead of waiting for
-                                     * the response deadline.
-                                     *
-                                     * @param context failing connection context
-                                     * @param cause decode or transport failure
-                                     */
-                                    @Override
-                                    public void exceptionCaught(
-                                            final ChannelHandlerContext context,
-                                            final Throwable cause) {
-                                        response.completeExceptionally(cause);
-                                        context.close();
-                                    }
-                                });
-            }
-        };
+        return new com.ishland.raknetify.test.ChannelSetup(channel -> {
+            channel.pipeline().addLast(new UserDataCodec(0xFD));
+            channel.pipeline().addLast(new StatusReceiver(response));
+        });
     }
 
     /**
@@ -211,5 +169,46 @@ public final class RaknetStatusProbe {
             throw new IllegalArgumentException("Invalid status string length");
         }
         return buffer.readCharSequence(length, StandardCharsets.UTF_8).toString();
+    }
+
+    /** Completes the status probe and reports transport errors before its response deadline. */
+    private static final class StatusReceiver extends SimpleChannelInboundHandler<Object> {
+        /** Destination owned by the probe thread and completed by its network callback. */
+        private final CompletableFuture<String> response;
+
+        /**
+         * Captures the connection's result destination before inbound packets arrive.
+         *
+         * @param response destination used to report decoded responses
+         */
+        private StatusReceiver(final CompletableFuture<String> response) {
+            this.response = response;
+        }
+
+        /**
+         * Accepts the status payload while automatically releasing every inbound message.
+         *
+         * @param context inbound pipeline context
+         * @param message decoded Minecraft bytes or an unsupported extension frame
+         */
+        @Override
+        protected void channelRead0(final ChannelHandlerContext context, final Object message) {
+            if (message instanceof ByteBuf buffer) {
+                response.complete(readStatus(buffer));
+            }
+        }
+
+        /**
+         * Reports protocol failures immediately instead of waiting for the response deadline.
+         *
+         * @param context failing connection context
+         * @param cause decode or transport failure
+         */
+        @Override
+        public void exceptionCaught(final ChannelHandlerContext context, final Throwable cause) {
+            response.completeExceptionally(cause);
+            context.close()
+                    .addListener(io.netty.channel.ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
+        }
     }
 }

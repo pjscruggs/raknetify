@@ -39,6 +39,8 @@ import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import network.ycc.raknet.frame.FrameData;
 import network.ycc.raknet.packet.FramedPacket;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.List;
@@ -115,7 +117,7 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
      * @param clazz runtime type used to identify the classifier
      * @return the first matching classifier, or null when none is installed
      */
-    public <T> T getHandler(final Class<T> clazz) {
+    public <T> @Nullable T getHandler(final Class<T> clazz) {
         for (OverrideHandler handler : handlers) {
             if (clazz.isInstance(handler)) {
                 return clazz.cast(handler);
@@ -168,7 +170,7 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
             startMultichannel(ctx, promise);
             return;
         }
-        if (msg == SynchronizationLayer.SYNC_REQUEST_OBJECT) {
+        if (msg instanceof SynchronizationLayer.SyncRequest) {
             if (this.isMultichannelEnabled) {
                 if (Constants.DEBUG) {
                     System.out.println(
@@ -186,7 +188,7 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
             try {
                 final FrameData frameData = encode0(ctx, buf);
                 if (frameData != null) {
-                    ctx.write(frameData, promise);
+                    super.write(ctx, frameData, promise);
                 } else {
                     promise.setSuccess();
                 }
@@ -227,7 +229,10 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
                     .addListener(future -> {
                         if (!future.isSuccess()) {
                             failPendingWrites(future.cause());
-                            ctx.close();
+                            ctx.close()
+                                    .addListener(
+                                            io.netty.channel.ChannelFutureListener
+                                                    .FIRE_EXCEPTION_ON_FAILURE);
                             return;
                         }
                         isMultichannelEnabled = true;
@@ -288,7 +293,7 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
      * @param buf readable Minecraft payload with its packet ID at the reader index
      * @return an owned frame, or null for empty payloads or an explicit discard rule
      */
-    private FrameData encode0(final ChannelHandlerContext ctx, final ByteBuf buf) {
+    private @Nullable FrameData encode0(final ChannelHandlerContext ctx, final ByteBuf buf) {
         if (buf.isReadable()) {
             final int packetChannelOverride = getChannelOverride(buf, !isMultichannelEnabled);
             if (packetChannelOverride == Integer.MIN_VALUE) {

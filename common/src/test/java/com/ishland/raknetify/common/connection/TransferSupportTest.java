@@ -71,10 +71,16 @@ class TransferSupportTest {
     void normalizesLiteralAndInternationalHosts() {
         TransferDestinations ipv6 =
                 TransferDestinations.parse(RULE.replace("play.example", "[2001:db8::1]"));
-        assertEquals(25570, ipv6.select("2001:db8:0:0:0:0:0:1", 25565, true).port());
+        assertEquals(
+                25570,
+                java.util.Objects.requireNonNull(ipv6.select("2001:db8:0:0:0:0:0:1", 25565, true))
+                        .port());
         TransferDestinations idn =
                 TransferDestinations.parse(RULE.replace("play.example", "bücher.example"));
-        assertEquals(25570, idn.select("xn--bcher-kva.example", 25565, true).port());
+        assertEquals(
+                25570,
+                java.util.Objects.requireNonNull(idn.select("xn--bcher-kva.example", 25565, true))
+                        .port());
     }
 
     /**
@@ -187,7 +193,11 @@ class TransferSupportTest {
             assertTrue(query.answer(query.transactionId(), true, capable));
             assertFalse(query.waiting());
             assertFalse(query.answer(query.transactionId(), false, capable));
-            assertEquals(25570, TransferSupport.select(capable, "play.example", 25565).port());
+            assertEquals(
+                    25570,
+                    java.util.Objects.requireNonNull(
+                                    TransferSupport.select(capable, "play.example", 25565))
+                            .port());
             assertNull(TransferSupport.select(ordinary, "play.example", 25565));
             assertNull(TransferSupport.select(null, "play.example", 25565));
         } finally {

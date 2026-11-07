@@ -31,6 +31,8 @@ import com.google.gson.JsonParser;
 import com.ishland.raknetify.common.Constants;
 import com.ishland.raknetify.common.util.PrefixUtil;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.IOException;
 import java.net.IDN;
 import java.nio.file.Files;
@@ -215,7 +217,7 @@ public final class TransferDestinations {
      * @param capable whether this connection answered the versioned transfer query
      * @return replacement endpoint, or null when no automatic rewrite is appropriate
      */
-    public Endpoint select(final String host, final int tcpPort, final boolean capable) {
+    public @Nullable Endpoint select(final String host, final int tcpPort, final boolean capable) {
         if (!capable || PrefixUtil.getInfo(host).useRakNet()) {
             return null;
         }

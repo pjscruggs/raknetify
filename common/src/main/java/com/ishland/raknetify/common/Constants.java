@@ -75,7 +75,16 @@ public class Constants {
     public static final int DEFAULT_PENDING_FRAME_SETS = 4;
 
     /** Ordering channels whose queued traffic survives world or protocol resynchronization. */
-    public static final int[] SYNC_IGNORE_CHANNELS = {1};
+    private static final int[] SYNC_IGNORE_CHANNELS = {1};
+
+    /**
+     * Returns independent protected-lane configuration for a new synchronization handler.
+     *
+     * @return ordering lanes whose traffic must survive protocol phase changes
+     */
+    public static int[] synchronizationIgnoredChannels() {
+        return SYNC_IGNORE_CHANNELS.clone();
+    }
 
     /** Prevents construction of the shared constants holder. */
     private Constants() {}

@@ -119,7 +119,8 @@ public final class PayloadOrderingNegotiation extends ChannelDuplexHandler {
             FrameData frame = FrameData.create(context.alloc(), PACKET_ID, payload);
             frame.setOrderChannel(0);
             frame.setReliability(FramedPacket.Reliability.RELIABLE_ORDERED);
-            context.writeAndFlush(frame);
+            context.writeAndFlush(frame)
+                    .addListener(io.netty.channel.ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
         } finally {
             payload.release();
         }
@@ -146,7 +147,8 @@ public final class PayloadOrderingNegotiation extends ChannelDuplexHandler {
         try {
             accept(context.channel(), frame);
         } catch (RuntimeException failure) {
-            context.close();
+            context.close()
+                    .addListener(io.netty.channel.ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
             throw failure;
         } finally {
             frame.release();
@@ -189,8 +191,8 @@ public final class PayloadOrderingNegotiation extends ChannelDuplexHandler {
      */
     private static boolean isGameMessage(final Object message) {
         return message instanceof ByteBuf
-                || message instanceof FrameData frame
-                        && frame.getPacketId() == Constants.RAKNET_GAME_PACKET_ID;
+                || (message instanceof FrameData frame
+                        && frame.getPacketId() == Constants.RAKNET_GAME_PACKET_ID);
     }
 
     /**
@@ -201,7 +203,8 @@ public final class PayloadOrderingNegotiation extends ChannelDuplexHandler {
      * @param identifier custom payload whose ordering dependency is being classified
      * @return declared channel, or zero to retain ordinary classification
      */
-    public static int remoteChannel(final Channel channel, final String identifier) {
+    public static int remoteChannel(
+            final @org.jspecify.annotations.Nullable Channel channel, final String identifier) {
         if (channel == null) {
             return 0;
         }

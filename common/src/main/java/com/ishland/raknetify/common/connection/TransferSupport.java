@@ -89,8 +89,10 @@ public final class TransferSupport {
      * @param port original server-selected TCP port
      * @return replacement RakNet address, or null to preserve the original packet
      */
-    public static TransferDestinations.Endpoint select(
-            final Channel channel, final String host, final int port) {
+    public static TransferDestinations.@org.jspecify.annotations.Nullable Endpoint select(
+            final @org.jspecify.annotations.Nullable Channel channel,
+            final String host,
+            final int port) {
         return destinations.select(
                 host, port, channel != null && Boolean.TRUE.equals(channel.attr(CAPABLE).get()));
     }

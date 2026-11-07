@@ -158,58 +158,7 @@ public class RakNetConnectionUtil {
             channel = appChannel;
             threadedReadHandlerName = null;
         }
-        channel.pipeline()
-                .addLast(
-                        new ChannelInitializer<>() {
-                            /**
-                             * Installs connection-local metrics, ordering synchronization, and the
-                             * transport read timeout.
-                             *
-                             * @param ch transport channel whose event loop owns the new handlers
-                             */
-                            @Override
-                            protected void initChannel(final Channel ch) {
-                                final RakNet.Config config = (RakNet.Config) ch.config();
-                                final SimpleMetricsLogger simpleMetricsLogger =
-                                        new SimpleMetricsLogger();
-                                config.setMetrics(simpleMetricsLogger);
-                                final MetricsSynchronizationHandler metricsSynchronizationHandler =
-                                        new MetricsSynchronizationHandler();
-                                simpleMetricsLogger.setMetricsSynchronizationHandler(
-                                        metricsSynchronizationHandler);
-                                final SynchronizationLayer synchronizationLayer =
-                                        new SynchronizationLayer(Constants.SYNC_IGNORE_CHANNELS);
-                                reInitChannelForOrdering(channel);
-                                ch.pipeline()
-                                        .addBefore(
-                                                FrameJoiner.NAME,
-                                                "raknetify-reliable-dedup",
-                                                new ReliableFrameDeduplicator());
-                                if (threadedReadHandlerName != null) {
-                                    ch.pipeline()
-                                            .addBefore(
-                                                    threadedReadHandlerName,
-                                                    "raknetify-metrics-sync",
-                                                    metricsSynchronizationHandler);
-                                    ch.pipeline()
-                                            .addBefore(
-                                                    threadedReadHandlerName,
-                                                    "raknetify-synchronization-layer",
-                                                    synchronizationLayer);
-                                } else {
-                                    ch.pipeline()
-                                            .addLast(
-                                                    "raknetify-metrics-sync",
-                                                    metricsSynchronizationHandler);
-                                    ch.pipeline()
-                                            .addLast(
-                                                    "raknetify-synchronization-layer",
-                                                    synchronizationLayer);
-                                }
-                                ch.pipeline()
-                                        .addFirst("raknetify-timeout", new ReadTimeoutHandler(15));
-                            }
-                        });
+        channel.pipeline().addLast(new TransportInitializer(threadedReadHandlerName));
     }
 
     //    public static void postInitChannel(Channel channel, boolean isClientSide) {
@@ -254,6 +203,63 @@ public class RakNetConnectionUtil {
                         "Raknetify: Error occurred while reinitializing channel ordering");
                 t.printStackTrace();
             }
+        }
+    }
+
+    /** Installs transport stages after the underlying channel has finished registration. */
+    private static final class TransportInitializer extends ChannelInitializer<Channel> {
+        /** Optional bridge before which connection-local handlers must execute. */
+        private final @org.jspecify.annotations.Nullable String threadedReadHandlerName;
+
+        /**
+         * Captures the optional thread bridge before the deferred initializer is registered.
+         *
+         * @param threadedReadHandlerName transport-to-application bridge name, or null for direct
+         *     channels
+         */
+        private TransportInitializer(
+                final @org.jspecify.annotations.Nullable String threadedReadHandlerName) {
+            this.threadedReadHandlerName = threadedReadHandlerName;
+        }
+
+        /**
+         * Installs connection-local metrics, ordering synchronization, and the transport read
+         * timeout.
+         *
+         * @param ch transport channel whose event loop owns the new handlers
+         */
+        @Override
+        protected void initChannel(final Channel ch) {
+            final RakNet.Config config = (RakNet.Config) ch.config();
+            final SimpleMetricsLogger simpleMetricsLogger = new SimpleMetricsLogger();
+            config.setMetrics(simpleMetricsLogger);
+            final MetricsSynchronizationHandler metricsSynchronizationHandler =
+                    new MetricsSynchronizationHandler();
+            simpleMetricsLogger.setMetricsSynchronizationHandler(metricsSynchronizationHandler);
+            final SynchronizationLayer synchronizationLayer =
+                    new SynchronizationLayer(Constants.synchronizationIgnoredChannels());
+            reInitChannelForOrdering(ch);
+            ch.pipeline()
+                    .addBefore(
+                            FrameJoiner.NAME,
+                            "raknetify-reliable-dedup",
+                            new ReliableFrameDeduplicator());
+            if (threadedReadHandlerName != null) {
+                ch.pipeline()
+                        .addBefore(
+                                threadedReadHandlerName,
+                                "raknetify-metrics-sync",
+                                metricsSynchronizationHandler);
+                ch.pipeline()
+                        .addBefore(
+                                threadedReadHandlerName,
+                                "raknetify-synchronization-layer",
+                                synchronizationLayer);
+            } else {
+                ch.pipeline().addLast("raknetify-metrics-sync", metricsSynchronizationHandler);
+                ch.pipeline().addLast("raknetify-synchronization-layer", synchronizationLayer);
+            }
+            ch.pipeline().addFirst("raknetify-timeout", new ReadTimeoutHandler(15));
         }
     }
 }

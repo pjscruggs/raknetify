@@ -306,7 +306,7 @@ class ReliableFrameDeduplicatorTest {
     /** Supplies actual RakNet queue limits to the native fragment decoder. */
     private static final class TransportChannel extends EmbeddedChannel {
         /** Lazy initialization also supports config queries from the superclass constructor. */
-        private ChannelConfig transportConfig;
+        private @org.jspecify.annotations.Nullable ChannelConfig transportConfig;
 
         /**
          * Returns the same configuration for every fragment rather than substituting a TCP channel

@@ -129,7 +129,9 @@ class GracefulCloseHandlerTest {
         HeldTransport transport = new HeldTransport();
         EmbeddedChannel channel = new EmbeddedChannel(transport, new GracefulCloseHandler());
         try {
-            channel.write(Unpooled.buffer().writeByte(1), channel.voidPromise());
+            assertSame(
+                    channel.voidPromise(),
+                    channel.write(Unpooled.buffer().writeByte(1), channel.voidPromise()));
             ChannelFuture closed = channel.close();
             assertFalse(closed.isDone());
             transport.complete(0, null);
@@ -148,7 +150,7 @@ class GracefulCloseHandlerTest {
         HeldTransport transport = new HeldTransport();
         EmbeddedChannel channel = new EmbeddedChannel(transport, new GracefulCloseHandler());
         try {
-            channel.write(Unpooled.buffer().writeByte(1));
+            assertFalse(channel.write(Unpooled.buffer().writeByte(1)).isDone());
             ChannelFuture closed = channel.close();
             channel.pipeline().remove(GracefulCloseHandler.class);
             assertTrue(closed.isSuccess());
@@ -241,7 +243,8 @@ class GracefulCloseHandlerTest {
          * @param index original write position
          * @param failure null for acknowledgement or the real transport failure to propagate
          */
-        private void complete(final int index, final Throwable failure) {
+        private void complete(
+                final int index, final @org.jspecify.annotations.Nullable Throwable failure) {
             ReferenceCountUtil.release(this.messages.set(index, null));
             if (failure == null) {
                 this.promises.get(index).trySuccess();
@@ -264,7 +267,7 @@ class GracefulCloseHandlerTest {
                     complete(i, new ClosedChannelException());
                 }
             }
-            context.close(promise);
+            assertSame(promise, context.close(promise));
         }
     }
 }

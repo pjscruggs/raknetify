@@ -30,6 +30,8 @@ import io.netty.channel.ChannelPromise;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.ScheduledFuture;
 
+import org.jspecify.annotations.Nullable;
+
 import java.nio.channels.ClosedChannelException;
 import java.util.concurrent.TimeUnit;
 
@@ -46,7 +48,7 @@ public final class GracefulCloseHandler extends ChannelDuplexHandler {
     private int pendingWrites;
 
     /** First close request owns completion and causes subsequent writes to be rejected. */
-    private ChannelPromise closingPromise;
+    private @Nullable ChannelPromise closingPromise;
 
     /**
      * Ensures drain completion, timeout and external closure cannot forward the same close twice.
@@ -54,7 +56,7 @@ public final class GracefulCloseHandler extends ChannelDuplexHandler {
     private boolean closeForwarded;
 
     /** Bounded drain deadline, cancelled as soon as normal transport closing begins. */
-    private ScheduledFuture<?> timeout;
+    private @Nullable ScheduledFuture<?> timeout;
 
     /** Uses a three-second drain budget before the transport's existing close timeout. */
     public GracefulCloseHandler() {
@@ -96,8 +98,7 @@ public final class GracefulCloseHandler extends ChannelDuplexHandler {
         }
         ChannelPromise tracked = promise.unvoid();
         this.pendingWrites++;
-        tracked.addListener(future -> writeCompleted(context));
-        context.write(message, tracked);
+        context.write(message, tracked).addListener(future -> writeCompleted(context));
     }
 
     /**
@@ -149,13 +150,14 @@ public final class GracefulCloseHandler extends ChannelDuplexHandler {
      * @param promise additional caller's close completion notification
      */
     private void relayClose(final ChannelPromise promise) {
-        this.closingPromise.addListener(future -> {
-            if (future.isSuccess()) {
-                promise.trySuccess();
-            } else {
-                promise.tryFailure(future.cause());
-            }
-        });
+        java.util.Objects.requireNonNull(this.closingPromise, "No close request to relay")
+                .addListener(future -> {
+                    if (future.isSuccess()) {
+                        promise.trySuccess();
+                    } else {
+                        promise.tryFailure(future.cause());
+                    }
+                });
     }
 
     /**
@@ -171,7 +173,10 @@ public final class GracefulCloseHandler extends ChannelDuplexHandler {
         if (this.timeout != null) {
             this.timeout.cancel(false);
         }
-        context.close(this.closingPromise);
+        context.close(
+                        java.util.Objects.requireNonNull(
+                                this.closingPromise, "No close request to finish"))
+                .addListener(io.netty.channel.ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
     }
 
     /**
@@ -186,7 +191,8 @@ public final class GracefulCloseHandler extends ChannelDuplexHandler {
         if (this.closingPromise != null) {
             finishClose(context);
         } else {
-            context.close();
+            context.close()
+                    .addListener(io.netty.channel.ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
         }
         context.fireChannelInactive();
     }

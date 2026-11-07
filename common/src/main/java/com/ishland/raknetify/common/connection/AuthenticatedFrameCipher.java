@@ -29,6 +29,8 @@ import io.netty.buffer.ByteBuf;
 import network.ycc.raknet.frame.FrameData;
 import network.ycc.raknet.packet.FramedPacket.Reliability;
 
+import org.jspecify.annotations.Nullable;
+
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
@@ -80,10 +82,10 @@ final class AuthenticatedFrameCipher {
     private final byte[] incomingSalt = new byte[16];
 
     /** Fresh sender salt, or the peer salt established by its first valid authenticated frame. */
-    private byte[] salt;
+    private byte @Nullable [] salt;
 
     /** Traffic key retained after initialization or the first successful authentication. */
-    private SecretKey trafficKey;
+    private @Nullable SecretKey trafficKey;
 
     /** Next nonce sequence for each reliability and ordering lane. */
     private final long[] sequences = new long[64];
@@ -153,6 +155,9 @@ final class AuthenticatedFrameCipher {
      */
     private void encrypt(final FrameData frame, final ByteBuf input, final ByteBuf output)
             throws GeneralSecurityException {
+        if (salt == null || trafficKey == null) {
+            throw new GeneralSecurityException("Outbound traffic key is not initialized");
+        }
         int lane = lane(frame);
         consumeBudget(input.readableBytes());
         long sequence = sequences[lane]++;
@@ -217,6 +222,9 @@ final class AuthenticatedFrameCipher {
         }
         if (!MessageDigest.isEqual(salt, incomingSalt)) {
             throw new GeneralSecurityException("Encrypted session salt changed");
+        }
+        if (trafficKey == null) {
+            throw new GeneralSecurityException("Established encrypted session has no traffic key");
         }
         return trafficKey;
     }

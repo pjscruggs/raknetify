@@ -73,7 +73,7 @@ public class MathUtil {
         byte b;
         do {
             b = buf.readByte();
-            i |= (b & 127) << j++ * 7;
+            i |= (b & 127) << (j++ * 7);
             if (j > 5) {
                 throw new RuntimeException("VarInt too big");
             }

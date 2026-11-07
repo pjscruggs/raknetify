@@ -33,6 +33,8 @@ import com.ishland.raknetify.common.util.MathUtil;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.IntPredicate;
@@ -53,7 +55,7 @@ public class CustomPayloadChannel {
         private final IntPredicate isCustomPayload;
 
         /** Connection-local peer declarations, absent for classifiers used without a transport. */
-        private final Channel channel;
+        private final @Nullable Channel channel;
 
         /**
          * Local declarations take precedence over peer preferences and stay fixed for this
@@ -76,7 +78,8 @@ public class CustomPayloadChannel {
          * @param isCustomPayload predicate recognizing custom-payload packet IDs
          * @param channel owning connection, or null to use local registrations only
          */
-        public OverrideHandler(final IntPredicate isCustomPayload, final Channel channel) {
+        public OverrideHandler(
+                final IntPredicate isCustomPayload, final @Nullable Channel channel) {
             this.isCustomPayload = Objects.requireNonNull(isCustomPayload);
             this.channel = channel;
             this.local = PacketOrdering.snapshot();
