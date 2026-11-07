@@ -37,7 +37,6 @@ import com.ishland.raknetify.fabric.mixin.access.INetworkState1_20_4;
 import com.ishland.raknetify.fabric.mixin.access.INetworkStateInternalPacketHandler;
 import com.ishland.raknetify.fabric.mixin.access.IPacketCodecDispatcher;
 
-import io.netty.buffer.ByteBuf;
 import io.netty.util.ResourceLeakDetector;
 import io.netty.util.internal.SystemPropertyUtil;
 
@@ -57,8 +56,6 @@ import net.minecraft.SharedConstants;
 import net.minecraft.network.NetworkPhase;
 import net.minecraft.network.NetworkSide;
 import net.minecraft.network.RegistryByteBuf;
-import net.minecraft.network.listener.ClientPlayPacketListener;
-import net.minecraft.network.listener.ServerPlayPacketListener;
 import net.minecraft.network.packet.CommonPackets;
 import net.minecraft.network.packet.CookiePackets;
 import net.minecraft.network.packet.Packet;
@@ -92,6 +89,14 @@ import java.util.stream.Stream;
 
 /** Initializes Fabric transport support and optionally generates proxy packet-ID routing tables. */
 public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
+
+    /**
+     * Associates a generic packet field with the registry class that declares it.
+     *
+     * @param fieldNode bytecode field including its generic signature
+     * @param clazz registry class used to read the corresponding static packet type
+     */
+    private record FieldNodeClazzPair(FieldNode fieldNode, Class<?> clazz) {}
 
     /** Whether startup should merge this protocol's generated routes into channelMappings.json. */
     private static final boolean SAVE_CHANNEL_MAPPINGS =
@@ -180,24 +185,23 @@ public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
                 }
             }
         } else {
-            final List<PacketType<Packet<? super ServerPlayPacketListener>>> c2sPacketTypes;
-            final List<PacketType<Packet<? super ServerPlayPacketListener>>> s2cPacketTypes;
+            final List<? extends PacketType<?>> c2sPacketTypes;
+            final List<? extends PacketType<?>> s2cPacketTypes;
             if (!RaknetifyFabricMixinPlugin.AFTER_1_21_4) {
                 try {
                     c2sPacketTypes =
-                            ((IPacketCodecDispatcher<
-                                                    ByteBuf,
-                                                    Packet<? super ServerPlayPacketListener>,
-                                                    PacketType<
-                                                            Packet<
-                                                                    ? super
-                                                                            ServerPlayPacketListener>>>)
-                                            ((NetworkState<ServerPlayPacketListener>)
-                                                            MultiVersionUtil
-                                                                    .NetworkState$Factory$bind1_20_5
+                            ((IPacketCodecDispatcher<?, ?, ?>)
+                                            ((NetworkState<?>)
+                                                            MultiVersionUtil.requireCompatible(
+                                                                            MultiVersionUtil
+                                                                                    .NetworkState$Factory$bind1_20_5,
+                                                                            "NetworkState$Factory$bind1_20_5")
                                                                     .invoke(
                                                                             MultiVersionUtil
-                                                                                    .PlayStateFactories$C2S1_20_5
+                                                                                    .requireCompatible(
+                                                                                            MultiVersionUtil
+                                                                                                    .PlayStateFactories$C2S1_20_5,
+                                                                                            "PlayStateFactories$C2S1_20_5")
                                                                                     .get(),
                                                                             RegistryByteBuf
                                                                                     .makeFactory(
@@ -205,26 +209,26 @@ public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
                                                     .codec())
                                     .getPacketTypes().stream()
                                             .map(byteBufPacketPacketTypePacketType ->
-                                                    byteBufPacketPacketTypePacketType.id())
+                                                    (PacketType<?>)
+                                                            byteBufPacketPacketTypePacketType.id())
                                             .toList();
                 } catch (Throwable e) {
                     throw new RuntimeException(e);
                 }
                 try {
                     s2cPacketTypes =
-                            ((IPacketCodecDispatcher<
-                                                    ByteBuf,
-                                                    Packet<? super ServerPlayPacketListener>,
-                                                    PacketType<
-                                                            Packet<
-                                                                    ? super
-                                                                            ServerPlayPacketListener>>>)
-                                            ((NetworkState<ClientPlayPacketListener>)
-                                                            MultiVersionUtil
-                                                                    .NetworkState$Factory$bind1_20_5
+                            ((IPacketCodecDispatcher<?, ?, ?>)
+                                            ((NetworkState<?>)
+                                                            MultiVersionUtil.requireCompatible(
+                                                                            MultiVersionUtil
+                                                                                    .NetworkState$Factory$bind1_20_5,
+                                                                            "NetworkState$Factory$bind1_20_5")
                                                                     .invoke(
                                                                             MultiVersionUtil
-                                                                                    .PlayStateFactories$S2C1_20_5
+                                                                                    .requireCompatible(
+                                                                                            MultiVersionUtil
+                                                                                                    .PlayStateFactories$S2C1_20_5,
+                                                                                            "PlayStateFactories$S2C1_20_5")
                                                                                     .get(),
                                                                             RegistryByteBuf
                                                                                     .makeFactory(
@@ -232,37 +236,32 @@ public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
                                                     .codec())
                                     .getPacketTypes().stream()
                                             .map(byteBufPacketPacketTypePacketType ->
-                                                    byteBufPacketPacketTypePacketType.id())
+                                                    (PacketType<?>)
+                                                            byteBufPacketPacketTypePacketType.id())
                                             .toList();
                 } catch (Throwable e) {
                     throw new RuntimeException(e);
                 }
             } else {
                 c2sPacketTypes =
-                        ((IPacketCodecDispatcher<
-                                                ByteBuf,
-                                                Packet<? super ServerPlayPacketListener>,
-                                                PacketType<
-                                                        Packet<? super ServerPlayPacketListener>>>)
+                        ((IPacketCodecDispatcher<?, ?, ?>)
                                         PlayStateFactories.C2S
                                                 .bind(RegistryByteBuf.makeFactory(null), null)
                                                 .codec())
                                 .getPacketTypes().stream()
                                         .map(byteBufPacketPacketTypePacketType ->
-                                                byteBufPacketPacketTypePacketType.id())
+                                                (PacketType<?>)
+                                                        byteBufPacketPacketTypePacketType.id())
                                         .toList();
                 s2cPacketTypes =
-                        ((IPacketCodecDispatcher<
-                                                ByteBuf,
-                                                Packet<? super ServerPlayPacketListener>,
-                                                PacketType<
-                                                        Packet<? super ServerPlayPacketListener>>>)
+                        ((IPacketCodecDispatcher<?, ?, ?>)
                                         PlayStateFactories.S2C
                                                 .bind(RegistryByteBuf.makeFactory(null))
                                                 .codec())
                                 .getPacketTypes().stream()
                                         .map(byteBufPacketPacketTypePacketType ->
-                                                byteBufPacketPacketTypePacketType.id())
+                                                (PacketType<?>)
+                                                        byteBufPacketPacketTypePacketType.id())
                                         .toList();
             }
 
@@ -286,19 +285,16 @@ public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
      */
     public static Object2IntMap<Class<? extends Packet<?>>> getPacketIdsFromPacketHandler(
             final Object value) {
-        Object2IntMap<Class<? extends Packet<?>>> packetIds;
-        if (value instanceof INetworkStateInternalPacketHandler) {
-            packetIds = ((INetworkStateInternalPacketHandler) value).getPacketIds();
-        } else if (MultiVersionUtil.clazzNetworkStatePacketHandler.isInstance(value)) {
-            packetIds =
-                    ((INetworkStateInternalPacketHandler)
-                                    MultiVersionUtil.NetworkStatePacketHandler$backingHandler1_20_2
-                                            .get(value))
-                            .getPacketIds();
-        } else {
-            throw new IllegalStateException("Unknown packet handler type: " + value.getClass());
+        if (value instanceof INetworkStateInternalPacketHandler handler) {
+            return handler.getPacketIds();
         }
-        return packetIds;
+        final Class<?> wrapper = MultiVersionUtil.clazzNetworkStatePacketHandler;
+        final java.lang.invoke.VarHandle backing =
+                MultiVersionUtil.NetworkStatePacketHandler$backingHandler1_20_2;
+        if (wrapper != null && backing != null && wrapper.isInstance(value)) {
+            return ((INetworkStateInternalPacketHandler) backing.get(value)).getPacketIds();
+        }
+        throw new IllegalStateException("Unknown packet handler type: " + value.getClass());
     }
 
     /**
@@ -401,13 +397,6 @@ public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
      * @throws IllegalStateException if a packet signature refers to an unavailable class
      */
     private static Map<PacketType<?>, Class<?>> collectPacketClasses() {
-        /**
-         * Associates a generic packet field with the registry class that declares it.
-         *
-         * @param fieldNode bytecode field including its generic signature
-         * @param clazz registry class used to read the corresponding static packet type
-         */
-        record FieldNodeClazzPair(FieldNode fieldNode, Class<?> clazz) {}
 
         Map<PacketType<?>, Class<?>> vanillaPacketTypes = new Object2ObjectOpenHashMap<>();
         for (FieldNodeClazzPair fieldNodeClazzPair :
@@ -509,7 +498,8 @@ public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
                 Set<String> unhandled = new HashSet<>();
                 for (Object config : configs) {
                     final Set<String> unhandledTargets =
-                            (Set<String>) getUnhandledTargetsMethod.invoke(config);
+                            ((Set<?>) getUnhandledTargetsMethod.invoke(config))
+                                    .stream().map(String.class::cast).collect(Collectors.toSet());
                     unhandled.addAll(unhandledTargets);
                 }
                 for (String s : unhandled) {
@@ -518,7 +508,8 @@ public class RaknetifyFabric implements ModInitializer, PreLaunchEntrypoint {
                 }
                 for (Object config : configs) {
                     for (String unhandledTarget :
-                            (Set<String>) getUnhandledTargetsMethod.invoke(config)) {
+                            ((Set<?>) getUnhandledTargetsMethod.invoke(config))
+                                    .stream().map(String.class::cast).collect(Collectors.toSet())) {
                         auditLogger.error("{} is already classloaded", unhandledTarget);
                     }
                 }

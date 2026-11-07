@@ -81,11 +81,11 @@ public class MixinServerLoginNetworkHandler26_4 {
             final ChannelHandler decrypt = pipeline.get("decrypt");
             final ChannelHandler encrypt = pipeline.get("encrypt");
             if (decrypt != null
-                    && ("me.steinborn.krypton.mod.shared.network.pipeline.MinecraftCipherDecoder"
-                            .equals(decrypt.getClass().getName()))
+                    && "me.steinborn.krypton.mod.shared.network.pipeline.MinecraftCipherDecoder"
+                            .equals(decrypt.getClass().getName())
                     && encrypt != null
-                    && ("me.steinborn.krypton.mod.shared.network.pipeline.MinecraftCipherEncoder"
-                            .equals(encrypt.getClass().getName()))) {
+                    && "me.steinborn.krypton.mod.shared.network.pipeline.MinecraftCipherEncoder"
+                            .equals(encrypt.getClass().getName())) {
                 System.out.println("Raknetify: Krypton detected, applying compatibility");
 
                 pipeline.remove("decrypt");

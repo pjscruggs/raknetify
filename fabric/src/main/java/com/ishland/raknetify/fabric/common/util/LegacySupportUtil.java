@@ -44,7 +44,11 @@ public class LegacySupportUtil {
             return entity.getEntityWorld();
         } else {
             try {
-                return (World) MultiVersionUtil.Entity$getEntity1_21_8.invokeExact(entity);
+                return (World)
+                        MultiVersionUtil.requireCompatible(
+                                        MultiVersionUtil.Entity$getEntity1_21_8,
+                                        "Entity$getEntity1_21_8")
+                                .invokeExact(entity);
             } catch (Throwable e) {
                 throw new RuntimeException(e);
             }

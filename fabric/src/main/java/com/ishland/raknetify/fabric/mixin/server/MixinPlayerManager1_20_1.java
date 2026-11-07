@@ -129,7 +129,8 @@ public class MixinPlayerManager1_20_1 {
                             .formatted(this));
             return;
         }
-        channel.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL);
+        channel.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL)
+                .addListener(RakNet.INTERNAL_WRITE_LISTENER);
     }
 
     /**
@@ -153,6 +154,7 @@ public class MixinPlayerManager1_20_1 {
                             .formatted(this));
             return;
         }
-        channel.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL);
+        channel.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL)
+                .addListener(RakNet.INTERNAL_WRITE_LISTENER);
     }
 }

@@ -56,8 +56,11 @@ public class MixinClientPlayNetworkHandler {
     private void postGameJoin(final GameJoinS2CPacket packet, final CallbackInfo ci) {
         final Channel channel =
                 ((IClientConnection)
-                                MultiVersionUtil.ClientPlayNetworkHandler$connection.get(
-                                        (ClientPlayNetworkHandler) (Object) this))
+                                MultiVersionUtil.requireCompatible(
+                                                MultiVersionUtil
+                                                        .ClientPlayNetworkHandler$connection,
+                                                "ClientPlayNetworkHandler$connection")
+                                        .get((ClientPlayNetworkHandler) (Object) this))
                         .getChannel();
         if (channel == null) {
             //noinspection RedundantStringFormatCall
@@ -68,6 +71,7 @@ public class MixinClientPlayNetworkHandler {
         }
         channel.eventLoop()
                 .execute(() ->
-                        channel.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL));
+                        channel.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL)
+                                .addListener(network.ycc.raknet.RakNet.INTERNAL_WRITE_LISTENER));
     }
 }

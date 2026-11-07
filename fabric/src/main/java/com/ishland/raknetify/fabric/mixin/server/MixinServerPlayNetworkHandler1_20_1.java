@@ -150,9 +150,14 @@ public class MixinServerPlayNetworkHandler1_20_1 {
                         .getChannel();
         if (channel != null && channel.config() instanceof RakNet.Config config) {
             assert MultiVersionUtil.ServerPlayerEntity$pingMillis1_20_1 != null;
-            MultiVersionUtil.ServerPlayerEntity$pingMillis1_20_1.set(
-                    this.player,
-                    (int) ((config.getRTTNanos() + config.getRTTStdDevNanos()) / 1_000_000));
+            MultiVersionUtil.requireCompatible(
+                            MultiVersionUtil.ServerPlayerEntity$pingMillis1_20_1,
+                            "ServerPlayerEntity$pingMillis1_20_1")
+                    .set(
+                            this.player,
+                            (int)
+                                    ((config.getRTTNanos() + config.getRTTStdDevNanos())
+                                            / 1_000_000));
         }
     }
 }

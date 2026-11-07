@@ -30,6 +30,8 @@ import io.netty.channel.ChannelPromise;
 
 import net.minecraft.network.packet.s2c.login.LoginCompressionS2CPacket;
 
+import network.ycc.raknet.RakNet;
+
 /**
  * Lets vanilla finish its compression transition without waiting for RakNet write acknowledgement.
  */
@@ -50,7 +52,7 @@ public class RakNetCompressionCompatibilityHandler extends ChannelDuplexHandler 
             throws Exception {
         if (msg instanceof LoginCompressionS2CPacket) {
             promise.trySuccess();
-            ctx.write(msg);
+            ctx.write(msg).addListener(RakNet.INTERNAL_WRITE_LISTENER);
             ctx.pipeline().remove(this);
             return;
         }

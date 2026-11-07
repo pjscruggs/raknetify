@@ -31,6 +31,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.VersionParsingException;
 import net.fabricmc.loader.api.metadata.version.VersionPredicate;
 
+import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
@@ -170,7 +171,7 @@ public class RaknetifyFabricMixinPlugin implements IMixinConfigPlugin {
      * @return null to retain the configured reference mapper
      */
     @Override
-    public String getRefMapperConfig() {
+    public @Nullable String getRefMapperConfig() {
         return null;
     }
 
@@ -256,7 +257,7 @@ public class RaknetifyFabricMixinPlugin implements IMixinConfigPlugin {
      * @return null because no additional mixin class names are supplied
      */
     @Override
-    public List<String> getMixins() {
+    public @Nullable List<String> getMixins() {
         return null;
     }
 

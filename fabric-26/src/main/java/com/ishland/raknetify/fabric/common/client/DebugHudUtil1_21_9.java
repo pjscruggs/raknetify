@@ -64,40 +64,43 @@ public class DebugHudUtil1_21_9 {
      * @return transport diagnostic entry suitable for Minecraft's debug registry
      */
     public static DebugScreenEntry createEntry() {
-        return new DebugScreenEntry() {
-            /**
-             * Appends transport diagnostics without requiring a loaded world or chunk.
-             *
-             * @param lines debug-screen line collector
-             * @param world current client world, unused by transport diagnostics and possibly null
-             * @param clientChunk client-side chunk, unused by transport diagnostics and possibly
-             *     null
-             * @param chunk server-side chunk, unused by transport diagnostics and possibly null
-             */
-            @Override
-            public void display(
-                    final DebugScreenDisplayer lines,
-                    @Nullable final Level world,
-                    @Nullable final LevelChunk clientChunk,
-                    @Nullable final LevelChunk chunk) {
-                if (MinecraftVersions.IS_26_4_SNAPSHOT) {
-                    DebugHudUtil.getDebugString(s -> DebugHudLines26_4.addLine(lines, s));
-                } else {
-                    DebugHudUtil.getDebugString(s -> lines.addToGroup(ID, s));
-                }
-            }
+        return new TransportEntry();
+    }
 
-            /**
-             * Allows network diagnostics even when Minecraft suppresses detailed world debug
-             * information.
-             *
-             * @param reducedDebugInfo whether the server requests reduced debug information
-             * @return true because these lines expose only connection diagnostics
-             */
-            @Override
-            public boolean isAllowed(final boolean reducedDebugInfo) {
-                return true;
+    /** Displays transport diagnostics independently of world and chunk availability. */
+    private static final class TransportEntry implements DebugScreenEntry {
+
+        /**
+         * Appends transport diagnostics without requiring a loaded world or chunk.
+         *
+         * @param lines debug-screen line collector
+         * @param world current client world, unused by transport diagnostics and possibly null
+         * @param clientChunk client-side chunk, unused by transport diagnostics and possibly null
+         * @param chunk server-side chunk, unused by transport diagnostics and possibly null
+         */
+        @Override
+        public void display(
+                final DebugScreenDisplayer lines,
+                @Nullable final Level world,
+                @Nullable final LevelChunk clientChunk,
+                @Nullable final LevelChunk chunk) {
+            if (MinecraftVersions.IS_26_4_SNAPSHOT) {
+                DebugHudUtil.getDebugString(s -> DebugHudLines26_4.addLine(lines, s));
+            } else {
+                DebugHudUtil.getDebugString(s -> lines.addToGroup(ID, s));
             }
-        };
+        }
+
+        /**
+         * Allows network diagnostics even when Minecraft suppresses detailed world debug
+         * information.
+         *
+         * @param reducedDebugInfo whether the server requests reduced debug information
+         * @return true because these lines expose only connection diagnostics
+         */
+        @Override
+        public boolean isAllowed(final boolean reducedDebugInfo) {
+            return true;
+        }
     }
 }

@@ -51,40 +51,50 @@ public class DebugHudUtil1_21_9 {
         }
 
         Identifier identifier = Identifier.of("raknetify", "raknetify_debug_info");
-        IDebugHudEntries.invokeRegister(
-                identifier,
-                new DebugHudEntry() {
-                    /**
-                     * Appends transport diagnostics without requiring a loaded world or chunk.
-                     *
-                     * @param lines debug-screen line collector
-                     * @param world current client world, unused by transport diagnostics and
-                     *     possibly null
-                     * @param clientChunk client-side chunk, unused by transport diagnostics and
-                     *     possibly null
-                     * @param chunk server-side chunk, unused by transport diagnostics and possibly
-                     *     null
-                     */
-                    @Override
-                    public void render(
-                            final DebugHudLines lines,
-                            @Nullable final World world,
-                            @Nullable final WorldChunk clientChunk,
-                            @Nullable final WorldChunk chunk) {
-                        DebugHudUtil.getDebugString(s -> lines.addLineToSection(identifier, s));
-                    }
+        IDebugHudEntries.invokeRegister(identifier, new TransportEntry(identifier));
+    }
 
-                    /**
-                     * Allows network diagnostics even when Minecraft suppresses detailed world
-                     * debug information.
-                     *
-                     * @param reducedDebugInfo whether the server requests reduced debug information
-                     * @return true because these lines expose only connection diagnostics
-                     */
-                    @Override
-                    public boolean canShow(final boolean reducedDebugInfo) {
-                        return true;
-                    }
-                });
+    /** Displays transport diagnostics independently of world and chunk availability. */
+    private static final class TransportEntry implements DebugHudEntry {
+        /** Registry section receiving this entry's transport lines. */
+        private final Identifier identifier;
+
+        /**
+         * Associates transport diagnostics with their registered HUD section.
+         *
+         * @param identifier registry identifier used for grouped lines
+         */
+        private TransportEntry(final Identifier identifier) {
+            this.identifier = identifier;
+        }
+
+        /**
+         * Appends transport diagnostics without requiring a loaded world or chunk.
+         *
+         * @param lines debug-screen line collector
+         * @param world current client world, unused by transport diagnostics and possibly null
+         * @param clientChunk client-side chunk, unused by transport diagnostics and possibly null
+         * @param chunk server-side chunk, unused by transport diagnostics and possibly null
+         */
+        @Override
+        public void render(
+                final DebugHudLines lines,
+                @Nullable final World world,
+                @Nullable final WorldChunk clientChunk,
+                @Nullable final WorldChunk chunk) {
+            DebugHudUtil.getDebugString(s -> lines.addLineToSection(identifier, s));
+        }
+
+        /**
+         * Allows network diagnostics even when Minecraft suppresses detailed world debug
+         * information.
+         *
+         * @param reducedDebugInfo whether the server requests reduced debug information
+         * @return true because these lines expose only connection diagnostics
+         */
+        @Override
+        public boolean canShow(final boolean reducedDebugInfo) {
+            return true;
+        }
     }
 }

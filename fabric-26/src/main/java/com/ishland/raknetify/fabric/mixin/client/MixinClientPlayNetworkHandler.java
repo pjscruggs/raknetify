@@ -65,6 +65,7 @@ public class MixinClientPlayNetworkHandler {
         }
         channel.eventLoop()
                 .execute(() ->
-                        channel.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL));
+                        channel.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL)
+                                .addListener(network.ycc.raknet.RakNet.INTERNAL_WRITE_LISTENER));
     }
 }

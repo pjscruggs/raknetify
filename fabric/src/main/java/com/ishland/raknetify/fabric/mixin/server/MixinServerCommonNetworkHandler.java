@@ -24,6 +24,7 @@
 
 package com.ishland.raknetify.fabric.mixin.server;
 
+import com.google.errorprone.annotations.Keep;
 import com.ishland.raknetify.fabric.common.util.MultiVersionUtil;
 import com.ishland.raknetify.fabric.mixin.access.IClientConnection;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
@@ -54,10 +55,8 @@ public abstract class MixinServerCommonNetworkHandler implements ServerCommonPac
     /** Vanilla player connection inspected for RakNet transport configuration. */
     @Shadow @Final protected ClientConnection connection;
 
-    /**
-     * Vanilla player latency field, updated from transport nanoseconds converted to milliseconds.
-     */
-    @Shadow private int latency;
+    /** Written by this hook and read by vanilla from the transformed target class. */
+    @Keep @Shadow private int latency;
 
     /**
      * Keeps vanilla's keepalive interval from expiring on connections already monitored by RakNet.

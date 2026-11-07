@@ -48,9 +48,6 @@ public class MixinServerLoginNetworkHandler {
     /** Login connection whose pipeline advertises whether streaming compression was negotiated. */
     @Shadow @Final public ClientConnection connection;
 
-    /** Vanilla server reference retained by the login listener. */
-    @Shadow @Final private MinecraftServer server;
-
     /**
      * Substitutes the disabled vanilla threshold only after RakNet streaming compression is active.
      *

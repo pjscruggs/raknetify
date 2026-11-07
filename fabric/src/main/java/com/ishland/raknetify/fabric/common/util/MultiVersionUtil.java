@@ -38,6 +38,7 @@ import net.minecraft.network.state.NetworkState;
 import net.minecraft.server.network.ServerPlayNetworkHandler;
 import net.minecraft.server.network.ServerPlayerEntity;
 
+import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.transformer.meta.MixinMerged;
 
 import java.lang.annotation.Annotation;
@@ -85,47 +86,47 @@ public class MultiVersionUtil {
     public static final VarHandle ServerPlayNetworkHandler$connection;
 
     /** Client play listener connection field, or null on a dedicated server. */
-    public static final VarHandle ClientPlayNetworkHandler$connection;
+    public static final @Nullable VarHandle ClientPlayNetworkHandler$connection;
 
     /**
      * Optional vanilla encrypted-state flag, absent on versions that no longer expose that field.
      */
-    private static final VarHandle ClientConnection$encrypted;
+    private static final @Nullable VarHandle ClientConnection$encrypted;
 
     /** Legacy player ping field used before latency moved to the common packet listener. */
-    public static final VarHandle ServerPlayerEntity$pingMillis1_20_1;
+    public static final @Nullable VarHandle ServerPlayerEntity$pingMillis1_20_1;
 
     /** Optional protocol-wrapper class used by the legacy backing-handler layout. */
-    public static final Class<?> clazzNetworkStatePacketHandler;
+    public static final @Nullable Class<?> clazzNetworkStatePacketHandler;
 
     /** Optional wrapper field leading to the underlying class-to-ID packet handler. */
-    public static final VarHandle NetworkStatePacketHandler$backingHandler1_20_2;
+    public static final @Nullable VarHandle NetworkStatePacketHandler$backingHandler1_20_2;
 
     /** Optional older protocol factory bind method used when inspecting registration order. */
-    public static final MethodHandle NetworkState$Factory$bind1_20_5;
+    public static final @Nullable MethodHandle NetworkState$Factory$bind1_20_5;
 
     /** Optional runtime holder of the static play protocol factories. */
-    public static final Class<?> clazzPlayStateFactories;
+    public static final @Nullable Class<?> clazzPlayStateFactories;
 
     /** Optional static serverbound play factory used by the older codec-registration API. */
-    public static final VarHandle PlayStateFactories$C2S1_20_5;
+    public static final @Nullable VarHandle PlayStateFactories$C2S1_20_5;
 
     /** Optional static clientbound play factory used by the older codec-registration API. */
-    public static final VarHandle PlayStateFactories$S2C1_20_5;
+    public static final @Nullable VarHandle PlayStateFactories$S2C1_20_5;
 
     /**
      * Optional legacy hunger-state serializer used when constructing the client hunger replacement.
      */
-    public static final MethodHandle HungerManager$writeNbt1_21_5;
+    public static final @Nullable MethodHandle HungerManager$writeNbt1_21_5;
 
     /** Optional legacy hunger-state reader used to initialize the client hunger replacement. */
-    public static final MethodHandle HungerManager$readNbt1_21_5;
+    public static final @Nullable MethodHandle HungerManager$readNbt1_21_5;
 
     /**
      * Optional older entity world getter used before the compile target's accessor became
      * available.
      */
-    public static final MethodHandle Entity$getEntity1_21_8;
+    public static final @Nullable MethodHandle Entity$getEntity1_21_8;
 
     static {
         try {
@@ -140,7 +141,7 @@ public class MultiVersionUtil {
                                                     "net.minecraft.class_2535",
                                                     "field_11647",
                                                     "Z")),
-                            NoSuchFieldException.class);
+                            List.of(NoSuchFieldException.class));
             ClientConnection$encrypted =
                     encrypted == null
                             ? null
@@ -203,7 +204,7 @@ public class MultiVersionUtil {
                                             resolver.mapClassName(
                                                     INTERMEDIARY,
                                                     CLASSNAME_NetworkStatePacketHandler)),
-                            ClassNotFoundException.class);
+                            List.of(ClassNotFoundException.class));
             NetworkStatePacketHandler$backingHandler1_20_2 = findBackingHandler(resolver);
 
             NetworkState$Factory$bind1_20_5 = findFactoryBinding(resolver);
@@ -216,7 +217,7 @@ public class MultiVersionUtil {
                                                     INTERMEDIARY, CLASSNAME_PlayStateFactories),
                                             false,
                                             MultiVersionUtil.class.getClassLoader()),
-                            ClassNotFoundException.class);
+                            List.of(ClassNotFoundException.class));
 
             PlayStateFactories$C2S1_20_5 = findServerboundFactory(resolver);
 
@@ -240,7 +241,7 @@ public class MultiVersionUtil {
      * @return handle to the legacy member, or null when that API is absent
      * @throws IllegalAccessException if an existing member cannot be made accessible
      */
-    private static VarHandle findLegacyPing(final MappingResolver resolver)
+    private static @Nullable VarHandle findLegacyPing(final MappingResolver resolver)
             throws IllegalAccessException {
         final Field pingMillis1_20_1 =
                 getOrNull(
@@ -251,7 +252,7 @@ public class MultiVersionUtil {
                                                 "net.minecraft.class_3222",
                                                 "field_13967",
                                                 "I")),
-                        NoSuchFieldException.class);
+                        List.of(NoSuchFieldException.class));
         if (pingMillis1_20_1 != null) {
             pingMillis1_20_1.setAccessible(true);
             return MethodHandles.privateLookupIn(ServerPlayerEntity.class, MethodHandles.lookup())
@@ -268,7 +269,7 @@ public class MultiVersionUtil {
      * @return handle to the legacy member, or null when that API is absent
      * @throws IllegalAccessException if an existing member cannot be made accessible
      */
-    private static VarHandle findBackingHandler(final MappingResolver resolver)
+    private static @Nullable VarHandle findBackingHandler(final MappingResolver resolver)
             throws IllegalAccessException {
         if (clazzNetworkStatePacketHandler != null) {
             final Field backingHandler1_20_2 =
@@ -284,7 +285,7 @@ public class MultiVersionUtil {
                                                                     INTERMEDIARY,
                                                                     CLASSNAME_NetworkState$InternalPacketHandler)
                                                             + ";")),
-                            NoSuchFieldException.class);
+                            List.of(NoSuchFieldException.class));
             if (backingHandler1_20_2 != null) {
                 backingHandler1_20_2.setAccessible(true);
                 return MethodHandles.privateLookupIn(
@@ -305,7 +306,7 @@ public class MultiVersionUtil {
      * @return handle to the legacy member, or null when that API is absent
      * @throws IllegalAccessException if an existing member cannot be made accessible
      */
-    private static MethodHandle findFactoryBinding(final MappingResolver resolver)
+    private static @Nullable MethodHandle findFactoryBinding(final MappingResolver resolver)
             throws IllegalAccessException {
         Method factoryBind =
                 getOrNull(
@@ -313,8 +314,7 @@ public class MultiVersionUtil {
                                 NetworkState.Unbound.class.getDeclaredMethod(
                                         "bind" /* actually not obfuscated in 1.20.6 */,
                                         Function.class),
-                        NoSuchMethodException.class,
-                        NoClassDefFoundError.class);
+                        List.of(NoSuchMethodException.class, NoClassDefFoundError.class));
         if (factoryBind == null) {
             factoryBind =
                     getOrNull(
@@ -326,8 +326,7 @@ public class MultiVersionUtil {
                                                     "method_61107",
                                                     "(Ljava/util/function/Function;)Lnet/minecraft/class_9127;"),
                                             Function.class),
-                            NoSuchMethodException.class,
-                            NoClassDefFoundError.class);
+                            List.of(NoSuchMethodException.class, NoClassDefFoundError.class));
         }
         if (factoryBind != null) {
             factoryBind.setAccessible(true);
@@ -346,7 +345,7 @@ public class MultiVersionUtil {
      * @return handle to the legacy member, or null when that API is absent
      * @throws IllegalAccessException if an existing member cannot be made accessible
      */
-    private static VarHandle findServerboundFactory(final MappingResolver resolver)
+    private static @Nullable VarHandle findServerboundFactory(final MappingResolver resolver)
             throws IllegalAccessException {
         if (clazzPlayStateFactories != null) {
             final Field playStateFactoriesC2S1_20_5 =
@@ -361,7 +360,7 @@ public class MultiVersionUtil {
                                                             + CLASSNAME_NetworkState$Factory
                                                                     .replace('.', '/')
                                                             + ";")),
-                            NoSuchFieldException.class);
+                            List.of(NoSuchFieldException.class));
             if (playStateFactoriesC2S1_20_5 != null) {
                 playStateFactoriesC2S1_20_5.setAccessible(true);
                 return MethodHandles.privateLookupIn(
@@ -383,7 +382,7 @@ public class MultiVersionUtil {
      * @return handle to the legacy member, or null when that API is absent
      * @throws IllegalAccessException if an existing member cannot be made accessible
      */
-    private static VarHandle findClientboundFactory(final MappingResolver resolver)
+    private static @Nullable VarHandle findClientboundFactory(final MappingResolver resolver)
             throws IllegalAccessException {
         if (clazzPlayStateFactories != null) {
             final Field playStateFactoriesS2C1_20_5 =
@@ -398,7 +397,7 @@ public class MultiVersionUtil {
                                                             + CLASSNAME_NetworkState$Factory
                                                                     .replace('.', '/')
                                                             + ";")),
-                            NoSuchFieldException.class);
+                            List.of(NoSuchFieldException.class));
             if (playStateFactoriesS2C1_20_5 != null) {
                 playStateFactoriesS2C1_20_5.setAccessible(true);
                 return MethodHandles.privateLookupIn(
@@ -419,7 +418,7 @@ public class MultiVersionUtil {
      * @return handle to the legacy member, or null when that API is absent
      * @throws IllegalAccessException if an existing member cannot be made accessible
      */
-    private static MethodHandle findHungerWriter(final MappingResolver resolver)
+    private static @Nullable MethodHandle findHungerWriter(final MappingResolver resolver)
             throws IllegalAccessException {
         final Method writeNbt1_21_5 =
                 getOrNull(
@@ -431,7 +430,7 @@ public class MultiVersionUtil {
                                                 "method_7582",
                                                 "(Lnet/minecraft/class_2487;)V"),
                                         NbtCompound.class),
-                        NoSuchMethodException.class);
+                        List.of(NoSuchMethodException.class));
         if (writeNbt1_21_5 != null) {
             writeNbt1_21_5.setAccessible(true);
             return MethodHandles.privateLookupIn(HungerManager.class, MethodHandles.lookup())
@@ -448,7 +447,7 @@ public class MultiVersionUtil {
      * @return handle to the legacy member, or null when that API is absent
      * @throws IllegalAccessException if an existing member cannot be made accessible
      */
-    private static MethodHandle findHungerReader(final MappingResolver resolver)
+    private static @Nullable MethodHandle findHungerReader(final MappingResolver resolver)
             throws IllegalAccessException {
         final Method readNbt1_21_5 =
                 getOrNull(
@@ -460,7 +459,7 @@ public class MultiVersionUtil {
                                                 "method_7584",
                                                 "(Lnet/minecraft/class_2487;)V"),
                                         NbtCompound.class),
-                        NoSuchMethodException.class);
+                        List.of(NoSuchMethodException.class));
         if (readNbt1_21_5 != null) {
             readNbt1_21_5.setAccessible(true);
             return MethodHandles.privateLookupIn(HungerManager.class, MethodHandles.lookup())
@@ -477,7 +476,7 @@ public class MultiVersionUtil {
      * @return handle to the legacy member, or null when that API is absent
      * @throws IllegalAccessException if an existing member cannot be made accessible
      */
-    private static MethodHandle findEntityWorldGetter(final MappingResolver resolver)
+    private static @Nullable MethodHandle findEntityWorldGetter(final MappingResolver resolver)
             throws IllegalAccessException {
         final Method getEntity1_21_8 =
                 getOrNull(
@@ -488,7 +487,7 @@ public class MultiVersionUtil {
                                                 CLASSNAME_Entity,
                                                 "method_37908",
                                                 "()Lnet/minecraft/class_1937;")),
-                        NoSuchMethodException.class);
+                        List.of(NoSuchMethodException.class));
         if (getEntity1_21_8 != null) {
             getEntity1_21_8.setAccessible(true);
             return MethodHandles.privateLookupIn(Entity.class, MethodHandles.lookup())
@@ -532,6 +531,23 @@ public class MultiVersionUtil {
         return builder.build();
     }
 
+    /**
+     * Requires a reflective hook only after the caller has selected its version-specific path.
+     * Optional lookups remain absent on other releases without breaking class initialization.
+     *
+     * @param feature optional class, field or method resolved for the running game
+     * @param description compatibility hook required by the selected path
+     * @param <T> reflected feature type preserved for the caller
+     * @return available feature with its original type
+     * @throws IllegalStateException if the selected version path lacks its required feature
+     */
+    public static <T> T requireCompatible(final @Nullable T feature, final String description) {
+        if (feature == null) {
+            throw new IllegalStateException("Minecraft runtime does not provide " + description);
+        }
+        return feature;
+    }
+
     /** Forces compatibility-member resolution before normal Minecraft initialization proceeds. */
     public static void init() {}
 
@@ -553,7 +569,7 @@ public class MultiVersionUtil {
      * @param name fully qualified runtime class name
      * @return loaded class, or null when the class is absent
      */
-    public static Class<?> tryLocateClass(final String name) {
+    public static @Nullable Class<?> tryLocateClass(final String name) {
         try {
             return Class.forName(name);
         } catch (ClassNotFoundException e) {
@@ -570,9 +586,9 @@ public class MultiVersionUtil {
      * @return lookup result, or null when an allowed absence exception occurs
      * @throws RuntimeException if the lookup fails with an unlisted exception type
      */
-    private static <T> T getOrNull(
+    private static <T> @Nullable T getOrNull(
             final SupplierThrowable<T> supplier,
-            final Class<? extends Throwable>... catchExceptions) {
+            final List<Class<? extends Throwable>> catchExceptions) {
         try {
             return supplier.get();
         } catch (Throwable t) {

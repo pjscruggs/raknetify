@@ -51,8 +51,10 @@ public class DebugHudUtil {
         if (networkHandler != null) {
             final ClientConnection connection =
                     (ClientConnection)
-                            MultiVersionUtil.ClientPlayNetworkHandler$connection.get(
-                                    networkHandler);
+                            MultiVersionUtil.requireCompatible(
+                                            MultiVersionUtil.ClientPlayNetworkHandler$connection,
+                                            "ClientPlayNetworkHandler$connection")
+                                    .get(networkHandler);
             final Channel channel = ((IClientConnection) connection).getChannel();
             if (DebugHudFormatter.append(consumer, channel)) {
                 return;

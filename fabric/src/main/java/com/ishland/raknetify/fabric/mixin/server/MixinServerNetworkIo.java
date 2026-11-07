@@ -36,6 +36,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import io.netty.bootstrap.AbstractBootstrap;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.FixedRecvByteBufAllocator;
@@ -51,7 +52,7 @@ import net.minecraft.server.ServerNetworkIo;
 
 import network.ycc.raknet.server.channel.RakNetServerChannel;
 
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -106,9 +107,13 @@ public abstract class MixinServerNetworkIo {
      */
     @Shadow @Final private List<ChannelFuture> channels;
 
+    /** Reports failed address changes without discarding their stack traces or host context. */
+    @Unique private static final System.Logger raknetify$logger = System.getLogger("Raknetify2");
+
     /** Per-server interface-change callback, created once for wildcard binding. */
     @Unique
-    private Consumer<NetworkInterfaceListener.InterfaceAddressChangeEvent> raknetify$eventListener;
+    private @Nullable Consumer<NetworkInterfaceListener.InterfaceAddressChangeEvent>
+            raknetify$eventListener;
 
     /**
      * Creates the requested UDP endpoints before the original TCP bind continues. The thread-local
@@ -149,11 +154,10 @@ public abstract class MixinServerNetworkIo {
 
                     if (this.raknetify$eventListener == null) {
                         this.raknetify$eventListener =
-                                event -> {
-                                    raknetify$onInterfaceChange(event, udpPort);
-                                };
-                        NetworkInterfaceListener.addListener(event ->
-                                this.server.submit(() -> raknetify$eventListener.accept(event)));
+                                event ->
+                                        this.server.execute(
+                                                () -> raknetify$onInterfaceChange(event, udpPort));
+                        NetworkInterfaceListener.addListener(this.raknetify$eventListener);
                     }
                 } else {
                     System.out.println("Starting raknetify server on %s".formatted(address));
@@ -162,6 +166,25 @@ public abstract class MixinServerNetworkIo {
             } finally {
                 ThreadLocalUtil.setInitializingRaknet(false);
             }
+        }
+    }
+
+    /**
+     * Removes the exact registered callback when server shutdown starts.
+     *
+     * @param ci shutdown callback, left uncancelled so vanilla closes its listeners
+     */
+    @Inject(method = "stop", at = @At("HEAD"))
+    private void raknetify$stopInterfaceListener(final CallbackInfo ci) {
+        raknetify$removeInterfaceListener();
+    }
+
+    /** Unregisters this server without removing another server's network-change subscription. */
+    @Unique
+    private void raknetify$removeInterfaceListener() {
+        if (this.raknetify$eventListener != null) {
+            NetworkInterfaceListener.removeListener(this.raknetify$eventListener);
+            this.raknetify$eventListener = null;
         }
     }
 
@@ -175,7 +198,7 @@ public abstract class MixinServerNetworkIo {
     private void raknetify$onInterfaceChange(
             final NetworkInterfaceListener.InterfaceAddressChangeEvent event, final int port) {
         if (!this.active) {
-            NetworkInterfaceListener.removeListener(this.raknetify$eventListener);
+            raknetify$removeInterfaceListener();
             return;
         }
         try {
@@ -187,12 +210,16 @@ public abstract class MixinServerNetworkIo {
                     bind(inetAddress, port);
                 } catch (IOException t) {
                     System.out.println("**** FAILED TO BIND TO PORT! %s".formatted(t.getMessage()));
-                } catch (Throwable t) {
-                    t.printStackTrace();
+                } catch (RuntimeException t) {
+                    raknetify$logger.log(
+                            System.Logger.Level.WARNING,
+                            "Failed to bind RakNet address " + inetAddress,
+                            t);
                 }
             } else {
-                synchronized (this.channels) {
-                    for (Iterator<ChannelFuture> iter = this.channels.iterator();
+                final List<ChannelFuture> boundChannels = this.channels;
+                synchronized (boundChannels) {
+                    for (Iterator<ChannelFuture> iter = boundChannels.iterator();
                             iter.hasNext(); ) {
                         ChannelFuture channel = iter.next();
                         final SocketAddress socketAddress = channel.channel().localAddress();
@@ -200,15 +227,19 @@ public abstract class MixinServerNetworkIo {
                             if (inetAddress.equals(channelAddress.getAddress())) {
                                 System.out.println(
                                         "Stopping raknetify server on %s".formatted(inetAddress));
-                                channel.channel().close();
+                                channel.channel()
+                                        .close()
+                                        .addListener(
+                                                ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
                                 iter.remove();
                             }
                         }
                     }
                 }
             }
-        } catch (Throwable e) {
-            e.printStackTrace();
+        } catch (RuntimeException e) {
+            raknetify$logger.log(
+                    System.Logger.Level.WARNING, "Failed to update RakNet interface listeners", e);
         } finally {
             ThreadLocalUtil.setInitializingRaknet(false);
         }

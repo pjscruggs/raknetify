@@ -24,12 +24,15 @@
 
 package com.ishland.raknetify.fabric.common.connection;
 
+import com.google.common.base.Splitter;
 import com.google.common.collect.Sets;
 
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.MappingResolver;
+
+import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -89,7 +92,7 @@ public class RakNetMultiChannel {
                     mappedName.equals(sourceName) && !isIntermediaryNamespace
                             ? packetNames.getProperty(sourceName, mappedName)
                             : mappedName;
-            for (String name : names.split(",")) {
+            for (String name : Splitter.on(',').omitEmptyStrings().split(names)) {
                 try {
                     classHashSet.add(
                             Class.forName(name, false, RakNetMultiChannel.class.getClassLoader()));
@@ -491,7 +494,7 @@ public class RakNetMultiChannel {
      *     discard
      */
     public static int getPacketChannelOverride(
-            final Class<?> clazz, final boolean suppressWarning) {
+            final @Nullable Class<?> clazz, final boolean suppressWarning) {
         if (clazz == null) {
             System.err.println(
                     "Raknetify: Warning: Tried to send packet without setting packet class");

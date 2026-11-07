@@ -161,9 +161,9 @@ public abstract class MixinClientConnection {
         }
         if (Constants.DEBUG) {
             System.err.println("Exception caught for connection %s".formatted(this.channel));
-            for (String s : DebugUtil.printChannelDetails(this.channel).split("\n")) {
-                System.err.println("  " + s);
-            }
+            DebugUtil.printChannelDetails(this.channel)
+                    .lines()
+                    .forEach(line -> System.err.println("  " + line));
             ex.printStackTrace();
         } else {
             final ConnectionProtocol state;

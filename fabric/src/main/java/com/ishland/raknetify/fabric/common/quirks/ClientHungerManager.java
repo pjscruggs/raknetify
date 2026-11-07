@@ -76,12 +76,18 @@ public class ClientHungerManager extends HungerManager {
         } else {
             NbtCompound compound = new NbtCompound();
             try {
-                MultiVersionUtil.HungerManager$writeNbt1_21_5.invoke(hungerManager, compound);
+                MultiVersionUtil.requireCompatible(
+                                MultiVersionUtil.HungerManager$writeNbt1_21_5,
+                                "HungerManager$writeNbt1_21_5")
+                        .invoke(hungerManager, compound);
             } catch (Throwable e) {
                 throw new RuntimeException(e);
             }
             try {
-                MultiVersionUtil.HungerManager$readNbt1_21_5.invoke(clientHungerManager, compound);
+                MultiVersionUtil.requireCompatible(
+                                MultiVersionUtil.HungerManager$readNbt1_21_5,
+                                "HungerManager$readNbt1_21_5")
+                        .invoke(clientHungerManager, compound);
             } catch (Throwable e) {
                 throw new RuntimeException(e);
             }

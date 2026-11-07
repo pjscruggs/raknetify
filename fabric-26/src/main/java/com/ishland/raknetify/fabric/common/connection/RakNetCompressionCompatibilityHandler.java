@@ -32,6 +32,8 @@ import io.netty.channel.ChannelPromise;
 
 import net.minecraft.network.protocol.login.ClientboundLoginCompressionPacket;
 
+import network.ycc.raknet.RakNet;
+
 /**
  * Lets vanilla finish its compression transition without waiting for RakNet write acknowledgement.
  */
@@ -59,7 +61,7 @@ public class RakNetCompressionCompatibilityHandler extends ChannelDuplexHandler 
                         : msg instanceof ClientboundLoginCompressionPacket;
         if (setupCompression) {
             promise.trySuccess();
-            ctx.write(msg);
+            ctx.write(msg).addListener(RakNet.INTERNAL_WRITE_LISTENER);
             ctx.pipeline().remove(this);
             return;
         }

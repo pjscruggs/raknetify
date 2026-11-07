@@ -240,6 +240,8 @@ import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
 import net.minecraft.network.protocol.ping.ClientboundPongResponsePacket;
 import net.minecraft.network.protocol.ping.ServerboundPingRequestPacket;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.Set;
 
 /** Defines packet delivery groups whose ordering dependencies stay within each RakNet channel. */
@@ -595,7 +597,7 @@ public class RakNetMultiChannel {
      *     discard
      */
     public static int getPacketChannelOverride(
-            final Class<?> clazz, final boolean suppressWarning) {
+            final @Nullable Class<?> clazz, final boolean suppressWarning) {
         if (clazz == null) {
             System.err.println(
                     "Raknetify: Warning: Tried to send packet without setting packet class");

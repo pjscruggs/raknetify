@@ -38,6 +38,8 @@ import net.minecraft.network.protocol.game.ClientboundRespawnPacket;
 import net.minecraft.network.protocol.game.ClientboundStartConfigurationPacket;
 import net.minecraft.network.protocol.game.ServerboundConfigurationAcknowledgedPacket;
 
+import network.ycc.raknet.RakNet;
+
 /**
  * Coordinates RakNet ordering with Minecraft world changes, command availability, and codec
  * transitions.
@@ -62,18 +64,21 @@ public class RakNetFabricChannelEventListener extends ChannelDuplexHandler {
             final ChannelHandlerContext ctx, final Object msg, final ChannelPromise promise)
             throws Exception {
         if (msg instanceof ClientboundRespawnPacket || msg instanceof ClientboundLoginPacket) {
-            ctx.write(SynchronizationLayer.SYNC_REQUEST_OBJECT);
+            ctx.write(SynchronizationLayer.SYNC_REQUEST_OBJECT)
+                    .addListener(RakNet.INTERNAL_WRITE_LISTENER);
         }
         if (msg instanceof ClientboundStartConfigurationPacket
                 || msg instanceof ServerboundConfigurationAcknowledgedPacket) {
-            ctx.write(SynchronizationLayer.SYNC_REQUEST_OBJECT);
+            ctx.write(SynchronizationLayer.SYNC_REQUEST_OBJECT)
+                    .addListener(RakNet.INTERNAL_WRITE_LISTENER);
         }
         if (msg instanceof ClientboundCommandsPacket) {
-            ctx.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL);
+            ctx.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL)
+                    .addListener(RakNet.INTERNAL_WRITE_LISTENER);
         }
         if (msg instanceof UnconfiguredPipelineHandler.InboundConfigurationTask
                 || msg instanceof UnconfiguredPipelineHandler.OutboundConfigurationTask) {
-            ctx.write(RakNetNetworkTransitionUtil.handleTransition(msg), promise);
+            super.write(ctx, RakNetNetworkTransitionUtil.handleTransition(msg), promise);
             return;
         }
         super.write(ctx, msg, promise);

@@ -40,7 +40,7 @@ public final class TransferQuery implements CustomQueryPayload {
      */
     @Override
     public Identifier id() {
-        return Identifier.tryParse(TransferSupport.QUERY_ID);
+        return Identifier.parse(TransferSupport.QUERY_ID);
     }
 
     /**

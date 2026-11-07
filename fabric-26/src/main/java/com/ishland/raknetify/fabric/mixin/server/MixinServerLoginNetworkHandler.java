@@ -48,9 +48,6 @@ public class MixinServerLoginNetworkHandler {
     /** Login connection whose pipeline advertises whether streaming compression was negotiated. */
     @Shadow @Final public Connection connection;
 
-    /** Vanilla server reference retained by the login listener. */
-    @Shadow @Final private MinecraftServer server;
-
     // Compression setup moved into the constructor in the snapshot, so both locations share this
     // redirect.
     /**

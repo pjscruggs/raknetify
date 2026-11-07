@@ -33,11 +33,14 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 
 import net.minecraft.network.handler.NetworkStateTransitions;
+import net.minecraft.network.packet.Packet;
 import net.minecraft.network.packet.c2s.play.AcknowledgeReconfigurationC2SPacket;
 import net.minecraft.network.packet.s2c.play.CommandTreeS2CPacket;
 import net.minecraft.network.packet.s2c.play.EnterReconfigurationS2CPacket;
 import net.minecraft.network.packet.s2c.play.GameJoinS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerRespawnS2CPacket;
+
+import network.ycc.raknet.RakNet;
 
 /**
  * Coordinates RakNet ordering with Minecraft world changes, command availability, and codec
@@ -54,8 +57,8 @@ public class RakNetFabricChannelEventListener extends ChannelDuplexHandler {
     static {
         boolean isReconfigurationSupported0;
         try {
-            EnterReconfigurationS2CPacket.class.getName();
-            isReconfigurationSupported0 = true;
+            isReconfigurationSupported0 =
+                    Packet.class.isAssignableFrom(EnterReconfigurationS2CPacket.class);
         } catch (NoClassDefFoundError e) {
             isReconfigurationSupported0 = false;
         }
@@ -77,21 +80,24 @@ public class RakNetFabricChannelEventListener extends ChannelDuplexHandler {
             final ChannelHandlerContext ctx, final Object msg, final ChannelPromise promise)
             throws Exception {
         if (msg instanceof PlayerRespawnS2CPacket || msg instanceof GameJoinS2CPacket) {
-            ctx.write(SynchronizationLayer.SYNC_REQUEST_OBJECT);
+            ctx.write(SynchronizationLayer.SYNC_REQUEST_OBJECT)
+                    .addListener(RakNet.INTERNAL_WRITE_LISTENER);
         }
         if (isReconfigurationSupported) {
             if (msg instanceof EnterReconfigurationS2CPacket
                     || msg instanceof AcknowledgeReconfigurationC2SPacket) {
-                ctx.write(SynchronizationLayer.SYNC_REQUEST_OBJECT);
+                ctx.write(SynchronizationLayer.SYNC_REQUEST_OBJECT)
+                        .addListener(RakNet.INTERNAL_WRITE_LISTENER);
             }
         }
         if (msg instanceof CommandTreeS2CPacket) {
-            ctx.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL);
+            ctx.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL)
+                    .addListener(RakNet.INTERNAL_WRITE_LISTENER);
         }
         if (RaknetifyFabricMixinPlugin.AFTER_1_20_5) {
             if (msg instanceof NetworkStateTransitions.DecoderTransitioner
                     || msg instanceof NetworkStateTransitions.EncoderTransitioner) {
-                ctx.write(RakNetNetworkTransitionUtil.handleTransition(msg), promise);
+                super.write(ctx, RakNetNetworkTransitionUtil.handleTransition(msg), promise);
                 return;
             }
         }

@@ -61,11 +61,6 @@ public class MixinServerLoginNetworkHandler {
     @Shadow @Final private MinecraftServer server;
 
     /**
-     * Vanilla login challenge retained by the target listener, unused by this compatibility hook.
-     */
-    @Shadow @Final private byte[] challenge;
-
-    /**
      * Detects Krypton cipher handlers and re-enters Minecraft encryption setup with standard
      * ciphers. The RakNet connection hooks then install frame encryption in their place.
      *
@@ -89,11 +84,11 @@ public class MixinServerLoginNetworkHandler {
             final ChannelHandler decrypt = pipeline.get("decrypt");
             final ChannelHandler encrypt = pipeline.get("encrypt");
             if (decrypt != null
-                    && ("me.steinborn.krypton.mod.shared.network.pipeline.MinecraftCipherDecoder"
-                            .equals(decrypt.getClass().getName()))
+                    && "me.steinborn.krypton.mod.shared.network.pipeline.MinecraftCipherDecoder"
+                            .equals(decrypt.getClass().getName())
                     && encrypt != null
-                    && ("me.steinborn.krypton.mod.shared.network.pipeline.MinecraftCipherEncoder"
-                            .equals(encrypt.getClass().getName()))) {
+                    && "me.steinborn.krypton.mod.shared.network.pipeline.MinecraftCipherEncoder"
+                            .equals(encrypt.getClass().getName())) {
                 System.out.println("Raknetify: Krypton detected, applying compatibility");
 
                 pipeline.remove("decrypt");
