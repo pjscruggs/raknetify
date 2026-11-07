@@ -40,8 +40,20 @@ jobs:
           java-version: 25
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         if: matrix.build-mode == 'manual'
+      - uses: github/codeql-action/setup-codeql@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        if: matrix.language == 'java-kotlin'
+        id: query-tools
+        with:
+          languages: java-kotlin
+      - name: Test framework analysis against positive and negative witnesses
+        if: matrix.language == 'java-kotlin'
+        env:
+          CODEQL_CLI: ${{ steps.query-tools.outputs.codeql-path }}
+        run: |
+          # Run before application tracing can redirect fixture extraction to the application database.
+          "$CODEQL_CLI" pack install quality/codeql
+          "$CODEQL_CLI" test run quality/codeql/tests --threads=2
       - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
-        id: codeql
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
@@ -54,18 +66,6 @@ jobs:
         with:
           category: /language:${{ matrix.language }}
           output: codeql-results
-      - name: Test framework analysis against positive and negative witnesses
-        if: matrix.language == 'java-kotlin'
-        env:
-          CODEQL_CLI: ${{ steps.codeql.outputs.codeql-path }}
-        run: |
-          codeql_cli="$CODEQL_CLI"
-          # Fixture compilation must write to its own test database, not the completed application trace.
-          for name in "${!CODEQL_@}" "${!SEMMLE_@}"; do
-            unset "$name"
-          done
-          unset LD_PRELOAD
-          "$codeql_cli" test run quality/codeql/tests --threads=2
       - name: Reject source security and correctness findings
         run: python3 quality/check_sarif.py codeql-results
       - name: Preserve analysis results
