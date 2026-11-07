@@ -29,6 +29,8 @@ import io.netty.util.concurrent.ScheduledFuture;
 
 import network.ycc.raknet.RakNet;
 
+import org.jspecify.annotations.Nullable;
+
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Objects;
@@ -57,7 +59,7 @@ public class RakNetVelocityPingUpdater extends ChannelDuplexHandler {
     private final ConnectedPlayer player;
 
     /** Once-per-second event-loop task, or null before installation and after removal. */
-    ScheduledFuture<?> updateTask;
+    private @Nullable ScheduledFuture<?> updateTask;
 
     /**
      * Associates transport ping samples with an authenticated proxy player.

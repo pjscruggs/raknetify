@@ -22,14 +22,11 @@ package com.ishland.raknetify.velocity.init;
 
 import static com.ishland.raknetify.common.util.ReflectionUtil.accessible;
 
-import com.velocitypowered.api.network.ProtocolVersion;
 import com.velocitypowered.proxy.protocol.MinecraftPacket;
 import com.velocitypowered.proxy.protocol.StateRegistry;
 import com.velocitypowered.proxy.protocol.packet.RespawnPacket;
 
 import io.netty.util.collection.IntObjectMap;
-
-import it.unimi.dsi.fastutil.objects.Object2IntMap;
 
 import java.util.Map;
 import java.util.function.Supplier;
@@ -54,35 +51,58 @@ public class VelocityPacketRegistryInjector {
                             accessible(StateRegistry.class.getDeclaredField("clientbound"))
                                     .get(StateRegistry.PLAY);
             final var versions =
-                    (Map<ProtocolVersion, StateRegistry.PacketRegistry.ProtocolRegistry>)
+                    (Map<?, ?>)
                             accessible(
                                             StateRegistry.PacketRegistry.class.getDeclaredField(
                                                     "versions"))
                                     .get(registry);
-            for (StateRegistry.PacketRegistry.ProtocolRegistry value : versions.values()) {
+            for (Object entry : versions.values()) {
+                final StateRegistry.PacketRegistry.ProtocolRegistry value =
+                        StateRegistry.PacketRegistry.ProtocolRegistry.class.cast(entry);
                 final var packetClassToId =
-                        (Object2IntMap<Class<? extends MinecraftPacket>>)
+                        (Map<?, ?>)
                                 accessible(
                                                 StateRegistry.PacketRegistry.ProtocolRegistry.class
                                                         .getDeclaredField("packetClassToId"))
                                         .get(value);
                 final var packetIdToSupplier =
-                        (IntObjectMap<Supplier<? extends MinecraftPacket>>)
+                        (IntObjectMap<?>)
                                 accessible(
                                                 StateRegistry.PacketRegistry.ProtocolRegistry.class
                                                         .getDeclaredField("packetIdToSupplier"))
                                         .get(value);
-                if (packetClassToId.containsKey(RespawnPacket.class)) {
-                    final int packetId = packetClassToId.getInt(RespawnPacket.class);
+                // Share only JDK map types across the proxy and plugin dependency loaders.
+                final Object registeredId = packetClassToId.get(RespawnPacket.class);
+                if (registeredId != null) {
+                    if (!(registeredId instanceof Integer packetId)) {
+                        throw new IllegalStateException("Respawn packet ID is not an integer");
+                    }
                     if (!packetIdToSupplier.containsKey(packetId)) {
-                        packetIdToSupplier.put(
-                                packetId,
-                                RespawnPacket::new); // make respawn packet no longer encodeOnly
+                        installRespawnDecoder(packetIdToSupplier, packetId);
                     }
                 }
             }
-        } catch (Throwable t) {
+        } catch (ReflectiveOperationException | RuntimeException t) {
             throw new RuntimeException("Failed to inject velocity packet registry", t);
         }
+    }
+
+    /**
+     * Adds the known packet constructor through the erased API of Velocity's private decoder map.
+     * The caller obtains the ID from this registry's RespawnPacket encoder entry and checks it is
+     * vacant. No cast claims that unrelated map values have a generic type they have not been
+     * checked against.
+     *
+     * @param decoders private map already verified to implement Netty's integer-keyed map interface
+     * @param packetId registered RespawnPacket wire identifier for this protocol version
+     * @throws ReflectiveOperationException if the private registry cannot accept the validated
+     *     constructor
+     */
+    private static void installRespawnDecoder(final IntObjectMap<?> decoders, final int packetId)
+            throws ReflectiveOperationException {
+        final Supplier<MinecraftPacket> factory = RespawnPacket::new;
+        IntObjectMap.class
+                .getMethod("put", int.class, Object.class)
+                .invoke(decoders, packetId, factory);
     }
 }

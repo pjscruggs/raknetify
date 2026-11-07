@@ -20,9 +20,7 @@
 
 package com.ishland.raknetify.velocity;
 
-import static com.ishland.raknetify.velocity.RaknetifyVelocityPlugin.INSTANCE;
 import static com.ishland.raknetify.velocity.RaknetifyVelocityPlugin.LOGGER;
-import static com.ishland.raknetify.velocity.RaknetifyVelocityPlugin.PROXY;
 
 import com.ishland.raknetify.common.data.ProtocolMultiChannelMappings;
 import com.ishland.raknetify.velocity.connection.RakNetVelocityConnectionUtil;
@@ -57,9 +55,10 @@ public class RaknetifyVelocityLaunchWrapper {
                                         + " https://papermc.io/downloads#Velocity");
                     };
             runnable.run();
-            PROXY.getEventManager()
+            RaknetifyVelocityPlugin.proxy()
+                    .getEventManager()
                     .register(
-                            INSTANCE,
+                            RaknetifyVelocityPlugin.instance(),
                             ListenerBoundEvent.class,
                             PostOrder.LAST,
                             ignored -> runnable.run());
@@ -69,27 +68,31 @@ public class RaknetifyVelocityLaunchWrapper {
         ProtocolMultiChannelMappings.init();
         VelocityPacketRegistryInjector.inject();
 
-        PROXY.getEventManager()
+        RaknetifyVelocityPlugin.proxy()
+                .getEventManager()
                 .register(
-                        INSTANCE,
+                        RaknetifyVelocityPlugin.instance(),
                         LoginEvent.class,
                         PostOrder.LAST,
                         RakNetVelocityConnectionUtil::onPlayerLogin);
-        PROXY.getEventManager()
+        RaknetifyVelocityPlugin.proxy()
+                .getEventManager()
                 .register(
-                        INSTANCE,
+                        RaknetifyVelocityPlugin.instance(),
                         ListenerBoundEvent.class,
                         PostOrder.LAST,
                         VelocityRaknetifyServer::start);
-        PROXY.getEventManager()
+        RaknetifyVelocityPlugin.proxy()
+                .getEventManager()
                 .register(
-                        INSTANCE,
+                        RaknetifyVelocityPlugin.instance(),
                         ListenerCloseEvent.class,
                         PostOrder.LAST,
                         VelocityRaknetifyServer::stop);
-        PROXY.getEventManager()
+        RaknetifyVelocityPlugin.proxy()
+                .getEventManager()
                 .register(
-                        INSTANCE,
+                        RaknetifyVelocityPlugin.instance(),
                         ServerPostConnectEvent.class,
                         PostOrder.LAST,
                         RakNetVelocityConnectionUtil::onServerSwitch);

@@ -20,6 +20,7 @@
 
 package com.ishland.raknetify.velocity;
 
+import com.google.common.base.Equivalence;
 import com.google.common.base.Preconditions;
 import com.google.inject.Inject;
 import com.velocitypowered.api.event.Subscribe;
@@ -27,15 +28,16 @@ import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
 import com.velocitypowered.api.plugin.Plugin;
 import com.velocitypowered.api.proxy.ProxyServer;
 
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.net.URLStreamHandlerFactory;
 import java.security.CodeSource;
-import java.util.ArrayList;
-import java.util.regex.Pattern;
+import java.util.Objects;
 
 /**
  * Bootstraps Velocity integration with selected bundled dependencies isolated from proxy versions.
@@ -43,59 +45,57 @@ import java.util.regex.Pattern;
 @Plugin(id = "raknetify")
 public class RaknetifyVelocityPlugin {
 
-    /**
-     * Fastutil class-name patterns that must load from the plugin instead of the proxy class
-     * loader.
-     */
-    private static final java.util.List<Pattern> excludeRegex = new ArrayList<>();
-
-    static {
-        excludeRegex.add(Pattern.compile("it.unimi.dsi.fastutil.ints.*Int2ObjectLinked*"));
-        excludeRegex.add(Pattern.compile("it.unimi.dsi.fastutil.ints.*Int2ObjectSorted*"));
-        excludeRegex.add(Pattern.compile("it.unimi.dsi.fastutil.ints.*Int2ObjectAVL*"));
-        excludeRegex.add(Pattern.compile("it.unimi.dsi.fastutil.ints.*Int2ObjectRB*"));
-        excludeRegex.add(Pattern.compile("it.unimi.dsi.fastutil.ints.*Int2ObjectArray*"));
-        excludeRegex.add(Pattern.compile("it.unimi.dsi.fastutil.ints.IntList*"));
-        excludeRegex.add(Pattern.compile("it.unimi.dsi.fastutil.ints.AbstractIntList*"));
-        excludeRegex.add(Pattern.compile("it.unimi.dsi.fastutil.ints.IntSorted*"));
-        excludeRegex.add(Pattern.compile("it.unimi.dsi.fastutil.ints.AbstractIntSorted*"));
-        excludeRegex.add(Pattern.compile("it.unimi.dsi.fastutil.ints.IntRB*"));
-    }
-
-    /**
-     * Checks whether a dependency class must bypass parent-first lookup.
-     *
-     * @param name fully qualified class name requested by the wrapper
-     * @return true when a bundled-dependency pattern matches
-     */
-    private static boolean isExcluded(final String name) {
-        for (Pattern regex : excludeRegex) {
-            if (regex.matcher(name).find()) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     /** Shared proxy instance exposed to the wrapped implementation after initialization. */
-    public static ProxyServer PROXY;
+    private static volatile @Nullable ProxyServer PROXY;
 
     /** Proxy-provided logger exposed to the wrapped implementation after initialization. */
-    public static Logger LOGGER;
+    public static volatile Logger LOGGER = LoggerFactory.getLogger("Raknetify2");
 
     /** Original plugin instance retained for Velocity event and task ownership. */
-    public static RaknetifyVelocityPlugin INSTANCE;
+    private static volatile @Nullable RaknetifyVelocityPlugin INSTANCE;
 
     /**
      * Dependency-isolating class loader used for the packaged plugin, or null for a direct launch.
      */
-    public static URLClassLoader WRAPPER;
+    public static volatile @Nullable URLClassLoader WRAPPER;
 
     /** Proxy instance injected into the original plugin by Velocity. */
-    @Inject private ProxyServer proxy;
+    private final ProxyServer proxy;
 
     /** Plugin logger injected by Velocity before the initialization event. */
-    @Inject private Logger logger;
+    private final Logger logger;
+
+    /**
+     * Receives required proxy services before any lifecycle callback can run.
+     *
+     * @param proxy running proxy that owns plugin events and tasks
+     * @param logger plugin-specific logger supplied by the proxy
+     */
+    @Inject
+    public RaknetifyVelocityPlugin(final ProxyServer proxy, final Logger logger) {
+        this.proxy = proxy;
+        this.logger = logger;
+    }
+
+    /**
+     * Returns the initialized proxy service shared with the isolated implementation.
+     *
+     * @return proxy whose initialization callback has started
+     * @throws NullPointerException if accessed before plugin initialization
+     */
+    public static ProxyServer proxy() {
+        return Objects.requireNonNull(PROXY, "Raknetify2 proxy services are not initialized");
+    }
+
+    /**
+     * Returns the original plugin instance used to own Velocity registrations.
+     *
+     * @return initialized plugin instance from the parent class loader
+     * @throws NullPointerException if accessed before plugin initialization
+     */
+    public static RaknetifyVelocityPlugin instance() {
+        return Objects.requireNonNull(INSTANCE, "Raknetify2 is not initialized");
+    }
 
     /**
      * Publishes injected services and launches the integration through its dependency wrapper.
@@ -115,21 +115,9 @@ public class RaknetifyVelocityPlugin {
         if (codeSource != null && !isDevLaunch()) {
             try {
                 LOGGER.info("Bootstrapping raknetify in wrapped environment");
-                final URLClassLoader urlClassLoader =
-                        new RaknetifyURLClassLoader(
-                                "raknetify wrapper",
-                                new URL[] {codeSource.getLocation()},
-                                RaknetifyVelocityPlugin.class.getClassLoader());
-                final Class<?> launchWrapper =
-                        urlClassLoader.loadClass(
-                                "com.ishland.raknetify.velocity.RaknetifyVelocityLaunchWrapper");
-                Preconditions.checkState(
-                        launchWrapper.getClassLoader() == urlClassLoader,
-                        "Not launched in wrapper");
-                WRAPPER = urlClassLoader;
-                launchWrapper.getMethod("launch").invoke(null);
+                launchIsolated(codeSource.getLocation());
                 return;
-            } catch (Throwable t) {
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError t) {
                 LOGGER.error(
                         "Error bootstrapping raknetify inside wrapped environment, running in"
                                 + " normal environment instead",
@@ -150,6 +138,35 @@ public class RaknetifyVelocityPlugin {
     }
 
     /**
+     * Retains a successful wrapper and closes a failed one without hiding its original failure.
+     *
+     * @param archive packaged plugin location used for isolated implementation loading
+     * @throws ReflectiveOperationException if the isolated launch entry point cannot run
+     */
+    private static void launchIsolated(final URL archive) throws ReflectiveOperationException {
+        final RaknetifyClassLoader wrapper =
+                new RaknetifyClassLoader(
+                        new URL[] {archive}, RaknetifyVelocityPlugin.class.getClassLoader());
+        try {
+            final Class<?> launch =
+                    wrapper.loadClass(
+                            "com.ishland.raknetify.velocity.RaknetifyVelocityLaunchWrapper");
+            Preconditions.checkState(
+                    Equivalence.identity().equivalent(launch.getClassLoader(), wrapper),
+                    "Not launched in wrapper");
+            launch.getMethod("launch").invoke(null);
+            WRAPPER = wrapper;
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError failure) {
+            try {
+                wrapper.close();
+            } catch (IOException cleanup) {
+                failure.addSuppressed(cleanup);
+            }
+            throw failure;
+        }
+    }
+
+    /**
      * Detects a development launch where the plugin is already on the system class path.
      *
      * @return true when the system class loader can load the plugin entry point
@@ -161,111 +178,6 @@ public class RaknetifyVelocityPlugin {
             return true;
         } catch (ClassNotFoundException e) {
             return false;
-        }
-    }
-
-    /**
-     * Shares proxy APIs with the parent while loading Raknetify internals and selected dependencies
-     * locally.
-     */
-    private static class RaknetifyURLClassLoader extends URLClassLoader {
-
-        /**
-         * Creates a wrapper with explicit plugin URLs and a shared-API parent.
-         *
-         * @param urls plugin and bundled-dependency locations searched for local classes
-         * @param parent class loader supplying shared proxy APIs
-         */
-        public RaknetifyURLClassLoader(final URL[] urls, final ClassLoader parent) {
-            super(urls, parent);
-        }
-
-        /**
-         * Creates a wrapper with plugin URLs and the default parent class loader.
-         *
-         * @param urls plugin and bundled-dependency locations searched for local classes
-         */
-        public RaknetifyURLClassLoader(final URL[] urls) {
-            super(urls);
-        }
-
-        /**
-         * Creates a wrapper with a custom URL handler factory and shared-API parent.
-         *
-         * @param urls plugin and bundled-dependency locations searched for local classes
-         * @param parent class loader supplying shared proxy APIs
-         * @param factory factory providing URL protocol handlers
-         */
-        public RaknetifyURLClassLoader(
-                final URL[] urls, final ClassLoader parent, final URLStreamHandlerFactory factory) {
-            super(urls, parent, factory);
-        }
-
-        /**
-         * Creates a named wrapper for identifying the isolated plugin environment in diagnostics.
-         *
-         * @param name diagnostic name assigned to this class loader
-         * @param urls plugin and bundled-dependency locations searched for local classes
-         * @param parent class loader supplying shared proxy APIs
-         */
-        public RaknetifyURLClassLoader(
-                final String name, final URL[] urls, final ClassLoader parent) {
-            super(name, urls, parent);
-        }
-
-        /**
-         * Creates a named wrapper with custom URL handling for the isolated plugin environment.
-         *
-         * @param name diagnostic name assigned to this class loader
-         * @param urls plugin and bundled-dependency locations searched for local classes
-         * @param parent class loader supplying shared proxy APIs
-         * @param factory factory providing URL protocol handlers
-         */
-        public RaknetifyURLClassLoader(
-                final String name,
-                final URL[] urls,
-                final ClassLoader parent,
-                final URLStreamHandlerFactory factory) {
-            super(name, urls, parent, factory);
-        }
-
-        /**
-         * Uses parent lookup for shared APIs and local lookup for isolated implementation classes.
-         * Local class definition is serialized by the per-name class-loading lock.
-         *
-         * @param name fully qualified binary class name
-         * @param resolve whether a locally defined class should be linked before returning
-         * @return class from the parent or this wrapper according to the isolation rules
-         * @throws ClassNotFoundException if neither the allowed parent lookup nor the plugin URLs
-         *     supply the class
-         */
-        @Override
-        protected Class<?> loadClass(final String name, final boolean resolve)
-                throws ClassNotFoundException {
-            if (!(name.startsWith("com.ishland.raknetify")
-                            && !"com.ishland.raknetify.velocity.RaknetifyVelocityPlugin"
-                                    .equals(name))
-                    && !name.startsWith("network.ycc.raknet")
-                    && !isExcluded(name)) {
-                try {
-                    return Class.forName(name, true, this.getParent());
-                } catch (ClassNotFoundException | NoClassDefFoundError e) {
-                    // ignored, try our own loader
-                }
-            }
-
-            synchronized (getClassLoadingLock(name)) {
-                try {
-                    final Class<?> clazz = this.findClass(name);
-                    if (resolve) {
-                        this.resolveClass(clazz);
-                    }
-                    return clazz;
-                } catch (ClassNotFoundException e1) {
-                    // then fail here, there's nothing more we can do
-                    throw new ClassNotFoundException(name, e1);
-                }
-            }
         }
     }
 }

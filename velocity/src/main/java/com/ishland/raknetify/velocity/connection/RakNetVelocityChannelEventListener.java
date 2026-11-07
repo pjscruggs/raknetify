@@ -49,6 +49,10 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.MessageToMessageEncoder;
 
+import network.ycc.raknet.RakNet;
+
+import org.jspecify.annotations.Nullable;
+
 import java.lang.reflect.Field;
 import java.util.List;
 
@@ -62,7 +66,7 @@ public class RakNetVelocityChannelEventListener extends ChannelDuplexHandler {
     public static final String NAME = "raknetify-velocity-event-listener";
 
     /** Captured client login secret used when Velocity reports that encryption has been enabled. */
-    private SecretKey encryptionKey;
+    private @Nullable SecretKey encryptionKey;
 
     /**
      * Suppresses redundant vanilla compression and synchronizes transport ordering at phase
@@ -92,11 +96,13 @@ public class RakNetVelocityChannelEventListener extends ChannelDuplexHandler {
                 || msg instanceof JoinGamePacket
                 || msg instanceof StartUpdatePacket
                 || msg instanceof FinishedUpdatePacket) {
-            ctx.write(SynchronizationLayer.SYNC_REQUEST_OBJECT); // sync
+            ctx.write(SynchronizationLayer.SYNC_REQUEST_OBJECT)
+                    .addListener(RakNet.INTERNAL_WRITE_LISTENER);
             super.write(ctx, msg, promise);
             return;
         } else if (msg instanceof AvailableCommandsPacket) {
-            ctx.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL);
+            ctx.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL)
+                    .addListener(RakNet.INTERNAL_WRITE_LISTENER);
             super.write(ctx, msg, promise);
             return;
         }
@@ -121,7 +127,8 @@ public class RakNetVelocityChannelEventListener extends ChannelDuplexHandler {
             try {
                 byte[] secret =
                         EncryptionUtils.decryptRsa(
-                                ((VelocityServer) RaknetifyVelocityPlugin.PROXY).getServerKeyPair(),
+                                ((VelocityServer) RaknetifyVelocityPlugin.proxy())
+                                        .getServerKeyPair(),
                                 packet.getSharedSecret());
                 this.encryptionKey = new SecretKeySpec(secret, "AES");
             } catch (Throwable t) {

@@ -48,6 +48,8 @@ import io.netty.channel.socket.DatagramChannel;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.net.InetAddress;
@@ -83,17 +85,17 @@ public class VelocityRaknetifyServer {
             new ReferenceOpenHashSet<>();
 
     /** Original Minecraft listener address used to recognize wildcard interface changes. */
-    private static volatile InetSocketAddress currentServerAddress;
+    private static volatile @Nullable InetSocketAddress currentServerAddress;
 
     /** Whether interface changes should create or remove companion UDP endpoints. */
     private static volatile boolean active;
 
     static {
         NetworkInterfaceListener.addListener(event -> {
-            RaknetifyVelocityPlugin.PROXY
+            RaknetifyVelocityPlugin.proxy()
                     .getScheduler()
                     .buildTask(
-                            RaknetifyVelocityPlugin.INSTANCE,
+                            RaknetifyVelocityPlugin.instance(),
                             () -> {
                                 if (!active) {
                                     return;
@@ -139,7 +141,7 @@ public class VelocityRaknetifyServer {
         if (evt.getListenerType() != ListenerType.MINECRAFT) {
             return;
         }
-        Preconditions.checkArgument(RaknetifyVelocityPlugin.PROXY instanceof VelocityServer);
+        Preconditions.checkArgument(RaknetifyVelocityPlugin.proxy() instanceof VelocityServer);
         Preconditions.checkState(channels.isEmpty(), "Raknetify Server is already running");
         final InetSocketAddress address = evt.getAddress();
         currentServerAddress = address;
@@ -179,11 +181,11 @@ public class VelocityRaknetifyServer {
             final ConnectionManager cm =
                     (ConnectionManager)
                             accessible(VelocityServer.class.getDeclaredField("cm"))
-                                    .get(RaknetifyVelocityPlugin.PROXY);
+                                    .get(RaknetifyVelocityPlugin.proxy());
             final Object transportType =
                     accessible(ConnectionManager.class.getDeclaredField("transportType")).get(cm);
-            final ChannelFactory<? extends DatagramChannel> datagramChannelFactory =
-                    (ChannelFactory<? extends DatagramChannel>)
+            final ChannelFactory<?> datagramChannelFactory =
+                    (ChannelFactory<?>)
                             accessible(
                                             Class.forName(
                                                             "com.velocitypowered.proxy.network.TransportType")
@@ -216,7 +218,8 @@ public class VelocityRaknetifyServer {
                                 .channelFactory(() ->
                                         ProxyProtocol.create(() -> {
                                             final DatagramChannel channel =
-                                                    datagramChannelFactory.newChannel();
+                                                    DatagramChannel.class.cast(
+                                                            datagramChannelFactory.newChannel());
                                             channel.config()
                                                     .setOption(
                                                             ChannelOption.IP_TOS,
@@ -230,26 +233,7 @@ public class VelocityRaknetifyServer {
                                             return channel;
                                         }))
                                 .group(bossGroup, workerGroup)
-                                .childHandler(
-                                        new ChannelInitializer<>() {
-                                            /**
-                                             * Wraps Velocity's accepted-channel initialization with
-                                             * RakNet transport and codec setup.
-                                             *
-                                             * @param channel accepted RakNet application channel
-                                             * @throws Exception if invoking Velocity's child
-                                             *     initializer fails
-                                             */
-                                            @Override
-                                            protected void initChannel(final Channel channel)
-                                                    throws Exception {
-                                                RakNetVelocityConnectionUtil.initChannel(channel);
-                                                INIT_CHANNEL.invoke(
-                                                        cm.serverChannelInitializer.get(), channel);
-                                                RakNetVelocityConnectionUtil.postInitChannel(
-                                                        channel, false);
-                                            }
-                                        })
+                                .childHandler(new VelocityChildInitializer(cm))
                                 .localAddress(actualAddress)
                                 .bind()
                                 .syncUninterruptibly();
@@ -278,7 +262,7 @@ public class VelocityRaknetifyServer {
         if (evt.getListenerType() != ListenerType.MINECRAFT) {
             return;
         }
-        Preconditions.checkArgument(RaknetifyVelocityPlugin.PROXY instanceof VelocityServer);
+        Preconditions.checkArgument(RaknetifyVelocityPlugin.proxy() instanceof VelocityServer);
         Preconditions.checkState(!channels.isEmpty(), "Raknetify Server is not running");
         synchronized (channels) {
             active = false;
@@ -302,6 +286,36 @@ public class VelocityRaknetifyServer {
             channel.channel().close().sync();
         } catch (InterruptedException e) {
             RaknetifyVelocityPlugin.LOGGER.error("Interrupted whilst closing raknetify server");
+        }
+    }
+
+    /**
+     * Installs the native authentication pipeline between transport setup and codec replacement.
+     */
+    private static final class VelocityChildInitializer extends ChannelInitializer<Channel> {
+        /** Proxy connection manager supplying the current native child initializer. */
+        private final ConnectionManager manager;
+
+        /**
+         * Captures the proxy manager without creating or owning any of its event loops.
+         *
+         * @param manager running proxy connection manager
+         */
+        private VelocityChildInitializer(final ConnectionManager manager) {
+            this.manager = manager;
+        }
+
+        /**
+         * Preserves normal proxy initialization for each accepted RakNet application channel.
+         *
+         * @param channel accepted application connection
+         * @throws Exception if invoking the native initializer fails
+         */
+        @Override
+        protected void initChannel(final Channel channel) throws Exception {
+            RakNetVelocityConnectionUtil.initChannel(channel);
+            INIT_CHANNEL.invoke(manager.serverChannelInitializer.get(), channel);
+            RakNetVelocityConnectionUtil.postInitChannel(channel, false);
         }
     }
 }
