@@ -22,8 +22,8 @@ def download(folder, url, digest=None, algorithm='sha1'):
     if not path.exists():
         with urllib.request.urlopen(url, timeout=60) as response:
             path.write_bytes(response.read())
-    if digest:
-        assert hashlib.new(algorithm, path.read_bytes()).hexdigest() == digest, url
+    if digest and hashlib.new(algorithm, path.read_bytes()).hexdigest() != digest:
+        raise ValueError("Artifact digest mismatch: " + str(url))
     return path
 
 

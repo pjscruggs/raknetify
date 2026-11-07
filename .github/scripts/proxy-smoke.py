@@ -30,7 +30,8 @@ def download(item, target):
             'User-Agent': 'Raknetify2-Compatibility/1.0 (https://github.com/pjscruggs/raknetify2)'})
         with urllib.request.urlopen(request, timeout=60) as response:
             target.write_bytes(response.read())
-    assert hashlib.sha512(target.read_bytes()).hexdigest() == item['sha512'], target
+    if hashlib.sha512(target.read_bytes()).hexdigest() != item['sha512']:
+        raise ValueError("Artifact digest mismatch: " + str(target))
 
 
 def configure(folder, direct, maintenance, port, proxy_protocol=False):

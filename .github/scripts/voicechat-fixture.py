@@ -30,7 +30,8 @@ def install(folder, loader, public_port=None):
     destination = folder / ('plugins' if loader == 'bukkit' else 'mods') / 'voicechat.jar'
     with urllib.request.urlopen(entry['url'], timeout=60) as response:
         data = response.read()
-    assert hashlib.sha512(data).hexdigest() == entry['sha512'], entry['filename']
+    if hashlib.sha512(data).hexdigest() != entry['sha512']:
+        raise ValueError("Artifact digest mismatch: " + str(entry['filename']))
     destination.write_bytes(data)
     configure(folder, loader == 'bukkit', public_port)
 

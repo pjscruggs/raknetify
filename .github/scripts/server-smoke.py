@@ -130,7 +130,8 @@ def install_mods(folder, dependencies):
     for dependency in dependencies:
         with urllib.request.urlopen(dependency['url'], timeout=60) as response:
             data = response.read()
-        assert hashlib.sha512(data).hexdigest() == dependency['sha512'], dependency['filename']
+        if hashlib.sha512(data).hexdigest() != dependency['sha512']:
+            raise ValueError("Artifact digest mismatch: " + str(dependency['filename']))
         (folder / 'mods' / dependency['filename']).write_bytes(data)
 
 

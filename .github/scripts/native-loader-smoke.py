@@ -34,9 +34,11 @@ def download(path, url, digest, algorithm='sha1'):
         subprocess.run(['curl', '--fail', '--location', '--silent', '--show-error', '--retry', '3', '--retry-all-errors',
                         '--connect-timeout', '10', '--max-time', '60',
                         '--output', str(temporary), url], check=True, timeout=300)
-        assert hashlib.new(algorithm, temporary.read_bytes()).hexdigest() == digest, url
+        if hashlib.new(algorithm, temporary.read_bytes()).hexdigest() != digest:
+            raise ValueError("Artifact digest mismatch: " + str(url))
         temporary.replace(path)
-    assert hashlib.new(algorithm, path.read_bytes()).hexdigest() == digest, path
+    if hashlib.new(algorithm, path.read_bytes()).hexdigest() != digest:
+        raise ValueError("Artifact digest mismatch: " + str(path))
     return path
 
 
@@ -47,7 +49,8 @@ def minecraft_metadata(version):
     entry = next(item for item in manifest['versions'] if item['id'] == version)
     with urllib.request.urlopen(entry['url'], timeout=60) as response:
         content = response.read()
-    assert hashlib.sha1(content).hexdigest() == entry['sha1'], entry['url']
+    if hashlib.sha1(content).hexdigest() != entry['sha1']:
+        raise ValueError("Artifact digest mismatch: " + str(entry['url']))
     return json.loads(content)
 
 
@@ -240,7 +243,8 @@ def download_assets(transfers):
     for path, url, digest in transfers:
         path.parent.mkdir(parents=True, exist_ok=True)
         if path.exists():
-            assert hashlib.sha1(path.read_bytes()).hexdigest() == digest, path
+            if hashlib.sha1(path.read_bytes()).hexdigest() != digest:
+                raise ValueError("Artifact digest mismatch: " + str(path))
             continue
         temporary = path.with_name(path.name + '.part')
         config.extend(('url = ' + json.dumps(url, ensure_ascii=False),
@@ -253,7 +257,8 @@ def download_assets(transfers):
                     '--connect-timeout', '10', '--max-time', '60', '--config', '-'],
                    input='\n'.join(config) + '\n', encoding='utf-8', check=True, timeout=900)
     for path, temporary, digest in pending:
-        assert hashlib.sha1(temporary.read_bytes()).hexdigest() == digest, path
+        if hashlib.sha1(temporary.read_bytes()).hexdigest() != digest:
+            raise ValueError("Artifact digest mismatch: " + str(path))
         temporary.replace(path)
 
 

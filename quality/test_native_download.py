@@ -78,7 +78,7 @@ class NativeDownloadTests(unittest.TestCase):
 
     def test_rejects_changed_response(self):
         """Leave unexpected server bytes unpromoted instead of treating a successful HTTP response as valid content."""
-        with self.assertRaises(AssertionError):
+        with self.assertRaisesRegex(ValueError, 'digest'):
             self.native.download(self.artifact, self.url, '0' * 40)
         self.assertFalse(self.artifact.exists())
 
@@ -88,7 +88,7 @@ class NativeDownloadTests(unittest.TestCase):
         self.native.download(self.artifact, self.url, self.digest)
         self.assertEqual(0, self.requests)
         self.artifact.write_bytes(b'changed cache')
-        with self.assertRaises(AssertionError):
+        with self.assertRaisesRegex(ValueError, 'digest'):
             self.native.download(self.artifact, self.url, self.digest)
         self.assertEqual(0, self.requests)
 
@@ -109,14 +109,14 @@ class NativeDownloadTests(unittest.TestCase):
         self.native.download_assets([(self.artifact, self.url, self.digest)])
         self.assertEqual(2, self.requests)
         bad = self.artifact.with_name('bad asset')
-        with self.assertRaises(AssertionError):
+        with self.assertRaisesRegex(ValueError, 'digest'):
             self.native.download_assets([(bad, self.url, '0' * 40)])
         self.assertFalse(bad.exists())
 
     def test_asset_batch_rejects_corrupt_cache(self):
         """Reject changed cached assets before opening the batch's first network connection."""
         self.artifact.write_bytes(b'changed cache')
-        with self.assertRaises(AssertionError):
+        with self.assertRaisesRegex(ValueError, 'digest'):
             self.native.download_assets([(self.artifact, self.url, self.digest)])
         self.assertEqual(0, self.requests)
 
