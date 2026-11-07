@@ -22,24 +22,23 @@ package com.ishland.raknetify.velocity.connection;
 
 import com.google.common.base.Preconditions;
 import com.ishland.raknetify.common.Constants;
+import com.ishland.raknetify.common.connection.DelayedPacketSender;
 import com.ishland.raknetify.velocity.RaknetifyVelocityPlugin;
 import com.velocitypowered.proxy.protocol.packet.KeepAlivePacket;
 
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 
 import network.ycc.raknet.RakNet;
 
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Answers backend keepalives using the RakNet client's measured RTT instead of relaying them to the
  * client.
  */
-public class RakNetVelocityServerChannelEventListener extends ChannelDuplexHandler {
+public class RakNetVelocityServerChannelEventListener extends DelayedPacketSender {
 
     /** Pipeline name for the backend-facing keepalive and connection diagnostic handler. */
     public static final String NAME = "raknetify-bungee-downstream-event-listener";
@@ -73,18 +72,7 @@ public class RakNetVelocityServerChannelEventListener extends ChannelDuplexHandl
                 RaknetifyVelocityPlugin.LOGGER.info("Received downstream keepalive, swallowing it");
             }
             final long rttNanos = RakNet.config(clientChannel).getRTTNanos();
-            //
-            // RaknetifyVelocityPlugin.PROXY.getScheduler().buildTask(RaknetifyVelocityPlugin.INSTANCE, () -> ctx.write(msg))
-            //                    .delay(Math.max(rttNanos - 4_000_000, 0), TimeUnit.NANOSECONDS) //
-            // reduce delay to aid scheduling overhead
-            //                    .clearRepeat()
-            //                    .schedule();
-            ctx.channel()
-                    .eventLoop()
-                    .schedule(
-                            () -> ctx.writeAndFlush(msg),
-                            Math.max(rttNanos - 4_000_000, 0),
-                            TimeUnit.NANOSECONDS); // reduce delay to aid scheduling overhead
+            replyAfter(ctx, msg, Math.max(rttNanos - 4_000_000, 0));
             return; // prevent keepalive from being sent to clients
         }
         super.channelRead(ctx, msg);

@@ -27,10 +27,10 @@ package com.ishland.raknetify.bungee.connection;
 import com.google.common.base.Preconditions;
 import com.ishland.raknetify.bungee.RaknetifyBungeePlugin;
 import com.ishland.raknetify.common.Constants;
+import com.ishland.raknetify.common.connection.DelayedPacketSender;
 import com.ishland.raknetify.common.connection.SynchronizationLayer;
 
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 
@@ -42,13 +42,12 @@ import net.md_5.bungee.protocol.packet.Respawn;
 import network.ycc.raknet.RakNet;
 
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Answers backend keepalives using the RakNet client's measured RTT instead of relaying them to the
  * client.
  */
-public class RakNetBungeeServerChannelEventListener extends ChannelDuplexHandler {
+public class RakNetBungeeServerChannelEventListener extends DelayedPacketSender {
 
     /** Pipeline name for the backend-facing keepalive and connection diagnostic handler. */
     public static final String NAME = "raknetify-bungee-downstream-event-listener";
@@ -80,23 +79,23 @@ public class RakNetBungeeServerChannelEventListener extends ChannelDuplexHandler
         if (msg instanceof PacketWrapper wrapper) {
             final DefinedPacket packet = wrapper.packet;
             if (packet instanceof Respawn) {
-                clientChannel.write(SynchronizationLayer.SYNC_REQUEST_OBJECT);
-            } else if (packet instanceof KeepAlive) {
+                clientChannel
+                        .write(SynchronizationLayer.SYNC_REQUEST_OBJECT)
+                        .addListener(RakNet.INTERNAL_WRITE_LISTENER);
+            } else if (packet instanceof KeepAlive keepAlive) {
                 if (Constants.DEBUG) {
                     RaknetifyBungeePlugin.LOGGER.info(
                             "Received downstream keepalive, swallowing it");
                 }
                 final long rttNanos = RakNet.config(clientChannel).getRTTNanos();
-                //                ProxyServer.getInstance().getScheduler()
-                //                        .schedule(RaknetifyBungeePlugin.INSTANCE, () ->
-                // ctx.write(packet), Math.max(rttNanos - 4_000_000, 0), TimeUnit.NANOSECONDS); //
-                // reduce delay to aid scheduling overhead
-                ctx.channel()
-                        .eventLoop()
-                        .schedule(
-                                () -> ctx.writeAndFlush(packet),
-                                Math.max(rttNanos - 4_000_000, 0),
-                                TimeUnit.NANOSECONDS); // reduce delay to aid scheduling overhead
+                try {
+                    replyAfter(
+                            ctx,
+                            new KeepAlive(keepAlive.getRandomId()),
+                            Math.max(rttNanos - 4_000_000, 0));
+                } finally {
+                    wrapper.trySingleRelease();
+                }
                 return; // prevent keepalive from being sent to clients
             }
         }
