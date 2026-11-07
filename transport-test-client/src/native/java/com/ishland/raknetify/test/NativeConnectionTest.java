@@ -121,7 +121,11 @@ public final class NativeConnectionTest {
                 }
                 return;
             }
-            if (!finishing && minecraft.player != null && minecraft.level != null) {
+            if (finishing) {
+                finishWhenClosed(minecraft);
+                return;
+            }
+            if (minecraft.player != null && minecraft.level != null) {
                 verifyJoined(minecraft);
             }
         } catch (Throwable failure) {
@@ -167,17 +171,25 @@ public final class NativeConnectionTest {
         }
         finishing = true;
         closingChannel = channel;
-        channel.closeFuture()
-                .addListener(future -> {
-                    System.out.println("PASS native transport close completed");
-                    minecraft.execute(() -> {
-                        System.out.println(
-                                "PASS native RakNet login, configuration and playable world");
-                        armed = false;
-                        minecraft.stop();
-                    });
-                });
         listener.getConnection().disconnect(Component.literal("Transport fixture complete"));
+    }
+
+    /**
+     * Observes transport closure from the client tick that owns fixture state and client shutdown.
+     * Polling the close future avoids depending on a separately queued client task during
+     * disconnect and keeps all fixture state changes on the client thread.
+     *
+     * @param minecraft client whose tick continues after the connection screen closes
+     */
+    private static void finishWhenClosed(final Minecraft minecraft) {
+        final Channel channel = closingChannel;
+        if (channel == null || !channel.closeFuture().isDone()) {
+            return;
+        }
+        System.out.println("PASS native transport close completed");
+        System.out.println("PASS native RakNet login, configuration and playable world");
+        armed = false;
+        minecraft.stop();
     }
 
     /**
