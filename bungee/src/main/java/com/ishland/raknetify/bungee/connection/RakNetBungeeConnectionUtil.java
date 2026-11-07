@@ -106,9 +106,8 @@ public class RakNetBungeeConnectionUtil {
      * the identity.
      *
      * @param channel initialized client connection, left unchanged for TCP
-     * @param isClientSide reserved direction flag, currently unused by this server-side integration
      */
-    public static void postInitChannel(final Channel channel, final boolean isClientSide) {
+    public static void postInitServerChannel(final Channel channel) {
         if (channel.config() instanceof RakNet.Config) {
             channel.pipeline()
                     .replace(
@@ -196,7 +195,7 @@ public class RakNetBungeeConnectionUtil {
                                             .formatted(pluginMessageId, protocolVersion));
                         }
                         multiChannelCodec.addHandler(
-                                new CustomPayloadChannel.OverrideHandler(
+                                new CustomPayloadChannel.PayloadClassifier(
                                         value -> value == pluginMessageId, channel));
 
                         // packet id -> channel id

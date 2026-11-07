@@ -49,7 +49,7 @@ public class CustomPayloadChannel {
      * Recognizes a protocol's custom-payload packets before looking up their namespaced
      * identifiers.
      */
-    public static class OverrideHandler implements RakNetSimpleMultiChannelCodec.OverrideHandler {
+    public static class PayloadClassifier implements RakNetSimpleMultiChannelCodec.OverrideHandler {
 
         /** Protocol-specific predicate identifying custom-payload packet IDs. */
         private final IntPredicate isCustomPayload;
@@ -68,7 +68,7 @@ public class CustomPayloadChannel {
          *
          * @param isCustomPayload predicate recognizing custom-payload packet IDs
          */
-        public OverrideHandler(final IntPredicate isCustomPayload) {
+        public PayloadClassifier(final IntPredicate isCustomPayload) {
             this(isCustomPayload, null);
         }
 
@@ -78,7 +78,7 @@ public class CustomPayloadChannel {
          * @param isCustomPayload predicate recognizing custom-payload packet IDs
          * @param channel owning connection, or null to use local registrations only
          */
-        public OverrideHandler(
+        public PayloadClassifier(
                 final IntPredicate isCustomPayload, final @Nullable Channel channel) {
             this.isCustomPayload = Objects.requireNonNull(isCustomPayload);
             this.channel = channel;

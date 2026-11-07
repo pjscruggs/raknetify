@@ -125,8 +125,8 @@ class CustomPayloadRoutingTest {
     void ordinaryPacketsDoNotUsePayloadOverrides() {
         ByteBuf packet = payload(CUSTOM_PAYLOAD_ID + 1, "example:entity_path");
         try {
-            CustomPayloadChannel.OverrideHandler handler =
-                    new CustomPayloadChannel.OverrideHandler(id -> id == CUSTOM_PAYLOAD_ID);
+            CustomPayloadChannel.PayloadClassifier handler =
+                    new CustomPayloadChannel.PayloadClassifier(id -> id == CUSTOM_PAYLOAD_ID);
             assertEquals(0, handler.getChannelOverride(packet, false));
         } finally {
             packet.release();
@@ -143,7 +143,8 @@ class CustomPayloadRoutingTest {
         Int2IntOpenHashMap routes = new Int2IntOpenHashMap();
         routes.put(CUSTOM_PAYLOAD_ID, 3);
         return new RakNetSimpleMultiChannelCodec(0xFD)
-                .addHandler(new CustomPayloadChannel.OverrideHandler(id -> id == CUSTOM_PAYLOAD_ID))
+                .addHandler(
+                        new CustomPayloadChannel.PayloadClassifier(id -> id == CUSTOM_PAYLOAD_ID))
                 .addHandler(
                         new RakNetSimpleMultiChannelCodec.PacketIdBasedOverrideHandler(
                                 routes, "test protocol"));

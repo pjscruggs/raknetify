@@ -561,7 +561,7 @@ public class BungeeRaknetifyServer {
         protected void initChannel(final Channel channel) throws Exception {
             RakNetBungeeConnectionUtil.initChannel(channel);
             INIT_CHANNEL.invoke(initializer, channel);
-            RakNetBungeeConnectionUtil.postInitChannel(channel, false);
+            RakNetBungeeConnectionUtil.postInitServerChannel(channel);
         }
     }
 

@@ -43,7 +43,6 @@ import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayDeque;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Queue;
 
 /**
@@ -384,29 +383,6 @@ public class RakNetSimpleMultiChannelCodec extends ChannelDuplexHandler {
             return;
         }
         super.channelRead(ctx, msg);
-    }
-
-    /**
-     * Extracts a Minecraft payload or retains an unrelated frame for a decoder output list. The
-     * caller retains responsibility for releasing the input frame. Negotiation markers produce no
-     * output.
-     *
-     * @param ctx decoder context, unused because the frame supplies its own retained payload
-     * @param packet complete, nonfragmented frame to inspect
-     * @param out output list receiving owned payload buffers or retained frames
-     */
-    protected void decode(
-            final ChannelHandlerContext ctx, final FrameData packet, final List<Object> out) {
-        assert !packet.isFragment();
-        if (packet.getDataSize() > 0) {
-            if (packetId == packet.getPacketId()) {
-                out.add(packet.createData().skipBytes(1));
-            } else if (packet.getPacketId() == Constants.RAKNET_PING_PACKET_ID) {
-                return;
-            } else {
-                out.add(packet.retain());
-            }
-        }
     }
 
     /** Classifies a Minecraft packet without changing the payload reader index. */

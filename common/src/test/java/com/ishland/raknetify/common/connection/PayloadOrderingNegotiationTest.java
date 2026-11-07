@@ -85,15 +85,15 @@ class PayloadOrderingNegotiationTest {
             assertEquals(0, announcement.refCnt());
             assertEquals(
                     2,
-                    new CustomPayloadChannel.OverrideHandler(id -> id == 24, receiver)
+                    new CustomPayloadChannel.PayloadClassifier(id -> id == 24, receiver)
                             .getChannelOverride(packet, false));
             assertEquals(
                     0,
-                    new CustomPayloadChannel.OverrideHandler(id -> id == 24, unrelated)
+                    new CustomPayloadChannel.PayloadClassifier(id -> id == 24, unrelated)
                             .getChannelOverride(packet, false));
             assertEquals(
                     0,
-                    new CustomPayloadChannel.OverrideHandler(id -> id == 25, receiver)
+                    new CustomPayloadChannel.PayloadClassifier(id -> id == 25, receiver)
                             .getChannelOverride(packet, false));
             assertEquals(0, packet.readerIndex());
         } finally {
@@ -116,7 +116,7 @@ class PayloadOrderingNegotiationTest {
             receiver.writeInbound(declaration);
             assertEquals(
                     7,
-                    new CustomPayloadChannel.OverrideHandler(id -> id == 24, receiver)
+                    new CustomPayloadChannel.PayloadClassifier(id -> id == 24, receiver)
                             .getChannelOverride(packet, false));
         } finally {
             packet.release();

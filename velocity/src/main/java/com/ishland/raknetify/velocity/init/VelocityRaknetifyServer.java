@@ -315,7 +315,7 @@ public class VelocityRaknetifyServer {
         protected void initChannel(final Channel channel) throws Exception {
             RakNetVelocityConnectionUtil.initChannel(channel);
             INIT_CHANNEL.invoke(manager.serverChannelInitializer.get(), channel);
-            RakNetVelocityConnectionUtil.postInitChannel(channel, false);
+            RakNetVelocityConnectionUtil.postInitServerChannel(channel);
         }
     }
 }

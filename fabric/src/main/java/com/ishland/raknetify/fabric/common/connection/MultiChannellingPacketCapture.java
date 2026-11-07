@@ -107,7 +107,7 @@ public class MultiChannellingPacketCapture extends ChannelOutboundHandlerAdapter
      */
     public RakNetSimpleMultiChannelCodec.OverrideHandler getCustomPayloadHandler(
             final io.netty.channel.Channel channel) {
-        return new CustomPayloadChannel.OverrideHandler(
+        return new CustomPayloadChannel.PayloadClassifier(
                 value ->
                         packetClass == CustomPayloadS2CPacket.class
                                 || packetClass == CustomPayloadC2SPacket.class,
