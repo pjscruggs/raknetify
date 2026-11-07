@@ -245,7 +245,9 @@ public class RakNetBungeeConnectionUtil {
             if (playerChannel != null && playerChannel.config() instanceof RakNet.Config) {
                 // this exists because bungeecord sends several packets to reset state before
                 // Respawn packet during server switch
-                playerChannel.write(SynchronizationLayer.SYNC_REQUEST_OBJECT);
+                playerChannel
+                        .write(SynchronizationLayer.SYNC_REQUEST_OBJECT)
+                        .addListener(RakNet.INTERNAL_WRITE_LISTENER);
 
                 // and inject into the server channel
                 final ServerConnection server = (ServerConnection) evt.getServer();

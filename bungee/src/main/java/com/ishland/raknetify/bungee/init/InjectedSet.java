@@ -25,29 +25,32 @@
 package com.ishland.raknetify.bungee.init;
 
 import com.google.common.collect.ForwardingSet;
-import com.ishland.raknetify.bungee.RaknetifyBungeePlugin;
 
 import io.netty.channel.Channel;
 
-import net.md_5.bungee.BungeeCord;
-import net.md_5.bungee.api.ProxyServer;
+import org.jspecify.annotations.Nullable;
 
+import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 /** Observes BungeeCord listener-set changes to create and close companion RakNet listeners. */
 public class InjectedSet extends ForwardingSet<Channel> {
 
-    /** Original proxy listener set whose ordinary set behavior is preserved. */
+    /** Concurrent listener membership owned by the proxy after lifecycle hooks are installed. */
     private final Set<Channel> delegate;
 
     /**
-     * Wraps the existing listener set without copying or replacing its channel entries.
+     * Validates existing listener entries before publishing a concurrent set with lifecycle hooks.
      *
-     * @param delegate live BungeeCord listener set
+     * @param delegate existing listener membership, including layouts declared as a generic
+     *     collection
      */
-    public InjectedSet(final Set<Channel> delegate) {
-        this.delegate = delegate;
+    public InjectedSet(final java.util.Collection<?> delegate) {
+        final Set<Channel> checked = java.util.concurrent.ConcurrentHashMap.newKeySet();
+        for (final Object channel : delegate) {
+            checked.add(Channel.class.cast(channel));
+        }
+        this.delegate = checked;
     }
 
     /**
@@ -57,18 +60,14 @@ public class InjectedSet extends ForwardingSet<Channel> {
      * @return whether the backing set gained a new element
      */
     @Override
-    public boolean add(final Channel element) {
-        ProxyServer.getInstance()
-                .getScheduler()
-                .schedule(
-                        RaknetifyBungeePlugin.INSTANCE,
-                        () ->
-                                BungeeRaknetifyServer.injectChannel(
-                                        (BungeeCord) ProxyServer.getInstance(), element, false),
-                        100,
-                        TimeUnit.MILLISECONDS);
+    public boolean add(final @Nullable Channel element) {
+        final Channel channel = Objects.requireNonNull(element, "listener channel");
+        if (!super.add(channel)) {
+            return false;
+        }
+        BungeeRaknetifyServer.listenerAdded(channel);
 
-        return super.add(element);
+        return true;
     }
 
     /** Closes companion UDP listeners before clearing the proxy's listener set. */
@@ -80,9 +79,9 @@ public class InjectedSet extends ForwardingSet<Channel> {
     }
 
     /**
-     * Returns the original set used for operations without lifecycle hooks.
+     * Returns the checked concurrent set used for operations without lifecycle hooks.
      *
-     * @return live proxy listener set wrapped by this instance
+     * @return proxy listener membership owned by this instance
      */
     @Override
     protected Set<Channel> delegate() {

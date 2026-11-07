@@ -36,6 +36,7 @@ import com.ishland.raknetify.common.util.NetworkInterfaceListener;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
@@ -43,7 +44,6 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.FixedRecvByteBufAllocator;
 import io.netty.channel.ReflectiveChannelFactory;
 import io.netty.channel.socket.DatagramChannel;
-import io.netty.util.AttributeKey;
 
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
@@ -55,6 +55,8 @@ import net.md_5.bungee.api.config.ListenerInfo;
 import net.md_5.bungee.netty.PipelineUtils;
 import net.md_5.bungee.query.QueryHandler;
 
+import org.jspecify.annotations.Nullable;
+
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.InetAddress;
@@ -65,7 +67,6 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.logging.Level;
@@ -119,13 +120,14 @@ public class BungeeRaknetifyServer {
     private static volatile boolean active;
 
     /** Activation generation used to reject callbacks captured by an earlier plugin activation. */
-    private static volatile int activeIndex;
+    private static int activeIndex;
 
     /** Whether the proxy listener set has already been wrapped with lifecycle hooks. */
     private static boolean injected;
 
     /** Current interface-change callback, replaced on each activation. */
-    private static volatile Consumer<NetworkInterfaceListener.InterfaceAddressChangeEvent> listener;
+    private static @Nullable Consumer<NetworkInterfaceListener.InterfaceAddressChangeEvent>
+            listener;
 
     /**
      * Wraps the proxy listener set once and attaches UDP endpoints to existing listeners. Collects
@@ -133,7 +135,7 @@ public class BungeeRaknetifyServer {
      *
      * @throws RuntimeException if listener inspection or initial UDP setup fails
      */
-    public static void inject() {
+    public static synchronized void inject() {
         if (active) {
             return;
         }
@@ -143,7 +145,8 @@ public class BungeeRaknetifyServer {
 
             //            stopAllQueryPorts();
 
-            final Set<Channel> listeners = (Set<Channel>) BUNGEE_LISTENERS_FIELD.get(instance);
+            final java.util.Collection<?> listeners =
+                    (java.util.Collection<?>) BUNGEE_LISTENERS_FIELD.get(instance);
 
             if (!injected) {
                 BUNGEE_LISTENERS_FIELD.set(instance, new InjectedSet(listeners));
@@ -152,7 +155,8 @@ public class BungeeRaknetifyServer {
 
             List<Throwable> errors = new ArrayList<>();
 
-            for (Channel listener : listeners) {
+            for (Object entry : listeners) {
+                final Channel listener = Channel.class.cast(entry);
                 try {
                     injectChannel(instance, listener, true);
                 } catch (Throwable t) {
@@ -161,17 +165,18 @@ public class BungeeRaknetifyServer {
             }
 
             int currentActiveIndex = ++activeIndex;
+            final RaknetifyBungeePlugin owner = RaknetifyBungeePlugin.instance();
             listener =
-                    event -> {
-                        onInterfaceChange(instance, currentActiveIndex, event);
-                    };
-            NetworkInterfaceListener.addListener(event ->
-                    instance.getScheduler()
-                            .schedule(
-                                    RaknetifyBungeePlugin.INSTANCE,
-                                    () -> listener.accept(event),
-                                    100,
-                                    TimeUnit.MILLISECONDS));
+                    event ->
+                            instance.getScheduler()
+                                    .schedule(
+                                            owner,
+                                            () ->
+                                                    onInterfaceChange(
+                                                            instance, currentActiveIndex, event),
+                                            100,
+                                            TimeUnit.MILLISECONDS);
+            NetworkInterfaceListener.addListener(listener);
 
             if (!errors.isEmpty()) {
                 final RuntimeException exception =
@@ -185,6 +190,40 @@ public class BungeeRaknetifyServer {
     }
 
     /**
+     * Schedules a new TCP listener only while the plugin owns an active registration generation.
+     * The proxy may keep the observed collection after disabling the plugin.
+     *
+     * @param channel newly added TCP listener whose native pipeline is still being initialized
+     */
+    public static synchronized void listenerAdded(final Channel channel) {
+        if (!active) {
+            return;
+        }
+        final BungeeCord instance = (BungeeCord) ProxyServer.getInstance();
+        final int generation = activeIndex;
+        instance.getScheduler()
+                .schedule(
+                        RaknetifyBungeePlugin.instance(),
+                        () -> injectCurrentListener(instance, channel, generation),
+                        100,
+                        TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Rejects deferred binds from an activation that has since been disabled or replaced.
+     *
+     * @param instance proxy that accepted the original listener
+     * @param channel TCP listener captured when the bind was scheduled
+     * @param generation plugin activation that owned the scheduling request
+     */
+    private static synchronized void injectCurrentListener(
+            final BungeeCord instance, final Channel channel, final int generation) {
+        if (active && generation == activeIndex) {
+            injectChannel(instance, channel, false);
+        }
+    }
+
+    /**
      * Finds a Minecraft listener's child pipeline and binds matching UDP endpoints. Query sockets,
      * Geyser listeners, and incomplete acceptor metadata are excluded.
      *
@@ -193,7 +232,7 @@ public class BungeeRaknetifyServer {
      * @param throwErrors whether binding failures should escape instead of only being logged
      * @throws RuntimeException if setup fails while throwErrors is true
      */
-    public static void injectChannel(
+    public static synchronized void injectChannel(
             final BungeeCord instance, final Channel listener, final boolean throwErrors) {
         try {
             if (!isListenerCandidate(listener)) {
@@ -204,7 +243,7 @@ public class BungeeRaknetifyServer {
             if (context == null) {
                 return;
             }
-            ChannelInitializer<Channel> initializer = context.initializer();
+            ChannelInitializer<?> initializer = context.initializer();
             ListenerInfo info = context.info();
 
             if (initializer == null) {
@@ -245,17 +284,13 @@ public class BungeeRaknetifyServer {
      * @param currentActiveIndex generation captured when this callback was registered
      * @param event local interface address addition or removal
      */
-    private static void onInterfaceChange(
+    private static synchronized void onInterfaceChange(
             final BungeeCord instance,
             final int currentActiveIndex,
             final NetworkInterfaceListener.InterfaceAddressChangeEvent event) {
-        if (!active) {
-            NetworkInterfaceListener.removeListener(listener);
-        }
-
-        if (currentActiveIndex != activeIndex) {
+        if (!active || currentActiveIndex != activeIndex) {
             return;
-        } // we can't remove ourselves now, is plugin reloaded?
+        }
 
         if (event.added()) {
             for (Channel channel : channels.keySet()) {
@@ -272,7 +307,9 @@ public class BungeeRaknetifyServer {
                         RaknetifyBungeePlugin.LOGGER.info(
                                 "Closing Raknetify server %s"
                                         .formatted(future.channel().localAddress()));
-                        future.channel().close();
+                        future.channel()
+                                .close()
+                                .addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
                         iterator.remove();
                     }
                 }
@@ -310,8 +347,8 @@ public class BungeeRaknetifyServer {
      * @return recovered acceptor metadata, or null when the channel serves query traffic
      * @throws RuntimeException if the proxy's acceptor fields cannot be inspected
      */
-    private static ListenerContext findListenerContext(final Channel listener) {
-        ChannelInitializer<Channel> initializer = null;
+    private static @Nullable ListenerContext findListenerContext(final Channel listener) {
+        ChannelInitializer<?> initializer = null;
         ListenerInfo info = null;
 
         for (String name : listener.pipeline().names()) {
@@ -322,15 +359,15 @@ public class BungeeRaknetifyServer {
             if (handler != null && ACCEPTOR_CLASS.isAssignableFrom(handler.getClass())) {
                 try {
                     initializer =
-                            (ChannelInitializer<Channel>)
+                            (ChannelInitializer<?>)
                                     accessible(ACCEPTOR_CLASS.getDeclaredField("childHandler"))
                                             .get(handler);
-                    final Map.Entry<AttributeKey<?>, ?>[] attrs =
-                            (Map.Entry<AttributeKey<?>, ?>[])
+                    final Map.Entry<?, ?>[] attrs =
+                            (Map.Entry<?, ?>[])
                                     accessible(ACCEPTOR_CLASS.getDeclaredField("childAttrs"))
                                             .get(handler);
                     for (var attr : attrs) {
-                        if (attr.getKey() == PipelineUtils.LISTENER) {
+                        if (PipelineUtils.LISTENER.equals(attr.getKey())) {
                             info = (ListenerInfo) attr.getValue();
                         }
                     }
@@ -348,7 +385,8 @@ public class BungeeRaknetifyServer {
      * @param initializer Minecraft pipeline initializer, or null when no acceptor was found
      * @param info proxy listener configuration, or null when its required attribute is absent
      */
-    private record ListenerContext(ChannelInitializer<Channel> initializer, ListenerInfo info) {}
+    private record ListenerContext(
+            @Nullable ChannelInitializer<?> initializer, @Nullable ListenerInfo info) {}
 
     /**
      * Expands wildcard binds into one UDP endpoint per address while preserving per-address failure
@@ -366,7 +404,7 @@ public class BungeeRaknetifyServer {
     private static void bindListenerAddresses(
             final BungeeCord instance,
             final Channel listener,
-            final ChannelInitializer<Channel> initializer,
+            final ChannelInitializer<?> initializer,
             final ListenerInfo info)
             throws java.net.SocketException, NoSuchFieldException, IllegalAccessException {
         if (((InetSocketAddress) info.getSocketAddress()).getAddress().isAnyLocalAddress()) {
@@ -404,9 +442,9 @@ public class BungeeRaknetifyServer {
     private static void startServer(
             final BungeeCord instance,
             final Channel listener,
-            final ChannelInitializer<Channel> initializer,
+            final ChannelInitializer<?> initializer,
             final ListenerInfo info,
-            final InetAddress address)
+            final @Nullable InetAddress address)
             throws NoSuchFieldException, IllegalAccessException {
         if (address != null) {
             final ReferenceOpenHashSet<ChannelFuture> futures = channels.get(listener);
@@ -446,23 +484,7 @@ public class BungeeRaknetifyServer {
                                 }))
                         .option(ChannelOption.SO_REUSEADDR, true)
                         .childAttr(PipelineUtils.LISTENER, info)
-                        .childHandler(
-                                new ChannelInitializer<>() {
-                                    /**
-                                     * Wraps the normal BungeeCord child initialization with RakNet
-                                     * transport setup and codec replacement.
-                                     *
-                                     * @param channel accepted RakNet application channel
-                                     * @throws Exception if invoking the proxy's initializer fails
-                                     */
-                                    @Override
-                                    protected void initChannel(final Channel channel)
-                                            throws Exception {
-                                        RakNetBungeeConnectionUtil.initChannel(channel);
-                                        INIT_CHANNEL.invoke(initializer, channel);
-                                        RakNetBungeeConnectionUtil.postInitChannel(channel, false);
-                                    }
-                                })
+                        .childHandler(new BungeeChildInitializer(initializer))
                         .group(getBossEventLoopGroup(instance), getWorkerEventLoopGroup(instance))
                         .localAddress(
                                 hasPortOverride
@@ -487,10 +509,7 @@ public class BungeeRaknetifyServer {
      * Closes all tracked UDP endpoints and clears their ownership tables while the plugin is
      * active.
      */
-    public static void stopAll() {
-        if (!active) {
-            return;
-        }
+    public static synchronized void stopAll() {
         for (ChannelFuture future :
                 Stream.concat(
                                 channels.values().stream().flatMap(Collection::stream),
@@ -498,11 +517,7 @@ public class BungeeRaknetifyServer {
                         .toList()) {
             RaknetifyBungeePlugin.LOGGER.info(
                     "Closing Raknetify server %s".formatted(future.channel().localAddress()));
-            try {
-                future.channel().close().sync();
-            } catch (InterruptedException e) {
-                RaknetifyBungeePlugin.LOGGER.severe("Interrupted whilst closing raknetify server");
-            }
+            future.channel().close().syncUninterruptibly();
         }
 
         channels.clear();
@@ -510,12 +525,44 @@ public class BungeeRaknetifyServer {
     }
 
     /** Closes active UDP endpoints and prevents subsequent listener creation. */
-    public static void disable() {
+    public static synchronized void disable() {
         if (!active) {
             return;
         }
-        stopAll();
         active = false;
+        if (listener != null) {
+            NetworkInterfaceListener.removeListener(listener);
+            listener = null;
+        }
+        stopAll();
+    }
+
+    /** Reuses the native proxy pipeline between transport setup and RakNet codec replacement. */
+    private static final class BungeeChildInitializer extends ChannelInitializer<Channel> {
+        /** Native initializer recovered from the corresponding TCP acceptor. */
+        private final ChannelInitializer<?> initializer;
+
+        /**
+         * Associates accepted UDP connections with their native TCP listener's initialization.
+         *
+         * @param initializer proxy-owned initializer invoked for each accepted child
+         */
+        private BungeeChildInitializer(final ChannelInitializer<?> initializer) {
+            this.initializer = initializer;
+        }
+
+        /**
+         * Installs RakNet handlers around the proxy's ordinary authentication pipeline.
+         *
+         * @param channel accepted application channel
+         * @throws Exception if the proxy's initializer cannot be invoked or fails
+         */
+        @Override
+        protected void initChannel(final Channel channel) throws Exception {
+            RakNetBungeeConnectionUtil.initChannel(channel);
+            INIT_CHANNEL.invoke(initializer, channel);
+            RakNetBungeeConnectionUtil.postInitChannel(channel, false);
+        }
     }
 
     /**

@@ -34,16 +34,29 @@ import net.md_5.bungee.api.plugin.Listener;
 import net.md_5.bungee.api.plugin.Plugin;
 import net.md_5.bungee.event.EventHandler;
 
+import org.jspecify.annotations.Nullable;
+
+import java.util.Objects;
 import java.util.logging.Logger;
 
 /** Connects the BungeeCord plugin lifecycle to UDP listeners and player connection hooks. */
 public class RaknetifyBungeePlugin extends Plugin implements Listener {
 
     /** Proxy-provided plugin logger initialized during enable. */
-    public static Logger LOGGER;
+    public static volatile Logger LOGGER = Logger.getLogger(RaknetifyBungeePlugin.class.getName());
 
     /** Enabled plugin instance used to own scheduled tasks and event registrations. */
-    public static RaknetifyBungeePlugin INSTANCE;
+    private static volatile @Nullable RaknetifyBungeePlugin instance;
+
+    /**
+     * Returns the enabled plugin that owns scheduled listener work.
+     *
+     * @return current plugin instance
+     * @throws NullPointerException if called outside the enabled plugin lifecycle
+     */
+    public static RaknetifyBungeePlugin instance() {
+        return Objects.requireNonNull(instance, "Raknetify2 is not enabled");
+    }
 
     /**
      * Loads routing tables, attaches companion UDP listeners, and registers player lifecycle hooks.
@@ -52,7 +65,7 @@ public class RaknetifyBungeePlugin extends Plugin implements Listener {
     public void onEnable() {
         super.onEnable();
 
-        INSTANCE = this;
+        instance = this;
         LOGGER = this.getLogger();
 
         ProtocolMultiChannelMappings.init();
@@ -68,6 +81,8 @@ public class RaknetifyBungeePlugin extends Plugin implements Listener {
         super.onDisable();
 
         BungeeRaknetifyServer.disable();
+        getProxy().getScheduler().cancel(this);
+        instance = null;
     }
 
     /**

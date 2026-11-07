@@ -40,7 +40,6 @@ import net.md_5.bungee.netty.ChannelWrapper;
 import net.md_5.bungee.netty.HandlerBoss;
 import net.md_5.bungee.netty.PipelineUtils;
 import net.md_5.bungee.protocol.PacketWrapper;
-import net.md_5.bungee.protocol.Protocol;
 import net.md_5.bungee.protocol.packet.Commands;
 import net.md_5.bungee.protocol.packet.EncryptionResponse;
 import net.md_5.bungee.protocol.packet.FinishConfiguration;
@@ -48,6 +47,10 @@ import net.md_5.bungee.protocol.packet.Login;
 import net.md_5.bungee.protocol.packet.Respawn;
 import net.md_5.bungee.protocol.packet.SetCompression;
 import net.md_5.bungee.protocol.packet.StartConfiguration;
+
+import network.ycc.raknet.RakNet;
+
+import org.jspecify.annotations.Nullable;
 
 import java.lang.reflect.Field;
 import java.security.GeneralSecurityException;
@@ -69,24 +72,13 @@ public class RakNetBungeeClientChannelEventListener extends ChannelDuplexHandler
     /**
      * Captured login secret awaiting installation of frame encryption on the next outgoing write.
      */
-    private SecretKey encryptionKey;
+    private @Nullable SecretKey encryptionKey;
 
     /**
      * Whether a swallowed compression packet requires BungeeCord's threshold to be reset on the
      * next write.
      */
     private boolean needResetCompression;
-
-    /**
-     * Protocol phase supplied by setProtocol, currently retained without affecting packet handling.
-     */
-    private Protocol protocol;
-
-    /**
-     * Protocol number supplied by setProtocol, currently retained without affecting packet
-     * handling.
-     */
-    private int protocolVersion = -1;
 
     /**
      * Reconciles proxy codec state, suppresses redundant vanilla compression, and handles phase
@@ -105,13 +97,6 @@ public class RakNetBungeeClientChannelEventListener extends ChannelDuplexHandler
         if (this.needResetCompression) {
             RaknetifyBungeePlugin.LOGGER.info(
                     "Preventing vanilla compression as streaming compression is enabled");
-
-            //            // note: this may corrupt bungeecords compression state, find a better way
-            // to do this
-            //            ctx.channel().pipeline().replace("compress", "compress", new
-            // ChannelDuplexHandler()); // no-op
-            //            ctx.channel().pipeline().replace("decompress", "decompress", new
-            // ChannelDuplexHandler()); // no-op
 
             final HandlerBoss handlerBoss = ctx.channel().pipeline().get(HandlerBoss.class);
 
@@ -155,11 +140,13 @@ public class RakNetBungeeClientChannelEventListener extends ChannelDuplexHandler
                 return;
             }
         } else if (startsNewPhase(msg)) {
-            ctx.write(SynchronizationLayer.SYNC_REQUEST_OBJECT); // sync
+            ctx.write(SynchronizationLayer.SYNC_REQUEST_OBJECT)
+                    .addListener(RakNet.INTERNAL_WRITE_LISTENER);
             super.write(ctx, msg, promise);
             return;
         } else if (msg instanceof Commands) {
-            ctx.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL);
+            ctx.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL)
+                    .addListener(RakNet.INTERNAL_WRITE_LISTENER);
             super.write(ctx, msg, promise);
             return;
         }
@@ -223,18 +210,6 @@ public class RakNetBungeeClientChannelEventListener extends ChannelDuplexHandler
     }
 
     /**
-     * Records protocol context supplied by an integration without changing the installed routing
-     * table.
-     *
-     * @param protocol current BungeeCord protocol phase
-     * @param protocolVersion negotiated Minecraft protocol number
-     */
-    public void setProtocol(final Protocol protocol, final int protocolVersion) {
-        this.protocol = protocol;
-        this.protocolVersion = protocolVersion;
-    }
-
-    /**
      * Propagates a pipeline exception and prints its stack trace for connection diagnostics.
      *
      * @param ctx context reporting the failure
@@ -247,35 +222,4 @@ public class RakNetBungeeClientChannelEventListener extends ChannelDuplexHandler
         super.exceptionCaught(ctx, cause);
         cause.printStackTrace();
     }
-
-    //    @Override
-    //    public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
-    //        super.userEventTriggered(ctx, evt);
-    //        if (evt == VelocityConnectionEvent.COMPRESSION_ENABLED) {
-    //            final MultiChannelingStreamingCompression compression =
-    // ctx.channel().pipeline().get(MultiChannelingStreamingCompression.class);
-    //            if (compression != null && compression.isActive()) {
-    //                RaknetifyVelocityPlugin.LOGGER.info("Preventing vanilla compression as
-    // streaming compression is enabled");
-    //                ctx.channel().pipeline().replace(Connections.COMPRESSION_ENCODER,
-    // Connections.COMPRESSION_ENCODER, new ChannelDuplexHandler()); // no-op
-    //                ctx.channel().pipeline().replace(Connections.COMPRESSION_DECODER,
-    // Connections.COMPRESSION_DECODER, new ChannelDuplexHandler()); // no-op
-    //            }
-    //        } else if (evt == VelocityConnectionEvent.COMPRESSION_DISABLED) {
-    //            ctx.channel().pipeline().replace(Connections.FRAME_DECODER,
-    // Connections.FRAME_DECODER, new ChannelDuplexHandler()); // no-op
-    //            ctx.channel().pipeline().replace(Connections.FRAME_ENCODER,
-    // Connections.FRAME_ENCODER, new ChannelDuplexHandler()); // no-op
-    //        } else if (evt == VelocityConnectionEvent.ENCRYPTION_ENABLED) {
-    //            Preconditions.checkState(this.encryptionKey != null, "EncryptionResponse not
-    // received yet or already consumed");
-    //            ctx.channel().pipeline().replace(Connections.CIPHER_ENCODER,
-    // Connections.CIPHER_ENCODER, new ChannelDuplexHandler());
-    //            ctx.channel().pipeline().replace(Connections.CIPHER_DECODER,
-    // Connections.CIPHER_DECODER, new ChannelDuplexHandler());
-    //            ctx.channel().pipeline().addAfter(MultiChannelingStreamingCompression.NAME,
-    // MultiChannellingEncryption.NAME, new MultiChannellingEncryption(encryptionKey));
-    //        }
-    //    }
 }

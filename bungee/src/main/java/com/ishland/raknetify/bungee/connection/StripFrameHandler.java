@@ -29,6 +29,7 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
+import io.netty.util.ReferenceCountUtil;
 
 import net.md_5.bungee.protocol.DefinedPacket;
 
@@ -59,8 +60,13 @@ public class StripFrameHandler extends ChannelOutboundHandlerAdapter {
             final ChannelHandlerContext ctx, final Object msg, final ChannelPromise promise)
             throws Exception {
         if (msg instanceof ByteBuf buf) {
-            DefinedPacket.readVarInt(buf);
-            ctx.write(buf.slice(), promise);
+            try {
+                DefinedPacket.readVarInt(buf);
+            } catch (RuntimeException failure) {
+                ReferenceCountUtil.release(buf);
+                throw failure;
+            }
+            super.write(ctx, buf.slice(), promise);
             return;
         }
         super.write(ctx, msg, promise);

@@ -32,6 +32,8 @@ import net.md_5.bungee.UserConnection;
 
 import network.ycc.raknet.RakNet;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
@@ -45,7 +47,7 @@ public class RakNetBungeePingUpdater extends ChannelDuplexHandler {
     private final UserConnection player;
 
     /** Once-per-second event-loop task, or null before installation and after removal. */
-    ScheduledFuture<?> updateTask;
+    private @Nullable ScheduledFuture<?> updateTask;
 
     /**
      * Associates transport ping samples with an authenticated proxy player.
