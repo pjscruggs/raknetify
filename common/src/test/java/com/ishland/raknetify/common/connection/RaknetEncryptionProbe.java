@@ -25,6 +25,7 @@
 package com.ishland.raknetify.common.connection;
 
 import com.ishland.raknetify.common.Constants;
+import com.ishland.raknetify.test.NativeLoginPacket;
 import com.ishland.raknetify.test.TransportTestPayload;
 
 import io.netty.bootstrap.Bootstrap;
@@ -49,7 +50,6 @@ import java.security.spec.X509EncodedKeySpec;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
-import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -240,11 +240,12 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
             throw new IllegalArgumentException("Trailing encryption request data");
         }
         ByteBuf reply = Unpooled.buffer().writeByte(1);
-        writeBytes(reply, encrypt(key, KEY.getEncoded()));
-        if (protocol >= 759 && protocol <= 760) {
-            reply.writeBoolean(true);
+        try {
+            NativeLoginPacket.write(reply, KEY, key, nonce);
+        } catch (ReflectiveOperationException | RuntimeException failure) {
+            reply.release();
+            throw failure;
         }
-        writeBytes(reply, encrypt(key, nonce));
         context.writeAndFlush(reply)
                 .addListener(io.netty.channel.ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
         answered = true;
@@ -324,20 +325,6 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
     }
 
     /**
-     * Encrypts one native login field using the server's public RSA key.
-     *
-     * @param key public key from Minecraft's encryption request
-     * @param bytes session key or verification nonce
-     * @return PKCS1-padded RSA ciphertext
-     * @throws Exception if the supplied key cannot encrypt the field
-     */
-    private static byte[] encrypt(final PublicKey key, final byte[] bytes) throws Exception {
-        Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
-        cipher.init(Cipher.ENCRYPT_MODE, key);
-        return cipher.doFinal(bytes);
-    }
-
-    /**
      * Reads one bounded variable-length native login field.
      *
      * @param buffer packet containing the length and bytes
@@ -352,17 +339,6 @@ public final class RaknetEncryptionProbe extends SimpleChannelInboundHandler<Obj
         byte[] result = new byte[length];
         buffer.readBytes(result);
         return result;
-    }
-
-    /**
-     * Writes a length-prefixed native login field.
-     *
-     * @param buffer destination packet owned by the caller
-     * @param bytes complete field contents
-     */
-    private static void writeBytes(final ByteBuf buffer, final byte[] bytes) {
-        RaknetStatusProbe.writeVarint(buffer, bytes.length);
-        buffer.writeBytes(bytes);
     }
 
     /**

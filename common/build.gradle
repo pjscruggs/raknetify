@@ -3,7 +3,10 @@ plugins {
     id 'info.solidsoft.pitest' version '1.19.0'
 }
 
+repositories { maven { url = 'https://maven.fabricmc.net/' } }
+
 dependencies {
+    testImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     compileOnlyApi 'de.maxhenkel.voicechat:voicechat-api:2.2.39'
     testImplementation 'de.maxhenkel.voicechat:voicechat-api:2.2.39'
     api("com.github.RelativityMC.netty-raknet:netty-raknet-common") {
@@ -44,12 +47,28 @@ pitest {
     mutationThreshold = 95
 }
 
-tasks.register('transportProbe', Sync) {
+/** Runs native login packet serialization before the client starts graphics or opens an account. */
+tasks.register('nativeLoginProbe', Jar) {
     dependsOn testClasses
+    archiveFileName = 'native-login-test.jar'
+    from(sourceSets.main.output)
+    from(sourceSets.test.output) {
+        include 'com/ishland/raknetify/common/connection/RaknetEncryptionProbe*'
+        include 'com/ishland/raknetify/common/connection/RaknetStatusProbe*'
+        include 'com/ishland/raknetify/test/NativeLogin*'
+        include 'com/ishland/raknetify/test/ChannelSetup*'
+        include 'com/ishland/raknetify/test/TransportTestPayload*'
+    }
+    from('src/test/fixtures/native-login')
+}
+
+tasks.register('transportProbe', Sync) {
+    dependsOn testClasses, nativeLoginProbe
     into layout.buildDirectory.dir('transport-probe')
     from(sourceSets.test.output) { into 'classes' }
     from(sourceSets.main.output) { into 'classes' }
     from(configurations.testRuntimeClasspath.filter { it.name.endsWith('.jar') }) { into 'lib' }
+    from(tasks.named('nativeLoginProbe'))
 }
 
 // Share bounded payload witnesses with the isolated native test mods.

@@ -21,6 +21,7 @@ import struct
 import subprocess
 import sys
 import threading
+from types import SimpleNamespace
 import time
 import urllib.request
 import urllib.error
@@ -306,7 +307,7 @@ def check_server(run):
             check_udp(frontend)
             check_connected_udp(frontend, metadata, run.java, run.probe_dir)
             if run.features.encryption:
-                check_encryption(frontend, metadata, run.java, run.probe_dir, run.features.packetfixer)
+                check_encryption(run, frontend, metadata)
             if run.features.proxy_protocol:
                 proxy.check_ip_ban(process, run.folder, proxy.NativeProbe(run.java, run.probe_dir, frontend, metadata['protocol_version']))
         if run.features.polymer:
@@ -367,14 +368,15 @@ def report_success(version, transport, log, features):
     print('PASS', version, transport, checks, flush=True)
 
 
-def check_encryption(port, metadata, java, probe_dir, packetfixer):
-    """Require the native key exchange and encrypted challenge in both directions without account lookup."""
-    classpath = os.pathsep.join(str(probe_dir.resolve() / part) for part in ('classes', 'lib/*'))
-    output = subprocess.check_output(
-        [java, '-cp', classpath, 'com.ishland.raknetify.common.connection.RaknetEncryptionProbe',
-         str(port), str(metadata['protocol_version']), str(8 * 1024 * 1024 + 64 if packetfixer else 8)],
-        text=True, timeout=45)
-    assert 'PASS native RSA and bidirectional RakNet encryption' in output, output
+def check_encryption(run, port, metadata):
+    """Require native client packet serialization and an encrypted round trip without account lookup."""
+    spec = importlib.util.spec_from_file_location('encryption_probe', Path(__file__).with_name('encryption-probe.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    request = SimpleNamespace(version=run.version, java=run.java, port=port,
+                              protocol=metadata['protocol_version'], modes=('echo',),
+                              payload_size=8 * 1024 * 1024 + 64 if run.features.packetfixer else 8)
+    module.run(run.probe_dir, run.folder.parent / 'encryption-clients', request)
 
 
 def encryption_fixture(args, version):
@@ -471,7 +473,7 @@ def select_java(args, version):
 
 
 def discard_runtime(folder):
-    """Remove regenerable server libraries after both runs pass, keeping worlds, mods and diagnostic logs."""
+    """Remove regenerable runtime libraries after both runs pass, keeping worlds, mods and diagnostic logs."""
     root = folder.resolve()
     for name in ('.fabric', 'libraries', 'versions'):
         target = folder / name
@@ -515,6 +517,8 @@ def main():
             check_server(ServerRun(folder, version, native, java, args.probe_dir, features, args.port))
         if args.discard_runtime:
             discard_runtime(folder)
+            if features.encryption:
+                discard_runtime(folder.parent / 'encryption-clients' / version)
 
 
 if __name__ == '__main__':

@@ -105,15 +105,11 @@ def await_transport(process, events):
 
 def rejected_logins(args, authority):
     """Require encrypted session rejection and plaintext nonce rejection, with only the valid nonce reaching authentication."""
-    classpath = os.pathsep.join((str(args.probe_dir / 'classes'), str(args.probe_dir / 'lib/*')))
     modes = ('rejected-session', 'rejected-throttle', 'rejected-nonce') if args.proxy_protocol else ('rejected-session', 'rejected-nonce')
-    for mode in modes:
-        subprocess.run([args.java, '-cp', classpath,
-                        'com.ishland.raknetify.common.connection.RaknetEncryptionProbe', str(args.client_port), '777', '8', mode],
-                       check=True, timeout=40)
-        if args.proxy_protocol and mode != 'rejected-session':
-            # Preserve Bukkit's default four-second IP throttle while testing separate authentication failures.
-            time.sleep(4.1)
+    lock = json.loads((Path(__file__).resolve().parents[2] / 'spigot-servers.json').read_text())
+    request = SimpleNamespace(version=lock['minecraft'], java=args.java, port=args.client_port,
+                              protocol=lock['protocol'], payload_size=8, modes=modes)
+    sibling('encryption-probe').run(args.probe_dir, args.work_dir / 'rejected-clients', request)
     assert len(authority.rejected) == 1, 'A failed nonce reached account verification'
     assert not authority.accepted, 'Rejection probes admitted a player'
 
