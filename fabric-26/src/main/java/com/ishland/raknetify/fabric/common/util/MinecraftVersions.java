@@ -24,6 +24,7 @@
 
 package com.ishland.raknetify.fabric.common.util;
 
+import com.ishland.raknetify.common.util.ReleaseFamily;
 import com.ishland.raknetify.minecraft.ModPlatform;
 
 /**
@@ -34,11 +35,14 @@ public final class MinecraftVersions {
     /** Minecraft version reported by the active loader without initializing game classes. */
     private static final String CURRENT = ModPlatform.get().minecraftVersion();
 
+    /** Validated numeric API family, parsed before any version-dependent class may be resolved. */
+    private static final ReleaseFamily FAMILY = ReleaseFamily.parse(CURRENT);
+
     /** Whether packet references introduced in Minecraft 26.2 may be resolved. */
-    public static final boolean AT_LEAST_26_2 = atLeast(26, 2);
+    public static final boolean AT_LEAST_26_2 = FAMILY.atLeast(26, 2);
 
     /** Whether packet references introduced in Minecraft 26.3 may be resolved. */
-    public static final boolean AT_LEAST_26_3 = atLeast(26, 3);
+    public static final boolean AT_LEAST_26_3 = FAMILY.atLeast(26, 3);
 
     // Keep this exact snapshot predicate aligned with the Minecraft dependency in fabric.mod.json.
     /** Whether the runtime matches the specifically supported 26.4 snapshot API. */
@@ -47,19 +51,4 @@ public final class MinecraftVersions {
 
     /** Prevents construction of the immutable runtime-version flags. */
     private MinecraftVersions() {}
-
-    /**
-     * Compares the numeric release family shared by the supported modern loader versions.
-     *
-     * @param major earliest supported release year
-     * @param minor earliest supported release within that year
-     * @return whether the current runtime reaches this API boundary
-     * @throws NumberFormatException if the loader supplies a nonnumeric release family
-     */
-    private static boolean atLeast(final int major, final int minor) {
-        String[] components = CURRENT.split("[.\\-+]");
-        int currentMajor = Integer.parseInt(components[0]);
-        int currentMinor = Integer.parseInt(components[1]);
-        return currentMajor > major || currentMajor == major && currentMinor >= minor;
-    }
 }
