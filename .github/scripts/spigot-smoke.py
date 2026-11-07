@@ -184,10 +184,11 @@ def exercise(args, lock, native, authority, server_jar):
         with sibling('udp-proxy-fixture').transport(args.proxy_protocol, 28990, repeated=True,
                                                    duplicate=args.proxy_protocol, frontend_port=28991) as port:
             args.client_port = port
-            smoke.check_udp(port)
-            smoke.check_connected_udp(port, expected, args.java, args.probe_dir)
+            # Check silence before a closed RakNet probe's source port can be reused by this socket.
             if args.voicechat:
                 sibling('voicechat-fixture').check(folder, log, 28990, port)
+            smoke.check_udp(port)
+            smoke.check_connected_udp(port, expected, args.java, args.probe_dir)
             rejected_logins(args, authority)
             if args.side == 'both':
                 join_server(args, authority, native, process)

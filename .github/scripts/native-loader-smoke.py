@@ -129,10 +129,11 @@ def server(args, lock, metadata):
         smoke.await_ready(process, events)
         smoke.check_tcp_when_ready(28990, expected)
         with sibling('udp-proxy-fixture').transport(args.proxy_protocol, 28990, frontend_port=28991) as port:
-            smoke.check_udp(port)
-            smoke.check_connected_udp(port, expected, args.java, args.probe_dir)
+            # Check silence before a closed RakNet probe's source port can be reused by this socket.
             if args.voicechat:
                 sibling('voicechat-fixture').check(folder, log, 28990, port)
+            smoke.check_udp(port)
+            smoke.check_connected_udp(port, expected, args.java, args.probe_dir)
             if args.side == 'both':
                 args.client_port = port
                 client(args, lock, metadata, join=True)
