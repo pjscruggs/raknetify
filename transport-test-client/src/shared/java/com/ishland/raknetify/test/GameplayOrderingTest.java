@@ -99,7 +99,7 @@ final class GameplayOrderingTest {
         RakNetSimpleMultiChannelCodec codec = new RakNetSimpleMultiChannelCodec(253);
         codec.addHandler((buffer, silent) -> routes[buffer.getUnsignedByte(buffer.readerIndex())]);
         EmbeddedChannel sender = new EmbeddedChannel(codec);
-        EmbeddedChannel receiver = new EmbeddedChannel(new FrameOrderIn());
+        EmbeddedChannel receiver = new TransportTestChannel(new FrameOrderIn());
         List<Frame> frames = new ArrayList<>();
         try {
             sender.writeOutbound(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL);
