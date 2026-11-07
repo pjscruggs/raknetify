@@ -120,6 +120,7 @@ class FrameReplayWindowTest {
         assertTrue(history.accept(10000, true));
         assertTrue(history.accept(8193, true));
         assertFalse(history.accept(8193, true));
+        assertTrue(history.accept((1L << 32) - 2, true));
         assertTrue(history.accept((1L << 32) - 1, true));
         assertFalse(history.accept((1L << 32) - 1, true));
     }
@@ -170,9 +171,12 @@ class FrameReplayWindowTest {
         var history = new FrameReplayWindow();
         assertTrue(history.accept(5, true));
         assertTrue(history.accept(0, true));
+        assertTrue(history.accept(6, true));
+        assertFalse(history.accept(5, true));
         assertTrue(history.accept(4095, true));
         assertFalse(history.accept(0, true));
         assertTrue(history.accept(4096, true));
+        assertFalse(history.accept(4095, true));
         assertFalse(history.accept(0, true));
         assertTrue(history.accept(1, true));
         assertFalse(history.accept(1, true));

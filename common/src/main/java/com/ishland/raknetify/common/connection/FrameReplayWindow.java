@@ -160,7 +160,8 @@ final class FrameReplayWindow {
     }
 
     /**
-     * Clears only slots displaced by a newer authenticated unreliable packet.
+     * Clears only slots displaced by a newer authenticated unreliable packet. Splitting a wrapped
+     * interval at the bitmap boundary avoids walking every missing sequence after packet loss.
      *
      * @param sequence new greatest received sequence
      */
@@ -168,8 +169,13 @@ final class FrameReplayWindow {
         if (sequence - highest >= WINDOW) {
             received.clear();
         } else {
-            for (long expired = highest + 1; expired <= sequence; expired++) {
-                received.clear((int) (expired % WINDOW));
+            int first = (int) ((highest + 1) % WINDOW);
+            int last = (int) (sequence % WINDOW);
+            if (first <= last) {
+                received.clear(first, last + 1);
+            } else {
+                received.clear(first, WINDOW);
+                received.clear(0, last + 1);
             }
         }
         highest = sequence;
