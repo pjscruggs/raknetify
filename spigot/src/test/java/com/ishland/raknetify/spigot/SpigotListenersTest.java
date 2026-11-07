@@ -26,12 +26,16 @@ package com.ishland.raknetify.spigot;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.google.errorprone.annotations.Keep;
+
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.util.NetUtil;
 
 import org.junit.jupiter.api.Test;
 
@@ -119,7 +123,7 @@ class SpigotListenersTest {
                     attempt == 0 ? 0 : ThreadLocalRandom.current().nextInt(49152, 65536);
             final DatagramSocket udp;
             try {
-                udp = new DatagramSocket(new InetSocketAddress("127.0.0.1", candidate));
+                udp = new DatagramSocket(new InetSocketAddress(NetUtil.LOCALHOST4, candidate));
             } catch (BindException unavailable) {
                 continue;
             }
@@ -165,20 +169,21 @@ class SpigotListenersTest {
         return new ServerBootstrap()
                 .group(group)
                 .channel(NioServerSocketChannel.class)
-                .childHandler(
-                        new ChannelInitializer<Channel>() {
-                            /**
-                             * Closes incidental test connections without creating a Minecraft login
-                             * session.
-                             *
-                             * @param channel accepted fixture TCP child
-                             */
-                            @Override
-                            protected void initChannel(final Channel channel) {
-                                channel.close();
-                            }
-                        })
-                .bind("127.0.0.1", port);
+                .childHandler(new CloseAcceptedChannel())
+                .bind(NetUtil.LOCALHOST4, port);
+    }
+
+    /** Closes incidental connections without constructing a Minecraft login session. */
+    private static final class CloseAcceptedChannel extends ChannelInitializer<Channel> {
+        /**
+         * Releases an unexpected TCP child and reports any failure to close its socket.
+         *
+         * @param channel accepted fixture connection
+         */
+        @Override
+        protected void initChannel(final Channel channel) {
+            channel.close().addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
+        }
     }
 
     /** Minimal CraftServer accessor contract around a fixture-owned native listener. */
@@ -261,7 +266,7 @@ class SpigotListenersTest {
     /** Matches the native listener field layout while retaining real Netty channels. */
     public static final class ListenerFacade {
         /** Native TCP futures that must never be closed by UDP cleanup. */
-        private final List<ChannelFuture> channels;
+        @Keep private final List<ChannelFuture> channels;
 
         /**
          * Keeps the bound listener available for reflective discovery.

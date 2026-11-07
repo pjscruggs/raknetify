@@ -121,7 +121,7 @@ final class SpigotPacketHandler extends ChannelDuplexHandler {
             return;
         }
         transition(ctx, name);
-        ctx.write(msg, promise);
+        super.write(ctx, msg, promise);
         guard.refresh(ctx.pipeline());
     }
 
@@ -145,9 +145,11 @@ final class SpigotPacketHandler extends ChannelDuplexHandler {
             case "net.minecraft.network.protocol.game.ClientboundLoginPacket",
                     "net.minecraft.network.protocol.game.ClientboundRespawnPacket",
                     "net.minecraft.network.protocol.game.ClientboundStartConfigurationPacket" ->
-                    ctx.write(SynchronizationLayer.SYNC_REQUEST_OBJECT);
+                    ctx.write(SynchronizationLayer.SYNC_REQUEST_OBJECT)
+                            .addListener(network.ycc.raknet.RakNet.INTERNAL_WRITE_LISTENER);
             case "net.minecraft.network.protocol.game.ClientboundCommandsPacket" ->
-                    ctx.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL);
+                    ctx.write(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL)
+                            .addListener(network.ycc.raknet.RakNet.INTERNAL_WRITE_LISTENER);
             default -> {}
         }
     }

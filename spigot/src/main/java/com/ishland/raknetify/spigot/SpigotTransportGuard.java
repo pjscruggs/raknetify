@@ -91,7 +91,8 @@ final class SpigotTransportGuard extends ChannelDuplexHandler {
             refresh(ctx.pipeline());
         } catch (Exception exception) {
             ReferenceCountUtil.release(msg);
-            ctx.close();
+            ctx.close()
+                    .addListener(io.netty.channel.ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
             throw exception;
         }
         ctx.fireChannelRead(msg);

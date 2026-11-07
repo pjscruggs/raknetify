@@ -39,17 +39,17 @@ final class SpigotDisconnectHandler extends ChannelOutboundHandlerAdapter {
      *
      * @param context outbound context immediately before the native packet listener
      * @param message native packet to encode and send
+     * @throws Exception if ordinary outbound forwarding fails
      * @param promise native send callback, completed after transport closure for disconnect packets
      */
     @Override
     public void write(
-            final ChannelHandlerContext context,
-            final Object message,
-            final ChannelPromise promise) {
+            final ChannelHandlerContext context, final Object message, final ChannelPromise promise)
+            throws Exception {
         if (isDisconnect(message.getClass().getName())) {
             writeAndClose(context, message, promise);
         } else {
-            context.write(message, promise);
+            super.write(context, message, promise);
         }
     }
 
@@ -79,17 +79,18 @@ final class SpigotDisconnectHandler extends ChannelOutboundHandlerAdapter {
             final Object message,
             final ChannelPromise promise) {
         ChannelPromise written = context.newPromise();
-        written.addListener(sent ->
-                context.channel()
-                        .closeFuture()
-                        .addListener(closed -> {
-                            if (sent.isSuccess()) {
-                                promise.trySuccess();
-                            } else {
-                                promise.tryFailure(sent.cause());
-                            }
-                        }));
-        context.writeAndFlush(message, written);
-        context.close();
+        context.writeAndFlush(message, written)
+                .addListener(sent ->
+                        context.channel()
+                                .closeFuture()
+                                .addListener(closed -> {
+                                    if (sent.isSuccess()) {
+                                        promise.trySuccess();
+                                    } else {
+                                        promise.tryFailure(sent.cause());
+                                    }
+                                }));
+        context.close()
+                .addListener(io.netty.channel.ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
     }
 }

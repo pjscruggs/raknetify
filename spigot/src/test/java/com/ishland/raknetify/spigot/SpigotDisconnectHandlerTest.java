@@ -73,7 +73,7 @@ class SpigotDisconnectHandlerTest {
         AtomicReference<Throwable> failure = new AtomicReference<>();
         try {
             ChannelPromise sent = nativeCallback(channel, failure);
-            channel.writeAndFlush(Unpooled.buffer().writeByte(42), sent);
+            assertSame(sent, channel.writeAndFlush(Unpooled.buffer().writeByte(42), sent));
             assertFalse(sent.isDone());
             assertTrue(channel.isOpen());
             var bytes = (io.netty.buffer.ByteBuf) channel.readOutbound();
@@ -101,7 +101,7 @@ class SpigotDisconnectHandlerTest {
         var bytes = Unpooled.buffer().writeByte(42);
         try {
             ChannelPromise sent = channel.newPromise();
-            channel.writeAndFlush(bytes, sent);
+            assertSame(sent, channel.writeAndFlush(bytes, sent));
             assertEquals(0, bytes.refCnt());
             assertFalse(sent.isDone());
             close.finish();
@@ -121,7 +121,7 @@ class SpigotDisconnectHandlerTest {
         EmbeddedChannel channel = new EmbeddedChannel(new SpigotDisconnectHandler());
         try {
             ChannelPromise sent = channel.newPromise();
-            channel.writeAndFlush(Unpooled.buffer().writeByte(1), sent);
+            assertSame(sent, channel.writeAndFlush(Unpooled.buffer().writeByte(1), sent));
             assertTrue(sent.isSuccess());
             assertTrue(channel.isOpen());
             ReferenceCountUtil.release(channel.readOutbound());
@@ -169,10 +169,10 @@ class SpigotDisconnectHandlerTest {
      */
     private static final class DelayedClose extends ChannelDuplexHandler {
         /** Context used to forward the held close below this handler. */
-        private ChannelHandlerContext context;
+        private @org.jspecify.annotations.Nullable ChannelHandlerContext context;
 
         /** Original close completion that remains pending until finish is called. */
-        private ChannelPromise promise;
+        private @org.jspecify.annotations.Nullable ChannelPromise promise;
 
         /**
          * Retains one asynchronous close while allowing repeated closes after completion to finish
@@ -184,7 +184,7 @@ class SpigotDisconnectHandlerTest {
         @Override
         public void close(final ChannelHandlerContext context, final ChannelPromise promise) {
             if (!context.channel().isOpen()) {
-                context.close(promise);
+                assertTrue(context.close(promise).isSuccess());
                 return;
             }
             this.context = context;
@@ -195,7 +195,12 @@ class SpigotDisconnectHandlerTest {
          * Completes the actual channel closure at the deterministic point chosen by the regression.
          */
         private void finish() {
-            context.close(promise);
+            assertTrue(
+                    java.util.Objects.requireNonNull(context, "No pending close context")
+                            .close(
+                                    java.util.Objects.requireNonNull(
+                                            promise, "No pending close promise"))
+                            .isSuccess());
         }
     }
 

@@ -42,6 +42,8 @@ import network.ycc.raknet.frame.FrameData;
 
 import org.junit.jupiter.api.Test;
 
+import java.security.GeneralSecurityException;
+import java.security.KeyPairGenerator;
 import java.security.PrivateKey;
 
 import javax.crypto.SecretKey;
@@ -51,6 +53,25 @@ import javax.crypto.spec.SecretKeySpec;
  * Exercises native-handler transitions, encrypted frame bytes, and ownership on rejected logins.
  */
 class SpigotCipherStateTest {
+    /** Ephemeral server key used to verify that capture forwards the actual native key owner. */
+    private static final PrivateKey SERVER_KEY = serverKey();
+
+    /**
+     * Creates a real RSA private key for the fixture without reusing production credentials.
+     *
+     * @return freshly generated test server key
+     * @throws ExceptionInInitializerError if the runtime has no supported RSA key generator
+     */
+    private static PrivateKey serverKey() {
+        try {
+            KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+            generator.initialize(2048);
+            return generator.generateKeyPair().getPrivate();
+        } catch (GeneralSecurityException failure) {
+            throw new ExceptionInInitializerError(failure);
+        }
+    }
+
     /** Deterministic fixture key with no relationship to a Minecraft account. */
     private static final SecretKey KEY = new SecretKeySpec(new byte[16], "AES");
 
@@ -60,7 +81,7 @@ class SpigotCipherStateTest {
      */
     @Test
     void statusPacketNeverUsesPlayDiscardRules() {
-        SpigotCipherState state = new SpigotCipherState(null);
+        SpigotCipherState state = new SpigotCipherState(SERVER_KEY);
         var mapping = ProtocolMultiChannelMappings.INSTANCE.mappings.get(777);
         var classifier =
                 new RakNetSimpleMultiChannelCodec.PacketIdBasedOverrideHandler(mapping.s2c, "test");
@@ -85,7 +106,7 @@ class SpigotCipherStateTest {
     void candidateAloneDoesNotEnableEncryption() throws Exception {
         EmbeddedChannel channel = pipeline();
         try {
-            SpigotCipherState state = new SpigotCipherState(null);
+            SpigotCipherState state = new SpigotCipherState(SERVER_KEY);
             state.capture(new KeyResponse());
             state.refresh(channel.pipeline());
             assertNull(channel.pipeline().get(MultiChannellingEncryption.NAME));
@@ -107,7 +128,7 @@ class SpigotCipherStateTest {
         RemovalWitness inbound = new RemovalWitness();
         RemovalWitness outbound = new RemovalWitness();
         try {
-            SpigotCipherState state = new SpigotCipherState(null);
+            SpigotCipherState state = new SpigotCipherState(SERVER_KEY);
             state.capture(new KeyResponse());
             channel.pipeline().addLast("decrypt", inbound).addLast("encrypt", outbound);
             state.refresh(channel.pipeline());
@@ -152,7 +173,7 @@ class SpigotCipherStateTest {
     void rejectsOneSidedNativeEncryption() throws Exception {
         EmbeddedChannel channel = pipeline();
         try {
-            SpigotCipherState state = new SpigotCipherState(null);
+            SpigotCipherState state = new SpigotCipherState(SERVER_KEY);
             state.capture(new KeyResponse());
             channel.pipeline().addLast("encrypt", new ChannelDuplexHandler());
             assertThrows(IllegalStateException.class, () -> state.refresh(channel.pipeline()));
@@ -169,7 +190,7 @@ class SpigotCipherStateTest {
      */
     @Test
     void rejectsDuplicateKeyResponse() throws Exception {
-        SpigotCipherState state = new SpigotCipherState(null);
+        SpigotCipherState state = new SpigotCipherState(SERVER_KEY);
         state.capture(new KeyResponse());
         assertThrows(IllegalStateException.class, () -> state.capture(new KeyResponse()));
     }
@@ -181,7 +202,7 @@ class SpigotCipherStateTest {
     @Test
     void invalidTransitionReleasesIncomingFrame() {
         EmbeddedChannel channel = pipeline();
-        SpigotTransportGuard guard = new SpigotTransportGuard(new SpigotCipherState(null));
+        SpigotTransportGuard guard = new SpigotTransportGuard(new SpigotCipherState(SERVER_KEY));
         channel.pipeline().addFirst("guard", guard).addLast("encrypt", new ChannelDuplexHandler());
         ByteBuf payload = Unpooled.buffer().writeByte(7);
         FrameData frame = FrameData.create(channel.alloc(), 0xfd, payload);
@@ -207,7 +228,8 @@ class SpigotCipherStateTest {
         RemovalWitness compressor = new RemovalWitness();
         RemovalWitness decompressor = new RemovalWitness();
         try {
-            SpigotTransportGuard guard = new SpigotTransportGuard(new SpigotCipherState(null));
+            SpigotTransportGuard guard =
+                    new SpigotTransportGuard(new SpigotCipherState(SERVER_KEY));
             channel.pipeline().addLast("compress", compressor).addLast("decompress", decompressor);
             assertFalse(guard.suppressCompression(channel.pipeline()));
             guard.refresh(channel.pipeline());
@@ -244,10 +266,11 @@ class SpigotCipherStateTest {
          * Supplies a known test secret while leaving native challenge acceptance to the separate
          * handler markers.
          *
-         * @param ignored unused fixture server key
+         * @param privateKey actual server key passed through the reflective native accessor
          * @return deterministic AES secret
          */
-        public SecretKey getSecretKey(final PrivateKey ignored) {
+        public SecretKey getSecretKey(final PrivateKey privateKey) {
+            assertSame(SERVER_KEY, privateKey);
             return KEY;
         }
     }

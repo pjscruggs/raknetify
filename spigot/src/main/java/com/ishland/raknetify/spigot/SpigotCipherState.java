@@ -39,7 +39,7 @@ final class SpigotCipherState {
     private final PrivateKey privateKey;
 
     /** Candidate shared secret retained only until the native server enables encryption. */
-    private SecretKey pending;
+    private @org.jspecify.annotations.Nullable SecretKey pending;
 
     /** Rejects a second encryption negotiation on an already encrypted connection. */
     private boolean installed;

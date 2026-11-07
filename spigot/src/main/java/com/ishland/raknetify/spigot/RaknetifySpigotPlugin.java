@@ -33,7 +33,7 @@ import java.util.logging.Level;
 /** Owns companion RakNet listeners for a tested Spigot or Paper server. */
 public final class RaknetifySpigotPlugin extends JavaPlugin {
     /** Listener and event-loop owner, absent until the server finishes enabling plugins. */
-    private SpigotListeners listeners;
+    private @org.jspecify.annotations.Nullable SpigotListeners listeners;
 
     /**
      * Defers binding until the native TCP listener exists and the server can report its game

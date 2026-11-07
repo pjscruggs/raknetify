@@ -96,24 +96,7 @@ final class SpigotListeners implements AutoCloseable {
                 new ServerBootstrap()
                         .group(transport)
                         .channelFactory(this::newServerChannel)
-                        .childHandler(
-                                new ChannelInitializer<Channel>() {
-                                    /**
-                                     * Adds framing around the server's original initializer and
-                                     * preserves its authentication handlers.
-                                     *
-                                     * @param channel newly accepted RakNet application channel
-                                     * @throws Exception if either transport or native pipeline
-                                     *     setup fails
-                                     */
-                                    @Override
-                                    protected void initChannel(final Channel channel)
-                                            throws Exception {
-                                        SpigotConnection.initialize(channel);
-                                        ServerAccess.initialize(acceptor, channel);
-                                        SpigotConnection.finish(channel, access.privateKey());
-                                    }
-                                })
+                        .childHandler(new AcceptedChannelInitializer(acceptor))
                         .localAddress(listener.localAddress())
                         .bind();
         channels.add(future.channel());
@@ -153,5 +136,38 @@ final class SpigotListeners implements AutoCloseable {
         channels.clear();
         transport.shutdownGracefully().syncUninterruptibly();
         application.shutdownGracefully().syncUninterruptibly();
+    }
+
+    /**
+     * Adds RakNet framing around the server's existing authentication pipeline after child
+     * registration.
+     */
+    private final class AcceptedChannelInitializer extends ChannelInitializer<Channel> {
+        /** Native acceptor whose child initializer must run before transport reconciliation. */
+        private final ChannelHandler acceptor;
+
+        /**
+         * Captures the listener-specific native initializer without changing its authentication
+         * handlers.
+         *
+         * @param acceptor Minecraft TCP acceptor supplying the original child setup
+         */
+        private AcceptedChannelInitializer(final ChannelHandler acceptor) {
+            this.acceptor = acceptor;
+        }
+
+        /**
+         * Adds framing around the server's original initializer and preserves its authentication
+         * handlers.
+         *
+         * @param channel newly accepted RakNet application channel
+         * @throws Exception if either transport or native pipeline setup fails
+         */
+        @Override
+        protected void initChannel(final Channel channel) throws Exception {
+            SpigotConnection.initialize(channel);
+            ServerAccess.initialize(acceptor, channel);
+            SpigotConnection.finish(channel, access.privateKey());
+        }
     }
 }
