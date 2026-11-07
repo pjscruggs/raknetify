@@ -50,6 +50,15 @@ public final class RaknetifyNeoForge {
      * @param event common setup event with the main-thread work queue
      */
     private void setup(final FMLCommonSetupEvent event) {
-        event.enqueueWork(MinecraftRuntime::initialize);
+        // Observe the failure without replacing the failed future retained by the loader.
+        event.enqueueWork(MinecraftRuntime::initialize)
+                .exceptionally(failure -> {
+                    System.getLogger("Raknetify2")
+                            .log(
+                                    System.Logger.Level.ERROR,
+                                    "Raknetify2 could not initialize Minecraft transport support",
+                                    failure);
+                    return null;
+                });
     }
 }
