@@ -35,6 +35,8 @@ import network.ycc.raknet.RakNet;
 import network.ycc.raknet.frame.FrameData;
 import network.ycc.raknet.packet.FramedPacket;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -57,7 +59,7 @@ public class MetricsSynchronizationHandler extends ChannelDuplexHandler {
     private static final byte VERSION = 0x00;
 
     /** Periodic event-loop task publishing a local snapshot every 200 milliseconds. */
-    private ScheduledFuture<?> future;
+    private @Nullable ScheduledFuture<?> future;
 
     /**
      * Captures the context and schedules peer-statistics updates on its event loop.
@@ -111,7 +113,9 @@ public class MetricsSynchronizationHandler extends ChannelDuplexHandler {
                         FrameData.create(
                                 ctx.alloc(), Constants.RAKNET_METRICS_SYNC_PACKET_ID, buffer);
                 frameData.setReliability(FramedPacket.Reliability.UNRELIABLE);
-                ctx.write(frameData);
+                ctx.write(frameData)
+                        .addListener(
+                                io.netty.channel.ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
             } finally {
                 if (buffer != null) {
                     buffer.release();
@@ -126,7 +130,7 @@ public class MetricsSynchronizationHandler extends ChannelDuplexHandler {
     /**
      * Complete peer measurements published together for readers outside the transport event loop.
      */
-    private volatile RemoteMetrics remote = EMPTY;
+    private volatile @Nullable RemoteMetrics remote;
 
     /**
      * Keeps parsing failures and concurrent readers from observing partially replaced statistics.
@@ -163,7 +167,7 @@ public class MetricsSynchronizationHandler extends ChannelDuplexHandler {
                 }
 
                 final long time = byteBuf.readLong();
-                if (time < remote.time()) {
+                if (time < snapshot().time()) {
                     return;
                 }
                 remote =
@@ -186,12 +190,23 @@ public class MetricsSynchronizationHandler extends ChannelDuplexHandler {
     }
 
     /**
+     * Reads a stable snapshot while preserving the distinction between no report and reported
+     * zeroes.
+     *
+     * @return latest peer report, or the immutable zero values before negotiation
+     */
+    private RemoteMetrics snapshot() {
+        RemoteMetrics current = remote;
+        return current == null ? EMPTY : current;
+    }
+
+    /**
      * Reports whether remote metric values have been initialized by a compatible snapshot.
      *
      * @return true after at least one supported snapshot has been accepted
      */
     public boolean isRemoteSupported() {
-        return remote != EMPTY;
+        return remote != null;
     }
 
     /**
@@ -200,7 +215,7 @@ public class MetricsSynchronizationHandler extends ChannelDuplexHandler {
      * @return remote queued bytes, or zero before the first snapshot
      */
     public int getQueuedBytes() {
-        return remote.queuedBytes();
+        return snapshot().queuedBytes();
     }
 
     /**
@@ -209,7 +224,7 @@ public class MetricsSynchronizationHandler extends ChannelDuplexHandler {
      * @return remote burst tokens plus its baseline pending-frame-set allowance
      */
     public int getBurst() {
-        return remote.burst();
+        return snapshot().burst();
     }
 
     /**
@@ -218,7 +233,7 @@ public class MetricsSynchronizationHandler extends ChannelDuplexHandler {
      * @return retransmitted-byte fraction, not a percentage or a measured packet-loss probability
      */
     public double getErrorRate() {
-        return remote.errorRate();
+        return snapshot().errorRate();
     }
 
     /**
@@ -227,7 +242,7 @@ public class MetricsSynchronizationHandler extends ChannelDuplexHandler {
      * @return remote outgoing packets per second
      */
     public int getTX() {
-        return remote.tx();
+        return snapshot().tx();
     }
 
     /**
@@ -236,6 +251,6 @@ public class MetricsSynchronizationHandler extends ChannelDuplexHandler {
      * @return remote incoming packets per second
      */
     public int getRX() {
-        return remote.rx();
+        return snapshot().rx();
     }
 }

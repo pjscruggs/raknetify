@@ -29,33 +29,34 @@ import com.ishland.raknetify.common.util.MathUtil;
 import network.ycc.raknet.RakNet;
 
 import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
+import org.jspecify.annotations.Nullable;
+
+import java.util.concurrent.atomic.LongAdder;
 
 /**
- * Collects transport counters and publishes sampled rates for diagnostics. Mutations must come from
- * one transport thread. Volatile fields allow other threads to read recent values but do not make
- * the counter increments atomic.
+ * Accumulates concurrent transport callbacks without losing increments and publishes sampled
+ * diagnostic rates. Sampling is serialized independently of counter updates. Published rates are
+ * approximate snapshots, while cumulative totals include every completed increment after writers
+ * have stopped.
  */
-@SuppressWarnings("NonAtomicOperationOnVolatileField")
 public class SimpleMetricsLogger implements RakNet.MetricsLogger {
 
     // ========== Loggers ==========
 
-    /** Received RakNet packet count, accumulated by the connection's single transport writer. */
-    private volatile long packetsIn;
+    /** Received RakNet packet count, accumulated by concurrent transport callbacks. */
+    private final LongAdder packetsIn = new LongAdder();
 
-    /** Received transport byte count, accumulated by the connection's single transport writer. */
-    private volatile long bytesIn;
+    /** Received transport byte count, accumulated by concurrent transport callbacks. */
+    private final LongAdder bytesIn = new LongAdder();
 
-    /** Sent RakNet packet count, accumulated by the connection's single transport writer. */
-    private volatile long packetsOut;
+    /** Sent RakNet packet count, accumulated by concurrent transport callbacks. */
+    private final LongAdder packetsOut = new LongAdder();
 
-    /** Sent transport byte count, accumulated by the connection's single transport writer. */
-    private volatile long bytesOut;
+    /** Sent transport byte count, accumulated by concurrent transport callbacks. */
+    private final LongAdder bytesOut = new LongAdder();
 
-    /**
-     * Retransmitted transport byte count, accumulated by the connection's single transport writer.
-     */
-    private volatile long bytesRecalled;
+    /** Retransmitted transport byte count, accumulated by concurrent transport callbacks. */
+    private final LongAdder bytesRecalled = new LongAdder();
 
     /** Latest transport round-trip-time estimate, in nanoseconds. */
     private volatile long measureRTTns;
@@ -76,7 +77,7 @@ public class SimpleMetricsLogger implements RakNet.MetricsLogger {
      */
     @Override
     public void packetsIn(final int delta) {
-        packetsIn += delta;
+        packetsIn.add(delta);
     }
 
     /**
@@ -86,7 +87,7 @@ public class SimpleMetricsLogger implements RakNet.MetricsLogger {
      */
     @Override
     public void bytesIn(final int delta) {
-        bytesIn += delta;
+        bytesIn.add(delta);
     }
 
     /**
@@ -96,7 +97,7 @@ public class SimpleMetricsLogger implements RakNet.MetricsLogger {
      */
     @Override
     public void packetsOut(final int delta) {
-        packetsOut += delta;
+        packetsOut.add(delta);
     }
 
     /**
@@ -107,7 +108,7 @@ public class SimpleMetricsLogger implements RakNet.MetricsLogger {
      */
     @Override
     public void bytesOut(final int delta) {
-        bytesOut += delta;
+        bytesOut.add(delta);
         tick();
     }
 
@@ -118,7 +119,7 @@ public class SimpleMetricsLogger implements RakNet.MetricsLogger {
      */
     @Override
     public void bytesRecalled(final int delta) {
-        bytesRecalled += delta;
+        bytesRecalled.add(delta);
     }
 
     /**
@@ -194,8 +195,8 @@ public class SimpleMetricsLogger implements RakNet.MetricsLogger {
 
     /** Updates the retransmitted-byte fraction only for intervals containing traffic. */
     private void tickErrorRate() {
-        final long bytesTotal = this.bytesIn + this.bytesOut;
-        final long bytesRecalled = this.bytesRecalled;
+        final long bytesTotal = this.bytesIn.sum() + this.bytesOut.sum();
+        final long bytesRecalled = this.bytesRecalled.sum();
 
         final long bytesTotalDelta = bytesTotal - lastBytesTotal;
         final long bytesRecalledDelta = bytesRecalled - this.lastBytesRecalled;
@@ -253,10 +254,10 @@ public class SimpleMetricsLogger implements RakNet.MetricsLogger {
      */
     private void tickRXTX(final long deltaTime) {
 
-        final long packetsIn = this.packetsIn;
-        final long packetsOut = this.packetsOut;
-        final long bytesIn = this.bytesIn;
-        final long bytesOut = this.bytesOut;
+        final long packetsIn = this.packetsIn.sum();
+        final long packetsOut = this.packetsOut.sum();
+        final long bytesIn = this.bytesIn.sum();
+        final long bytesOut = this.bytesOut.sum();
 
         final double timeDeltaS = deltaTime / 1000.0;
 
@@ -387,7 +388,7 @@ public class SimpleMetricsLogger implements RakNet.MetricsLogger {
      * @return cumulative incoming transport bytes
      */
     public long getBytesIn() {
-        return bytesIn;
+        return bytesIn.sum();
     }
 
     // ========== Misc ==========
@@ -396,14 +397,14 @@ public class SimpleMetricsLogger implements RakNet.MetricsLogger {
      * Peer-statistics handler paired with this local logger, or null before pipeline
      * initialization.
      */
-    private volatile MetricsSynchronizationHandler metricsSynchronizationHandler;
+    private volatile @Nullable MetricsSynchronizationHandler metricsSynchronizationHandler;
 
     /**
      * Finds the peer-statistics source associated with this connection.
      *
      * @return paired synchronization handler, or null if one has not been installed
      */
-    public MetricsSynchronizationHandler getMetricsSynchronizationHandler() {
+    public @Nullable MetricsSynchronizationHandler getMetricsSynchronizationHandler() {
         return this.metricsSynchronizationHandler;
     }
 

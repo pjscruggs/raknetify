@@ -45,31 +45,13 @@ import java.util.function.Consumer;
  */
 public class NetworkInterfaceListener {
 
-    /** Single daemon polling thread with slightly reduced priority. */
+    /** Single daemon polling thread for interface enumeration and notification. */
     private static final ScheduledExecutorService scheduler =
             Executors.newSingleThreadScheduledExecutor(r -> {
                 final Thread thread = new Thread(r, "Raknetify IFListener");
                 thread.setDaemon(true);
-                thread.setPriority(Thread.NORM_PRIORITY - 1);
                 return thread;
             });
-
-    static {
-        scheduler.scheduleAtFixedRate(
-                () -> {
-                    try {
-                        pollChanges();
-                    } catch (Throwable t) {
-                        t.printStackTrace();
-                    }
-                },
-                0,
-                10,
-                TimeUnit.SECONDS);
-    }
-
-    /** Forces initialization of the shared ten-second interface polling task. */
-    public static void init() {}
 
     /** Addresses seen on active interfaces at the last poll, owned by the polling thread. */
     private static final ObjectOpenHashSet<InetAddress> knownAddresses = new ObjectOpenHashSet<>();
@@ -77,6 +59,40 @@ public class NetworkInterfaceListener {
     /** Identity-based synchronized callback set, allowing platform-specific listener removal. */
     private static final ReferenceSet<Consumer<InterfaceAddressChangeEvent>> listeners =
             ReferenceSets.synchronize(new ReferenceOpenHashSet<>());
+
+    /**
+     * Polling failures are logged with context rather than written directly to the process error
+     * stream.
+     */
+    private static final System.Logger LOGGER =
+            System.getLogger(NetworkInterfaceListener.class.getName());
+
+    /** Scheduled task retained so initialization can detect an unexpectedly terminated poller. */
+    private static final java.util.concurrent.ScheduledFuture<?> POLLING =
+            scheduler.scheduleAtFixedRate(
+                    NetworkInterfaceListener::pollChanges, 0, 10, TimeUnit.SECONDS);
+
+    /**
+     * Verifies that the shared interface poller has not terminated unexpectedly.
+     *
+     * @throws IllegalStateException if polling terminated or the caller was interrupted while
+     *     checking it
+     */
+    public static void init() {
+        if (!POLLING.isDone()) {
+            return;
+        }
+        try {
+            POLLING.get();
+            throw new IllegalStateException("Network interface polling stopped");
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(
+                    "Interrupted while checking interface polling", exception);
+        } catch (java.util.concurrent.ExecutionException exception) {
+            throw new IllegalStateException("Network interface polling failed", exception);
+        }
+    }
 
     /**
      * Compares active interface addresses with the previous snapshot and publishes additions and
@@ -108,8 +124,11 @@ public class NetworkInterfaceListener {
                             consumer.accept(new InterfaceAddressChangeEvent(false, address)));
                 }
             }
-        } catch (Throwable t) {
-            t.printStackTrace();
+        } catch (java.net.SocketException | RuntimeException exception) {
+            LOGGER.log(
+                    System.Logger.Level.WARNING,
+                    "Cannot update local interface addresses",
+                    exception);
         }
     }
 
@@ -119,6 +138,7 @@ public class NetworkInterfaceListener {
      * @param consumer callback invoked on the shared interface polling thread
      */
     public static void addListener(final Consumer<InterfaceAddressChangeEvent> consumer) {
+        init();
         listeners.add(consumer);
     }
 
