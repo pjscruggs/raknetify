@@ -79,7 +79,7 @@ jobs:
             ${{ runner.os }}-gradle-
       - uses: ./.github/actions/setup-checks
       - name: Build and run unit tests
-        run: ./gradlew build :common:transportProbe :common:benchmarkClasses --warning-mode fail --no-daemon --max-workers=2
+        run: ./gradlew build :common:transportProbe :common:benchmarkClasses :common:pitest --warning-mode fail --no-daemon --max-workers=2
       - name: Preserve unit and quality reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

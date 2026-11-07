@@ -24,6 +24,7 @@
 
 package com.ishland.raknetify.common.connection;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -31,9 +32,98 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 import java.security.GeneralSecurityException;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.SplittableRandom;
 
 /** Exercises receipt ranges and lossy windows independently of cryptographic provider behavior. */
 class FrameReplayWindowTest {
+    /**
+     * Compares lossy receipt decisions with an independent set model across gaps, wraps and
+     * reordering.
+     *
+     * @throws GeneralSecurityException if loss-tolerant receipt unexpectedly exhausts reliable
+     *     budget
+     */
+    @Test
+    void unreliableHistoryMatchesAnIndependentReceiptSet() throws GeneralSecurityException {
+        var history = new FrameReplayWindow();
+        var random = new SplittableRandom(723910);
+        Set<Long> received = new HashSet<>();
+        long highest = -1;
+        for (int index = 0; index < 10000; index++) {
+            long sequence = Math.max(0, highest + random.nextInt(8193) - 4096);
+            highest = Math.max(highest, sequence);
+            boolean expected = sequence > highest - 4096 && received.add(sequence);
+            assertEquals(expected, history.accept(sequence, true), "Sequence " + sequence);
+        }
+    }
+
+    /** Ordered lanes accept gaps but never deliver a repeated or earlier authenticated sequence. */
+    @Test
+    void orderedTrafficNeverMovesBackwards() {
+        var history = new FrameReplayWindow();
+        assertTrue(history.acceptOrdered(0));
+        assertFalse(history.acceptOrdered(0));
+        assertTrue(history.acceptOrdered(20));
+        assertFalse(history.acceptOrdered(19));
+        assertFalse(history.acceptOrdered(20));
+        assertTrue(history.acceptOrdered(21));
+    }
+
+    /**
+     * Reliable duplicates must be rejected even while earlier missing packets prevent prefix
+     * advancement.
+     *
+     * @throws GeneralSecurityException if a small receipt history unexpectedly exhausts its budget
+     */
+    @Test
+    void reliableDuplicatesAreRejectedInsidePendingRanges() throws GeneralSecurityException {
+        var history = new FrameReplayWindow();
+        assertTrue(history.accept(4, false));
+        assertTrue(history.accept(5, false));
+        assertTrue(history.accept(6, false));
+        assertFalse(history.accept(4, false));
+        assertFalse(history.accept(5, false));
+        assertFalse(history.accept(6, false));
+    }
+
+    /**
+     * Joining two pending ranges returns their spare slot without requiring the missing prefix.
+     *
+     * @throws GeneralSecurityException if merging ranges fails to return the documented capacity
+     */
+    @Test
+    void bridgingReliableRangesReturnsBudgetCapacity() throws GeneralSecurityException {
+        var history = new FrameReplayWindow();
+        for (int index = 0; index < 65536; index++) {
+            assertTrue(history.accept(index * 2L + 1, false));
+        }
+        assertTrue(history.accept(2, false));
+        assertTrue(history.accept(131073, false));
+        assertThrows(GeneralSecurityException.class, () -> history.accept(131075, false));
+    }
+
+    /**
+     * Stale unseen packets and old bitmap slots cannot reappear after a full window jump.
+     *
+     * @throws GeneralSecurityException if loss-tolerant receipt unexpectedly consumes reliable
+     *     budget
+     */
+    @Test
+    void unreliableWindowExpiresUnseenBoundaryAndClearsReusedSlots()
+            throws GeneralSecurityException {
+        var history = new FrameReplayWindow();
+        assertTrue(history.accept(4096, true));
+        assertFalse(history.accept(0, true));
+        assertTrue(history.accept(1, true));
+        assertTrue(history.accept(10000, true));
+        assertTrue(history.accept(8193, true));
+        assertFalse(history.accept(8193, true));
+        assertTrue(history.accept((1L << 32) - 1, true));
+        assertFalse(history.accept((1L << 32) - 1, true));
+    }
+
     /**
      * Switching channels cannot multiply the connection's retained reliable-gap allowance.
      *

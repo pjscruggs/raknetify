@@ -1,4 +1,8 @@
 /** Builds platform-independent framing, compression, synchronization, and diagnostic code. */
+plugins {
+    id 'info.solidsoft.pitest' version '1.19.0'
+}
+
 dependencies {
     compileOnlyApi 'de.maxhenkel.voicechat:voicechat-api:2.2.39'
     testImplementation 'de.maxhenkel.voicechat:voicechat-api:2.2.39'
@@ -24,6 +28,21 @@ dependencies {
 }
 
 test { useJUnitPlatform() }
+
+/** Mutates replay decisions and budget accounting to verify the security regressions detect faults. */
+pitest {
+    pitestVersion = '1.30.2'
+    junit5PluginVersion = '1.2.3'
+    targetClasses = ['com.ishland.raknetify.common.connection.FrameReplayWindow*']
+    targetTests = ['com.ishland.raknetify.common.connection.FrameReplayWindowTest',
+            'com.ishland.raknetify.common.connection.AuthenticatedFrameCipherTest']
+    threads = 2
+    outputFormats = ['XML', 'HTML']
+    timestampedReports = false
+    failWhenNoMutations = true
+    coverageThreshold = 100
+    mutationThreshold = 95
+}
 
 tasks.register('transportProbe', Sync) {
     dependsOn testClasses
