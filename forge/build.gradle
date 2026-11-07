@@ -59,6 +59,9 @@ processResources {
     }
     filesMatching('raknetify-fabric.mixins.json') {
         filter { line -> line.replace('JAVA_25', inputs.properties.mixinJavaCompatibility) }
+        // The line filter uses the host separator. Normalize it for reproducible archives.
+        filter(org.apache.tools.ant.filters.FixCrLfFilter,
+                eol: org.apache.tools.ant.filters.FixCrLfFilter.CrLf.newInstance('lf'))
     }
     from rootProject.file('icon.png')
 }
