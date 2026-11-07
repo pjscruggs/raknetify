@@ -111,6 +111,14 @@ tasks.register('checkTransportJavaPractices', Pmd) {
 def pythonCommand = providers.gradleProperty('qualityPython').getOrElse(
         System.getProperty('os.name').toLowerCase().contains('windows') ? 'python' : 'python3')
 
+/** Uses the caller's installed workflow analyzer so local and CI checks share the same rule set. */
+def actionlintCommand = providers.gradleProperty('qualityActionlint').getOrElse('actionlint')
+
+tasks.register('checkWorkflows', Exec) {
+    workingDir projectDir.parentFile
+    commandLine actionlintCommand
+}
+
 tasks.register('checkPython', Exec) {
     workingDir projectDir.parentFile
     commandLine pythonCommand, 'quality/check_python.py'
@@ -145,4 +153,4 @@ tasks.register('testPythonPolicy', Exec) {
     }
 }
 
-tasks.named('check') { dependsOn 'checkJava', 'checkJavaPractices', 'checkTransportJava', 'checkTransportJavaPractices', 'checkJavaFormat', 'checkGroovy', 'checkPython', 'checkPythonPractices', 'testPythonPolicy' }
+tasks.named('check') { dependsOn 'checkWorkflows', 'checkJava', 'checkJavaPractices', 'checkTransportJava', 'checkTransportJavaPractices', 'checkJavaFormat', 'checkGroovy', 'checkPython', 'checkPythonPractices', 'testPythonPolicy' }
