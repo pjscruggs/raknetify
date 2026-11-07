@@ -28,6 +28,7 @@ import io.netty.channel.Channel;
 
 import net.minecraft.network.ClientConnection;
 
+import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
@@ -42,5 +43,5 @@ public interface IClientConnection {
      * @return Minecraft's Netty channel, possibly null before connection initialization
      */
     @Accessor
-    Channel getChannel();
+    @Nullable Channel getChannel();
 }

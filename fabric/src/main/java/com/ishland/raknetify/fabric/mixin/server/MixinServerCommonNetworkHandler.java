@@ -73,8 +73,8 @@ public abstract class MixinServerCommonNetworkHandler implements ServerCommonPac
                                     "Lnet/minecraft/server/network/ServerCommonNetworkHandler;lastKeepAliveTime:J",
                             opcode = Opcodes.GETFIELD))
     private long disableKeepAlive(final long original) {
-        if (!(((IClientConnection) this.connection).getChannel().config()
-                instanceof RakNet.Config)) {
+        final Channel channel = ((IClientConnection) this.connection).getChannel();
+        if (channel == null || !(channel.config() instanceof RakNet.Config)) {
             return original;
         }
         return Util.getMeasuringTimeMs();
@@ -96,12 +96,12 @@ public abstract class MixinServerCommonNetworkHandler implements ServerCommonPac
                                     "Lnet/minecraft/server/network/ServerCommonNetworkHandler;disconnect(Lnet/minecraft/text/Text;)V"))
     private boolean stopTimeoutPlayersOnKeepAlive(
             final ServerCommonNetworkHandler instance, final Text reason) {
-        return !(((IClientConnection)
+        final Channel channel =
+                ((IClientConnection)
                                 MultiVersionUtil.ServerPlayNetworkHandler$connection.get(
                                         (ServerCommonNetworkHandler) (Object) this))
-                        .getChannel()
-                        .config()
-                instanceof RakNet.Config);
+                        .getChannel();
+        return channel == null || !(channel.config() instanceof RakNet.Config);
     }
 
     /**
@@ -121,12 +121,12 @@ public abstract class MixinServerCommonNetworkHandler implements ServerCommonPac
                             opcode = Opcodes.PUTFIELD))
     private boolean redirectPingStoring(
             final ServerCommonNetworkHandler instance, final int value) {
-        return !(((IClientConnection)
+        final Channel channel =
+                ((IClientConnection)
                                 MultiVersionUtil.ServerPlayNetworkHandler$connection.get(
                                         (ServerCommonNetworkHandler) (Object) this))
-                        .getChannel()
-                        .config()
-                instanceof RakNet.Config);
+                        .getChannel();
+        return channel == null || !(channel.config() instanceof RakNet.Config);
     }
 
     /**

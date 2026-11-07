@@ -26,6 +26,7 @@ package com.ishland.raknetify.fabric.mixin.compat.krypton;
 
 import com.ishland.raknetify.fabric.mixin.access.IClientConnection;
 
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPipeline;
 
@@ -43,6 +44,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
+
+import java.util.Objects;
 
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
@@ -75,9 +78,12 @@ public class MixinServerLoginNetworkHandler26_4 {
     private void afterSetupEncryption(
             final byte options, final CallbackInfo ci, final SecretKey secretKey)
             throws CryptException {
-        final ChannelPipeline pipeline =
-                ((IClientConnection) this.connection).getChannel().pipeline();
-        if (((IClientConnection) this.connection).getChannel().config() instanceof RakNet.Config) {
+        final Channel channel =
+                Objects.requireNonNull(
+                        ((IClientConnection) this.connection).getChannel(),
+                        "Cannot configure encryption before channel activation");
+        final ChannelPipeline pipeline = channel.pipeline();
+        if (channel.config() instanceof RakNet.Config) {
             final ChannelHandler decrypt = pipeline.get("decrypt");
             final ChannelHandler encrypt = pipeline.get("encrypt");
             if (decrypt != null

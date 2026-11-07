@@ -32,6 +32,8 @@ import io.netty.channel.Channel;
 
 import network.ycc.raknet.RakNet;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.function.Consumer;
 
 /** Formats transport statistics without depending on a particular Minecraft client's classes. */
@@ -47,7 +49,7 @@ public final class DebugHudFormatter {
      * @param channel connection channel, or null while the client is disconnected
      * @return true when RakNet details were emitted, false for a missing or ordinary TCP channel
      */
-    public static boolean append(final Consumer<String> consumer, final Channel channel) {
+    public static boolean append(final Consumer<String> consumer, final @Nullable Channel channel) {
         if (channel == null || !(channel.config() instanceof RakNet.Config config)) {
             return false;
         }

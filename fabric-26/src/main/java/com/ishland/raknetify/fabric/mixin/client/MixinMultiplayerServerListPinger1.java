@@ -68,7 +68,7 @@ public abstract class MixinMultiplayerServerListPinger1 implements ClientStatusP
             at = @At("RETURN"))
     private void setPingImmediately(final CallbackInfo ci) {
         final Channel channel = ((IClientConnection) val$connection).getChannel();
-        if (channel.config() instanceof RakNet.Config config) {
+        if (channel != null && channel.config() instanceof RakNet.Config config) {
             val$data.ping = config.getRTTNanos() / 1_000_000;
         }
     }
@@ -98,6 +98,6 @@ public abstract class MixinMultiplayerServerListPinger1 implements ClientStatusP
             final ServerData serverInfo,
             final EventLoopGroupHolder backend) {
         final Channel channel = ((IClientConnection) val$connection).getChannel();
-        return !(channel.config() instanceof RakNet.Config);
+        return channel == null || !(channel.config() instanceof RakNet.Config);
     }
 }

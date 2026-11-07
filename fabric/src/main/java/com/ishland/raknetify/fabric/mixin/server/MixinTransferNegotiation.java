@@ -42,6 +42,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.util.Objects;
+
 /** Negotiates automatic transfer support after authentication and before vanilla finishes login. */
 @Mixin(value = ServerLoginNetworkHandler.class, priority = 1100)
 public abstract class MixinTransferNegotiation {
@@ -90,7 +92,9 @@ public abstract class MixinTransferNegotiation {
         if (this.raknetify$transfer.answer(
                 packet.queryId(),
                 ((TransferQueryAnswer) (Object) packet).raknetify$isTransferSupported(),
-                ((IClientConnection) this.connection).getChannel())) {
+                Objects.requireNonNull(
+                        ((IClientConnection) this.connection).getChannel(),
+                        "Cannot record transfer capability before channel activation"))) {
             callback.cancel();
         }
     }

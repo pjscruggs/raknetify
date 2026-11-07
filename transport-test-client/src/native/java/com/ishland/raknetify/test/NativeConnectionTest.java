@@ -161,18 +161,7 @@ public final class NativeConnectionTest {
         if (listener == null || level == null || player == null) {
             throw new IllegalStateException("Gameplay witness has no complete client world");
         }
-        Channel channel = ((IClientConnection) listener.getConnection()).getChannel();
-        if (!(channel.config() instanceof RakNet.Config)) {
-            throw new IllegalStateException("Client joined over TCP");
-        }
-        var compression = channel.pipeline().get(MultiChannelingStreamingCompression.class);
-        if (compression == null || !compression.isActive()) {
-            throw new IllegalStateException("Streaming compression was not negotiated");
-        }
-        if (Boolean.getBoolean("raknetify.test.encrypted")
-                && channel.pipeline().get(MultiChannellingEncryption.class) == null) {
-            throw new IllegalStateException("Native login did not negotiate frame encryption");
-        }
+        final Channel channel = verifyTransport(listener);
         if (!gameplayComplete(level, player, listener)) {
             return;
         }
@@ -189,6 +178,32 @@ public final class NativeConnectionTest {
                     });
                 });
         listener.getConnection().disconnect(Component.literal("Transport fixture complete"));
+    }
+
+    /**
+     * Requires the real login connection to have negotiated every transport feature selected by
+     * this run.
+     *
+     * @param listener client listener that has already entered the playable world
+     * @return initialized RakNet channel with active streaming compression and any required
+     *     encryption
+     * @throws IllegalStateException if the channel is absent or a required transport feature is
+     *     missing
+     */
+    private static Channel verifyTransport(final ClientPacketListener listener) {
+        Channel channel = ((IClientConnection) listener.getConnection()).getChannel();
+        if (channel == null || !(channel.config() instanceof RakNet.Config)) {
+            throw new IllegalStateException("Client joined without a RakNet channel");
+        }
+        var compression = channel.pipeline().get(MultiChannelingStreamingCompression.class);
+        if (compression == null || !compression.isActive()) {
+            throw new IllegalStateException("Streaming compression was not negotiated");
+        }
+        if (Boolean.getBoolean("raknetify.test.encrypted")
+                && channel.pipeline().get(MultiChannellingEncryption.class) == null) {
+            throw new IllegalStateException("Native login did not negotiate frame encryption");
+        }
+        return channel;
     }
 
     /**

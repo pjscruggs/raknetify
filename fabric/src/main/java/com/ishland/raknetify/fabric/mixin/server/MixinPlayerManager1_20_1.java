@@ -69,8 +69,8 @@ public class MixinPlayerManager1_20_1 {
             final ServerPlayerEntity player,
             final int latency,
             final CallbackInfo ci) {
-        if (((IClientConnection) connection).getChannel().config()
-                instanceof RakNet.Config config) {
+        final Channel channel = ((IClientConnection) connection).getChannel();
+        if (channel != null && channel.config() instanceof RakNet.Config config) {
             System.out.println(
                     String.format(
                             "Raknetify: %s logged in via RakNet, mtu %d",
@@ -91,8 +91,8 @@ public class MixinPlayerManager1_20_1 {
             final ClientConnection connection,
             final ServerPlayerEntity player,
             final CallbackInfo ci) {
-        if (((IClientConnection) connection).getChannel().config()
-                instanceof RakNet.Config config) {
+        final Channel channel = ((IClientConnection) connection).getChannel();
+        if (channel != null && channel.config() instanceof RakNet.Config config) {
             System.out.println(
                     String.format(
                             "Raknetify: %s logged in via RakNet, mtu %d",

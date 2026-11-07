@@ -68,7 +68,7 @@ public abstract class MixinMultiplayerServerListPinger1 implements ClientQueryPa
             at = @At("RETURN"))
     private void setPingImmediately(final CallbackInfo ci) {
         final Channel channel = ((IClientConnection) field_3774).getChannel();
-        if (channel.config() instanceof RakNet.Config config) {
+        if (channel != null && channel.config() instanceof RakNet.Config config) {
             field_3776.ping = config.getRTTNanos() / 1_000_000;
         }
     }
@@ -100,7 +100,7 @@ public abstract class MixinMultiplayerServerListPinger1 implements ClientQueryPa
             final ServerAddress address,
             final ServerInfo serverInfo) {
         final Channel channel = ((IClientConnection) field_3774).getChannel();
-        return !(channel.config() instanceof RakNet.Config);
+        return channel == null || !(channel.config() instanceof RakNet.Config);
     }
 
     /**
@@ -128,7 +128,7 @@ public abstract class MixinMultiplayerServerListPinger1 implements ClientQueryPa
             final ServerInfo serverInfo,
             final NetworkingBackend backend) {
         final Channel channel = ((IClientConnection) field_3774).getChannel();
-        return !(channel.config() instanceof RakNet.Config);
+        return channel == null || !(channel.config() instanceof RakNet.Config);
     }
 
     /**
@@ -156,6 +156,6 @@ public abstract class MixinMultiplayerServerListPinger1 implements ClientQueryPa
             final InetSocketAddress address,
             final ServerInfo info) {
         final Channel channel = ((IClientConnection) field_3774).getChannel();
-        return !(channel.config() instanceof RakNet.Config);
+        return channel == null || !(channel.config() instanceof RakNet.Config);
     }
 }

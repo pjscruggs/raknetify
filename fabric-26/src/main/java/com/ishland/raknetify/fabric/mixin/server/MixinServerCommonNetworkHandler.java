@@ -72,8 +72,8 @@ public abstract class MixinServerCommonNetworkHandler implements ServerCommonPac
                                     "Lnet/minecraft/server/network/ServerCommonPacketListenerImpl;keepAliveTime:J",
                             opcode = Opcodes.GETFIELD))
     private long disableKeepAlive(final long original) {
-        if (!(((IClientConnection) this.connection).getChannel().config()
-                instanceof RakNet.Config)) {
+        final Channel channel = ((IClientConnection) this.connection).getChannel();
+        if (channel == null || !(channel.config() instanceof RakNet.Config)) {
             return original;
         }
         return Util.getMillis();
@@ -95,8 +95,8 @@ public abstract class MixinServerCommonNetworkHandler implements ServerCommonPac
                                     "Lnet/minecraft/server/network/ServerCommonPacketListenerImpl;disconnect(Lnet/minecraft/network/chat/Component;)V"))
     private boolean stopTimeoutPlayersOnKeepAlive(
             final ServerCommonPacketListenerImpl instance, final Component reason) {
-        return !(((IClientConnection) this.connection).getChannel().config()
-                instanceof RakNet.Config);
+        final Channel channel = ((IClientConnection) this.connection).getChannel();
+        return channel == null || !(channel.config() instanceof RakNet.Config);
     }
 
     /**
@@ -116,8 +116,8 @@ public abstract class MixinServerCommonNetworkHandler implements ServerCommonPac
                             opcode = Opcodes.PUTFIELD))
     private boolean redirectPingStoring(
             final ServerCommonPacketListenerImpl instance, final int value) {
-        return !(((IClientConnection) this.connection).getChannel().config()
-                instanceof RakNet.Config);
+        final Channel channel = ((IClientConnection) this.connection).getChannel();
+        return channel == null || !(channel.config() instanceof RakNet.Config);
     }
 
     /**

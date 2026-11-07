@@ -71,12 +71,12 @@ public class MixinServerPlayNetworkHandler1_20_1 {
                                     "Lnet/minecraft/server/network/ServerPlayNetworkHandler;field_14136:J",
                             opcode = Opcodes.GETFIELD))
     private long disableKeepAlive(final long original) {
-        if (!(((IClientConnection)
+        final Channel channel =
+                ((IClientConnection)
                                 MultiVersionUtil.ServerPlayNetworkHandler$connection.get(
                                         (ServerPlayNetworkHandler) (Object) this))
-                        .getChannel()
-                        .config()
-                instanceof RakNet.Config)) {
+                        .getChannel();
+        if (channel == null || !(channel.config() instanceof RakNet.Config)) {
             return original;
         }
         return Util.getMeasuringTimeMs();
@@ -101,12 +101,12 @@ public class MixinServerPlayNetworkHandler1_20_1 {
                                     "Lnet/minecraft/server/network/ServerPlayNetworkHandler;method_14367(Lnet/minecraft/text/Text;)V"))
     private boolean stopTimeoutPlayersOnKeepAlive(
             final ServerPlayNetworkHandler instance, final Text reason) {
-        return !(((IClientConnection)
+        final Channel channel =
+                ((IClientConnection)
                                 MultiVersionUtil.ServerPlayNetworkHandler$connection.get(
                                         (ServerPlayNetworkHandler) (Object) this))
-                        .getChannel()
-                        .config()
-                instanceof RakNet.Config);
+                        .getChannel();
+        return channel == null || !(channel.config() instanceof RakNet.Config);
     }
 
     /**
@@ -128,12 +128,12 @@ public class MixinServerPlayNetworkHandler1_20_1 {
                                     "Lnet/minecraft/server/network/ServerPlayerEntity;field_13967:I",
                             opcode = Opcodes.PUTFIELD))
     private boolean redirectPingStoring(final ServerPlayerEntity instance, final int value) {
-        return !(((IClientConnection)
+        final Channel channel =
+                ((IClientConnection)
                                 MultiVersionUtil.ServerPlayNetworkHandler$connection.get(
                                         (ServerPlayNetworkHandler) (Object) this))
-                        .getChannel()
-                        .config()
-                instanceof RakNet.Config);
+                        .getChannel();
+        return channel == null || !(channel.config() instanceof RakNet.Config);
     }
 
     /**
