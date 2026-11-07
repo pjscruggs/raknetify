@@ -33,11 +33,16 @@ import io.netty.channel.Channel;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.ConnectScreen;
 import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 
 import network.ycc.raknet.RakNet;
+
+import org.jspecify.annotations.Nullable;
 
 import java.util.concurrent.TimeUnit;
 
@@ -66,7 +71,7 @@ public final class NativeConnectionTest {
     private static boolean chatSent;
 
     /** Application channel retained while the fixture verifies complete transport shutdown. */
-    private static Channel closingChannel;
+    private static @Nullable Channel closingChannel;
 
     /**
      * Monotonic deadline covering resource loading, login and receipt of the first playable world.
@@ -74,7 +79,7 @@ public final class NativeConnectionTest {
     private static long deadline;
 
     /** Last observed native dimension during the optional cross-world ordering regression. */
-    private static String lastDimension;
+    private static @Nullable String lastDimension;
 
     /** Completed dimension changes after initial arrival in the overworld. */
     private static int worldChanges;
@@ -150,9 +155,11 @@ public final class NativeConnectionTest {
      *     compression
      */
     private static void verifyJoined(final Minecraft minecraft) {
-        var listener = minecraft.getConnection();
-        if (listener == null) {
-            throw new IllegalStateException("Player has no server connection");
+        final var listener = minecraft.getConnection();
+        final var level = minecraft.level;
+        final var player = minecraft.player;
+        if (listener == null || level == null || player == null) {
+            throw new IllegalStateException("Gameplay witness has no complete client world");
         }
         Channel channel = ((IClientConnection) listener.getConnection()).getChannel();
         if (!(channel.config() instanceof RakNet.Config)) {
@@ -166,7 +173,7 @@ public final class NativeConnectionTest {
                 && channel.pipeline().get(MultiChannellingEncryption.class) == null) {
             throw new IllegalStateException("Native login did not negotiate frame encryption");
         }
-        if (!gameplayComplete(minecraft)) {
+        if (!gameplayComplete(level, player, listener)) {
             return;
         }
         finishing = true;
@@ -187,12 +194,17 @@ public final class NativeConnectionTest {
     /**
      * Waits for every selected gameplay and voice witness before closing their shared transport.
      *
-     * @param minecraft client with a playable world
+     * @param level current world whose chunks and tick counter establish readiness
+     * @param player local player whose position and experience prove gameplay delivery
+     * @param listener connection used for the final chat acknowledgement
      * @return whether dimension changes, chat and optional voice authentication have completed
      */
-    private static boolean gameplayComplete(final Minecraft minecraft) {
-        return verifyWorldChanges(minecraft)
-                && verifyChatAcknowledgement(minecraft)
+    private static boolean gameplayComplete(
+            final ClientLevel level,
+            final LocalPlayer player,
+            final ClientPacketListener listener) {
+        return verifyWorldChanges(level, player)
+                && verifyChatAcknowledgement(player, listener)
                 && (!Boolean.getBoolean("raknetify.test.voicechat")
                         || VoiceClientWitness.connected());
     }
@@ -226,21 +238,22 @@ public final class NativeConnectionTest {
      * Requires the server-driven overworld, Nether, and overworld sequence when the integration
      * test requests it.
      *
-     * @param minecraft client receiving real respawn and chunk packets from each destination
+     * @param level world installed by the latest native respawn packet
+     * @param player local player whose current chunk must have arrived
      * @return true after the requested sequence, or immediately when world changes are not under
      *     test
      * @throws IllegalStateException if dimensions arrive out of order
      */
-    private static boolean verifyWorldChanges(final Minecraft minecraft) {
+    private static boolean verifyWorldChanges(final ClientLevel level, final LocalPlayer player) {
         if (!Boolean.getBoolean("raknetify.test.worldChanges")) {
             return true;
         }
-        if (!minecraft.level.hasChunkAt(minecraft.player.blockPosition())) {
+        if (!level.hasChunkAt(player.blockPosition())) {
             return false;
         }
-        String dimension = minecraft.level.dimension().identifier().toString();
+        String dimension = level.dimension().identifier().toString();
         if (dimension.equals(lastDimension)) {
-            return worldSettled(minecraft);
+            return worldSettled(level);
         }
         if (lastDimension != null) {
             worldChanges++;
@@ -251,41 +264,42 @@ public final class NativeConnectionTest {
         }
         lastDimension = dimension;
         System.out.println("PASS native world boundary " + worldChanges + " " + dimension);
-        return worldSettled(minecraft);
+        return worldSettled(level);
     }
 
     /**
      * Keeps the final world active for twenty ticks so late entity and command packets are also
      * decoded.
      *
-     * @param minecraft client whose current world supplies the monotonically advancing fixture tick
+     * @param level current world supplying the monotonically advancing fixture tick
      * @return true after the final world has remained playable for twenty ticks
      */
-    private static boolean worldSettled(final Minecraft minecraft) {
+    private static boolean worldSettled(final ClientLevel level) {
         if (worldChanges != 2) {
             return false;
         }
         if (finalWorldTick < 0) {
-            finalWorldTick = minecraft.level.getGameTime();
+            finalWorldTick = level.getGameTime();
         }
-        return minecraft.level.getGameTime() - finalWorldTick >= 20;
+        return level.getGameTime() - finalWorldTick >= 20;
     }
 
     /**
      * Sends the final chat once and waits for the server runner to acknowledge receipt with an
      * experience update.
      *
-     * @param minecraft client receiving the server's ordinary gameplay packets
+     * @param player local player whose experience level carries the server acknowledgement
+     * @param listener active connection that sends the final chat once
      * @return true after the requested acknowledgement, or immediately outside the world-change
      *     regression
      */
-    private static boolean verifyChatAcknowledgement(final Minecraft minecraft) {
+    private static boolean verifyChatAcknowledgement(
+            final LocalPlayer player, final ClientPacketListener listener) {
         if (!chatSent) {
-            minecraft.getConnection().sendChat("Raknetify transport fixture joined");
+            listener.sendChat("Raknetify transport fixture joined");
             chatSent = true;
             System.out.println("PASS native final chat sent");
         }
-        return !Boolean.getBoolean("raknetify.test.worldChanges")
-                || minecraft.player.experienceLevel == 42;
+        return !Boolean.getBoolean("raknetify.test.worldChanges") || player.experienceLevel == 42;
     }
 }

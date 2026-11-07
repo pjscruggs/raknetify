@@ -47,14 +47,20 @@ public final class ForgeClientTest {
      * @param event final mod lifecycle event
      */
     private void complete(final FMLLoadCompleteEvent event) {
-        event.enqueueWork(() -> {
-            try {
-                ForgePayloadOwnershipTest.verify();
-                NativeClientTests.run();
-            } catch (Throwable failure) {
-                failure.printStackTrace();
-                System.exit(1);
-            }
-        });
+        event.enqueueWork(
+                        () -> {
+                            try {
+                                ForgePayloadOwnershipTest.verify();
+                                NativeClientTests.run();
+                            } catch (Throwable failure) {
+                                failure.printStackTrace();
+                                System.exit(1);
+                            }
+                        })
+                .exceptionally(failure -> {
+                    failure.printStackTrace();
+                    System.exit(1);
+                    return null;
+                });
     }
 }

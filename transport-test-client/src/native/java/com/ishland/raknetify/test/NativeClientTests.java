@@ -55,6 +55,9 @@ public final class NativeClientTests {
                 System.exit(0);
             }
         } catch (Throwable failure) {
+            if (failure instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             failure.printStackTrace();
             System.exit(1);
         }

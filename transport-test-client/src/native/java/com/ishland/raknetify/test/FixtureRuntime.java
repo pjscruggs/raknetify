@@ -24,9 +24,11 @@
 
 package com.ishland.raknetify.test;
 
+import com.google.common.base.Splitter;
 import com.ishland.raknetify.minecraft.ModPlatform;
 
 import java.nio.file.Path;
+import java.util.Objects;
 
 /**
  * Reads the native loader's game metadata without introducing a Fabric dependency into its tests.
@@ -52,11 +54,15 @@ final class FixtureRuntime {
      * @return whether the runtime's numeric release is at least the requested release
      */
     static boolean atLeast(final String version) {
-        String[] current = ModPlatform.get().minecraftVersion().split("[-+]")[0].split("\\.");
-        String[] required = version.split("\\.");
-        for (int index = 0; index < Math.max(current.length, required.length); index++) {
-            int actual = index < current.length ? Integer.parseInt(current[index]) : 0;
-            int minimum = index < required.length ? Integer.parseInt(required[index]) : 0;
+        final String release =
+                Splitter.onPattern("[-+]")
+                        .splitToList(ModPlatform.get().minecraftVersion())
+                        .getFirst();
+        final var current = Splitter.on('.').splitToList(release);
+        final var required = Splitter.on('.').splitToList(version);
+        for (int index = 0; index < Math.max(current.size(), required.size()); index++) {
+            int actual = index < current.size() ? Integer.parseInt(current.get(index)) : 0;
+            int minimum = index < required.size() ? Integer.parseInt(required.get(index)) : 0;
             if (actual != minimum) {
                 return actual > minimum;
             }
@@ -68,8 +74,11 @@ final class FixtureRuntime {
      * Derives fixture storage from the loader's isolated configuration location.
      *
      * @return game directory surrounding the configuration directory
+     * @throws NullPointerException if the loader supplies a filesystem root as its config directory
      */
     static Path gameDirectory() {
-        return ModPlatform.get().configDirectory().toAbsolutePath().getParent();
+        return Objects.requireNonNull(
+                ModPlatform.get().configDirectory().toAbsolutePath().getParent(),
+                "Fixture configuration directory must have a parent");
     }
 }

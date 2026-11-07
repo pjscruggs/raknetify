@@ -47,6 +47,11 @@ public final class NeoForgeClientTest {
      * @param event final mod lifecycle event
      */
     private void complete(final FMLLoadCompleteEvent event) {
-        event.enqueueWork(NativeClientTests::run);
+        event.enqueueWork(NativeClientTests::run)
+                .exceptionally(failure -> {
+                    failure.printStackTrace();
+                    System.exit(1);
+                    return null;
+                });
     }
 }
