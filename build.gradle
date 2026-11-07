@@ -17,6 +17,7 @@ buildscript {
 }
 
 plugins {
+	id 'net.ltgt.errorprone' version '5.2.0' apply false
 	id 'org.cyclonedx.bom' version '3.5.1'
 	id 'fabric-loom' version '1.17.21' apply false
 	id 'net.fabricmc.fabric-loom' version '1.17.21' apply false
@@ -53,17 +54,60 @@ tasks.register('qualityChecks') {
 	group = 'verification'
 	description = 'Check documentation and a cyclomatic complexity limit of ten across project sources.'
 	dependsOn gradle.includedBuild('quality').task(':check')
+    dependsOn gradle.includedBuild('compiler-checks').task(':test')
+    dependsOn gradle.includedBuild('netty-raknet').task(':netty-raknet-common:test')
+    dependsOn gradle.includedBuild('netty-raknet').task(':netty-raknet-tests:test')
 }
 
 subprojects {
 	apply plugin: 'java'
 	apply plugin: 'java-library'
-    dependencies {
-        compileOnly 'org.jspecify:jspecify:1.0.1'
-        testCompileOnly 'org.jspecify:jspecify:1.0.1'
+	apply plugin: 'net.ltgt.errorprone'
+	dependencies {
+		errorprone 'com.google.errorprone:error_prone_core:2.52.0'
+        errorprone 'com.ishland.raknetify.build:compiler-checks:1.0'
         compileOnly 'com.google.errorprone:error_prone_annotations:2.52.0'
         testCompileOnly 'com.google.errorprone:error_prone_annotations:2.52.0'
-    }
+		errorprone 'com.uber.nullaway:nullaway:0.14.3'
+		compileOnly 'org.jspecify:jspecify:1.0.1'
+		testCompileOnly 'org.jspecify:jspecify:1.0.1'
+	}
+	tasks.withType(JavaCompile).configureEach {
+		options.compilerArgs.addAll(['-Xlint:rawtypes,unchecked', '-Werror'])
+		options.errorprone {
+			ignoreSuppressionAnnotations = true
+            // Retains the original check for ordinary methods while recognizing generated invoker bodies.
+            disable 'DoNotCallSuggester'
+            error 'MixinAwareDoNotCall'
+			error 'NullAway', 'CheckReturnValue', 'CollectionIncompatibleType', 'EqualsHashCode',
+					'BoxedPrimitiveEquality', 'MustBeClosedChecker', 'StreamResourceLeak',
+					'FutureReturnValueIgnored', 'InterruptedExceptionSwallowed', 'GuardedBy'
+			option 'NullAway:AnnotatedPackages', 'com.ishland.raknetify'
+            // JMH invokes Setup before measured methods, which must still pass field-initialization checks.
+            option 'NullAway:CustomInitializerAnnotations', 'org.openjdk.jmh.annotations.Setup'
+            // Mixin invokes these methods after bytecode transformation, outside the Java call graph.
+            option 'UnusedMethod:ExemptingMethodAnnotations',
+                    'org.spongepowered.asm.mixin.injection.Inject,org.spongepowered.asm.mixin.injection.Redirect,' +
+                    'org.spongepowered.asm.mixin.injection.ModifyArg,org.spongepowered.asm.mixin.injection.ModifyArgs,' +
+                    'org.spongepowered.asm.mixin.injection.ModifyVariable,org.spongepowered.asm.mixin.injection.ModifyConstant,' +
+                    'org.spongepowered.asm.mixin.injection.Surrogate,' +
+                    'com.llamalad7.mixinextras.injector.ModifyExpressionValue,com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation,' +
+                    'com.llamalad7.mixinextras.injector.WrapWithCondition,com.llamalad7.mixinextras.injector.v2.WrapWithCondition,' +
+                    'com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod,com.llamalad7.mixinextras.injector.ModifyReturnValue'
+            // Shadow fields are supplied by the target class, whose constructor the mixin does not own.
+            option 'NullAway:ExcludedFieldAnnotations', 'org.spongepowered.asm.mixin.Shadow'
+            option 'Unused:methodAnnotationsExemptingParameters',
+                    'org.spongepowered.asm.mixin.injection.Inject,org.spongepowered.asm.mixin.injection.Redirect,' +
+                    'org.spongepowered.asm.mixin.injection.ModifyArg,org.spongepowered.asm.mixin.injection.ModifyArgs,' +
+                    'org.spongepowered.asm.mixin.injection.ModifyVariable,org.spongepowered.asm.mixin.injection.ModifyConstant,' +
+                    'org.spongepowered.asm.mixin.injection.Surrogate,' +
+                    'com.llamalad7.mixinextras.injector.ModifyExpressionValue,com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation,' +
+                    'com.llamalad7.mixinextras.injector.WrapWithCondition,com.llamalad7.mixinextras.injector.v2.WrapWithCondition,' +
+                    'com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod,com.llamalad7.mixinextras.injector.ModifyReturnValue'
+
+
+		}
+	}
 	// Integration fixtures must never become Maven release artifacts.
 	if (!project.name.startsWith('transport-test-')) apply plugin: 'maven-publish'
 	apply plugin: 'dev.yumi.gradle.licenser'

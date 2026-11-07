@@ -27,6 +27,17 @@ def ownedSources = providers.exec {
 }.standardOutput.asText.get().split('\u0000').findAll { !it.empty }
         .collect { new File(projectDir.parentFile, it) }.findAll { it.isFile() }
 
+/** Maintained transport sources receive the same documentation, complexity, and correctness checks. */
+def transportRoot = new File(projectDir.parentFile, 'netty-raknet')
+if (!new File(transportRoot, 'settings.gradle').isFile()) {
+    throw new GradleException('Initialize the netty-raknet submodule before running source checks.')
+}
+def transportSources = providers.exec {
+    workingDir transportRoot
+    commandLine 'git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z'
+}.standardOutput.asText.get().split('\u0000').findAll { !it.empty && it.endsWith('.java') }
+        .collect { new File(transportRoot, it) }.findAll { it.isFile() }
+
 checkstyle {
     toolVersion = '14.4.0'
     configFile = file('checkstyle.xml')
@@ -59,6 +70,12 @@ tasks.register('checkJava', Checkstyle) {
     reports { xml.required = true; html.required = true }
 }
 
+tasks.register('checkTransportJava', Checkstyle) {
+    source files(transportSources)
+    classpath = files()
+    reports { xml.required = true; html.required = true }
+}
+
 tasks.register('checkGroovy', CodeNarc) {
     source files(ownedSources.findAll { it.name.endsWith('.groovy') || it.name.endsWith('.gradle') })
     reports { xml.required = true; html.required = true }
@@ -80,6 +97,12 @@ tasks.withType(Pmd).configureEach {
 
 tasks.register('checkJavaPractices', Pmd) {
     source files(ownedSources.findAll { it.name.endsWith('.java') })
+    classpath = files(new File(System.getProperty('java.home'), 'lib/jrt-fs.jar'))
+    reports { xml.required = true; html.required = true }
+}
+
+tasks.register('checkTransportJavaPractices', Pmd) {
+    source files(transportSources)
     classpath = files(new File(System.getProperty('java.home'), 'lib/jrt-fs.jar'))
     reports { xml.required = true; html.required = true }
 }
@@ -122,4 +145,4 @@ tasks.register('testPythonPolicy', Exec) {
     }
 }
 
-tasks.named('check') { dependsOn 'checkJava', 'checkJavaPractices', 'checkJavaFormat', 'checkGroovy', 'checkPython', 'checkPythonPractices', 'testPythonPolicy' }
+tasks.named('check') { dependsOn 'checkJava', 'checkJavaPractices', 'checkTransportJava', 'checkTransportJavaPractices', 'checkJavaFormat', 'checkGroovy', 'checkPython', 'checkPythonPractices', 'testPythonPolicy' }

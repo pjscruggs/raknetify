@@ -1,0 +1,2 @@
+/** Keeps compiler extensions separate from the mod artifacts they analyze. */
+rootProject.name = 'compiler-checks'

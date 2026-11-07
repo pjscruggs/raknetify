@@ -13,6 +13,7 @@ pluginManagement {
 rootProject.name = "raknetify2"
 
 includeBuild('quality')
+includeBuild('compiler-checks')
 
 includeBuild('netty-raknet') {
     dependencySubstitution {

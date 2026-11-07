@@ -16,8 +16,9 @@ dependencies {
     compileOnly("com.google.guava:guava:31.1-jre")
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.3'
+    testImplementation 'com.tngtech.archunit:archunit:1.5.1'
     testImplementation 'io.netty:netty-all:4.1.25.Final'
-    testRuntimeOnly 'com.google.guava:guava:31.1-jre'
+    testImplementation 'com.google.guava:guava:31.1-jre'
     testRuntimeOnly 'com.google.code.gson:gson:2.9.0'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
@@ -57,4 +58,9 @@ tasks.register('benchmark', JavaExec) {
     args '-foe', 'true', '-f', '3', '-wi', '3', '-i', '5', '-w', '1s', '-r', '1s', '-prof', 'gc',
             '-jvmArgsAppend', '-Xms256m -Xmx256m', '-rf', 'json',
             '-rff', layout.buildDirectory.file('reports/benchmark.json').get().asFile.absolutePath
+}
+
+// The JMH generator owns its harness sources. Handwritten benchmark sources remain fully checked.
+tasks.named('compileBenchmarkJava', JavaCompile) {
+    options.errorprone.excludedPaths = '.*/generated/sources/annotationProcessor/java/benchmark/.*'
 }
