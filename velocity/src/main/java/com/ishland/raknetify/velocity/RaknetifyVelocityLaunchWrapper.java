@@ -26,7 +26,6 @@ import com.ishland.raknetify.common.data.ProtocolMultiChannelMappings;
 import com.ishland.raknetify.velocity.connection.RakNetVelocityConnectionUtil;
 import com.ishland.raknetify.velocity.init.VelocityPacketRegistryInjector;
 import com.ishland.raknetify.velocity.init.VelocityRaknetifyServer;
-import com.velocitypowered.api.event.PostOrder;
 import com.velocitypowered.api.event.connection.LoginEvent;
 import com.velocitypowered.api.event.player.ServerPostConnectEvent;
 import com.velocitypowered.api.event.proxy.ListenerBoundEvent;
@@ -37,6 +36,9 @@ import com.velocitypowered.api.event.proxy.ListenerCloseEvent;
  * selected.
  */
 public class RaknetifyVelocityLaunchWrapper {
+
+    /** Matches Velocity's legacy LAST priority while using the current numeric registration API. */
+    private static final short LAST_EVENT_PRIORITY = -32767;
 
     /**
      * Checks required Velocity internals, loads routing tables, and registers connection lifecycle
@@ -60,7 +62,7 @@ public class RaknetifyVelocityLaunchWrapper {
                     .register(
                             RaknetifyVelocityPlugin.instance(),
                             ListenerBoundEvent.class,
-                            PostOrder.LAST,
+                            LAST_EVENT_PRIORITY,
                             ignored -> runnable.run());
             return;
         }
@@ -73,28 +75,28 @@ public class RaknetifyVelocityLaunchWrapper {
                 .register(
                         RaknetifyVelocityPlugin.instance(),
                         LoginEvent.class,
-                        PostOrder.LAST,
+                        LAST_EVENT_PRIORITY,
                         RakNetVelocityConnectionUtil::onPlayerLogin);
         RaknetifyVelocityPlugin.proxy()
                 .getEventManager()
                 .register(
                         RaknetifyVelocityPlugin.instance(),
                         ListenerBoundEvent.class,
-                        PostOrder.LAST,
+                        LAST_EVENT_PRIORITY,
                         VelocityRaknetifyServer::start);
         RaknetifyVelocityPlugin.proxy()
                 .getEventManager()
                 .register(
                         RaknetifyVelocityPlugin.instance(),
                         ListenerCloseEvent.class,
-                        PostOrder.LAST,
+                        LAST_EVENT_PRIORITY,
                         VelocityRaknetifyServer::stop);
         RaknetifyVelocityPlugin.proxy()
                 .getEventManager()
                 .register(
                         RaknetifyVelocityPlugin.instance(),
                         ServerPostConnectEvent.class,
-                        PostOrder.LAST,
+                        LAST_EVENT_PRIORITY,
                         RakNetVelocityConnectionUtil::onServerSwitch);
     }
 

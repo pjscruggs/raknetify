@@ -248,7 +248,10 @@ public final class NativeConnectionTest {
         if (!Boolean.getBoolean("raknetify.test.worldChanges")) {
             return true;
         }
-        if (!level.hasChunkAt(player.blockPosition())) {
+        if (!level.getChunkSource()
+                .hasChunk(
+                        net.minecraft.core.SectionPos.blockToSectionCoord(player.getBlockX()),
+                        net.minecraft.core.SectionPos.blockToSectionCoord(player.getBlockZ()))) {
             return false;
         }
         String dimension = level.dimension().identifier().toString();
