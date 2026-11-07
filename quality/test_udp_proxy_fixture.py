@@ -5,6 +5,7 @@ from pathlib import Path
 import socket
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 def load_fixture():
@@ -18,6 +19,26 @@ def load_fixture():
 
 class UdpProxyFixtureTest(unittest.TestCase):
     """Exercise actual UDP tuples, first-packet metadata, late replies and safe fixture configuration."""
+
+    def test_worker_failure_is_raised_and_owned_socket_is_closed(self):
+        """A failed forwarding worker must fail the enclosing test even when the foreground succeeds."""
+        fixture = load_fixture()
+        proxy = fixture.UdpProxy(9)
+        with patch.object(proxy, 'run', side_effect=ValueError('failed forwarding')), \
+                self.assertRaisesRegex(ValueError, 'failed forwarding'), proxy as port:
+            self.assertGreater(port, 0)
+        self.assertEqual(-1, proxy.front.fileno())
+        self.assertTrue(proxy.worker.done())
+
+    def test_partial_startup_closes_socket_when_registration_fails(self):
+        """An initialization failure must release the socket before a context manager can be entered."""
+        fixture = load_fixture()
+        channel = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        with patch.object(fixture.socket, 'socket', return_value=channel), \
+                patch.object(fixture.selectors.DefaultSelector, 'register', side_effect=OSError('registration failed')), \
+                self.assertRaisesRegex(OSError, 'registration failed'):
+            fixture.UdpProxy(9)
+        self.assertEqual(-1, channel.fileno())
 
     def test_policy_refuses_unrelated_contents(self):
         """Reject an existing operator policy and remove only the exact policy created by this fixture."""

@@ -138,8 +138,9 @@ def server(args, lock, metadata):
                 client(args, lock, metadata, join=True)
                 shutil.copy2(args.work_dir / 'client.log', args.work_dir / 'native-client.log')
             if args.proxy_protocol:
-                sibling('udp-proxy-fixture').check_ip_ban(process, folder, args.java, args.probe_dir,
-                                                        port, expected['protocol_version'])
+                proxy = sibling('udp-proxy-fixture')
+                proxy.check_ip_ban(process, folder, proxy.NativeProbe(
+                    args.java, args.probe_dir, port, expected['protocol_version']))
     finally:
         smoke.stop_server(process, reader)
     assert process.returncode == 0, process.returncode

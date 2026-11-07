@@ -1,6 +1,7 @@
 """Verify mapping publication and smoke-test cleanup using isolated files and fake processes."""
 
 import importlib.util
+import io
 import json
 from pathlib import Path
 import subprocess
@@ -28,6 +29,20 @@ SMOKE = load_script('server-smoke')
 class BuildScriptTest(unittest.TestCase):
     """Protect mapping-output integrity and owned-process cleanup during failures."""
 
+    def test_selected_features_reach_the_server_process(self):
+        """Keep independent encryption, packet-limit and transfer switches in the actual launch command."""
+        process = Mock(stdout=io.StringIO(''))
+        features = SMOKE.SmokeFeatures(encryption=True, packetfixer=True, transfers=True)
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(SMOKE.subprocess, 'Popen', return_value=process) as launch:
+            folder = Path(directory)
+            _, reader = SMOKE.start_server(folder, folder / 'server.log', SMOKE.queue.Queue(), 'java', features)
+            reader.join(timeout=2)
+            self.assertFalse(reader.is_alive())
+        command = launch.call_args.args[0]
+        for switch in ('encryption', 'packetLimits', 'transfers'):
+            self.assertIn('-Draknetify.test.' + switch + '=true', command)
+
     def test_manifest_versions_include_additional_mappings_once(self):
         """Retain manifest order and extra mappings while removing duplicate version IDs."""
         with tempfile.TemporaryDirectory() as folder:
@@ -43,9 +58,9 @@ class BuildScriptTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             work = Path(folder)
             with patch.object(MAPPINGS, 'server_launcher', return_value=work / 'launcher.jar'), \
-                    patch.object(MAPPINGS.time, 'sleep'), patch.object(MAPPINGS.subprocess, 'run'):
-                with self.assertRaisesRegex(RuntimeError, 'did not write output'):
-                    MAPPINGS.generate_version(work, 'probe')
+                    patch.object(MAPPINGS.time, 'sleep'), patch.object(MAPPINGS.subprocess, 'run'), \
+                    self.assertRaisesRegex(RuntimeError, 'did not write output'):
+                MAPPINGS.generate_version(work, 'probe')
 
     def test_failed_matrix_does_not_replace_checked_in_mappings(self):
         """Leave the repository resource untouched when a later version fails after earlier output."""
@@ -68,9 +83,9 @@ class BuildScriptTest(unittest.TestCase):
             with patch.object(MAPPINGS, '__file__', str(root / '.github/scripts/generate-mappings.py')), \
                     patch.object(MAPPINGS.sys, 'argv', ['generate-mappings.py', 'first', 'second']), \
                     patch.object(MAPPINGS.subprocess, 'run'), \
-                    patch.object(MAPPINGS, 'generate_version', side_effect=generate):
-                with self.assertRaises(subprocess.CalledProcessError):
-                    MAPPINGS.main()
+                    patch.object(MAPPINGS, 'generate_version', side_effect=generate), \
+                    self.assertRaises(subprocess.CalledProcessError):
+                MAPPINGS.main()
             self.assertEqual(b'original mappings', resource.read_bytes())
 
     def test_server_cleanup_kills_only_after_graceful_timeout(self):
@@ -115,9 +130,9 @@ class BuildScriptTest(unittest.TestCase):
         process.poll.return_value = None
         events = Mock()
         events.get.side_effect = SMOKE.queue.Empty
-        with patch.object(SMOKE.time, 'monotonic', side_effect=[0, 0, 179, 180]):
-            with self.assertRaisesRegex(TimeoutError, '180 seconds'):
-                SMOKE.await_ready(process, events)
+        with patch.object(SMOKE.time, 'monotonic', side_effect=[0, 0, 179, 180]), \
+                self.assertRaisesRegex(TimeoutError, '180 seconds'):
+            SMOKE.await_ready(process, events)
         self.assertEqual(2, events.get.call_count)
 
 

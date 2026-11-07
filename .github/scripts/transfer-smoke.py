@@ -94,7 +94,7 @@ def run(args, version, smoke, companions):
     events = queue.Queue()
     log = folder / 'transfer.log'
     java = args.java_modern if version.startswith('26.') else args.java_21
-    process, reader = smoke.start_server(folder, log, events, java, transfers=True)
+    process, reader = smoke.start_server(folder, log, events, java, smoke.SmokeFeatures(transfers=True))
     try:
         smoke.await_ready(process, events)
         metadata = smoke.server_metadata(folder, version)

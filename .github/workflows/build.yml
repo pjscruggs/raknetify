@@ -24,6 +24,11 @@ jobs:
         with:
           distribution: zulu
           java-version: 25
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.13'
+      - name: Install pinned Python checks
+        run: python -m pip install --require-hashes --only-binary=:all: -r quality/requirements.txt
       - name: Check every owned source before compiling Minecraft modules
         run: ./gradlew -p quality check --no-daemon --max-workers=2
       - name: Preserve quality reports
@@ -74,6 +79,11 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: |
             ${{ runner.os }}-gradle-
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.13'
+      - name: Install pinned Python checks
+        run: python -m pip install --require-hashes --only-binary=:all: -r quality/requirements.txt
       - name: Build and run unit tests
         run: ./gradlew build :common:transportProbe :common:benchmarkClasses --warning-mode fail --no-daemon --max-workers=2
       - name: Preserve unit and quality reports

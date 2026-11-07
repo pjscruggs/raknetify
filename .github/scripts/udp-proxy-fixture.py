@@ -1,5 +1,8 @@
 """Relay loopback UDP through independently encoded PROXY v2 headers for packaged server tests."""
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from pathlib import Path
 import hashlib
 import ipaddress
 import json
@@ -60,41 +63,38 @@ class UdpProxy:
         self.identity = identity
         self.duplicate = duplicate
         self.duplicates = 0
-        self.selector = selectors.DefaultSelector()
-        self.front = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.front.bind(('127.0.0.1', frontend_port))
-        self.front.setblocking(False)
-        self.selector.register(self.front, selectors.EVENT_READ, None)
+        with ExitStack() as opening:
+            self.selector = opening.enter_context(selectors.DefaultSelector())
+            self.front = opening.enter_context(socket.socket(socket.AF_INET, socket.SOCK_DGRAM))
+            self.front.bind(('127.0.0.1', frontend_port))
+            self.front.setblocking(False)
+            self.selector.register(self.front, selectors.EVENT_READ, None)
+            self.resources = opening.pop_all()
         self.clients = {}
         self.stopped = threading.Event()
-        self.failure = None
-        self.thread = threading.Thread(target=self.run, name='udp-proxy-fixture')
+        self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='udp-proxy-fixture')
+        self.worker = None
 
     def __enter__(self):
         """Start forwarding only after the caller has configured and started its owned backend."""
-        self.thread.start()
+        self.worker = self.executor.submit(self.run)
         return self.front.getsockname()[1]
 
     def __exit__(self, kind, value, traceback):
         """Join the worker, close every socket and retain a worker failure alongside any foreground failure."""
         self.stopped.set()
-        self.thread.join(timeout=5)
-        assert not self.thread.is_alive(), 'UDP proxy fixture failed to stop'
-        for channel in self.clients.values():
-            channel.close()
-        self.front.close()
-        self.selector.close()
-        if self.failure is not None:
-            raise self.failure from value
+        try:
+            self.worker.result(timeout=5)
+        finally:
+            self.resources.close()
+            self.executor.shutdown(wait=False, cancel_futures=True)
 
     def run(self):
-        """Dispatch datagrams with a short selector deadline so cleanup never waits on an idle socket."""
-        try:
-            while not self.stopped.is_set():
-                for key, _ in self.selector.select(0.1):
-                    self.dispatch(key)
-        except Exception as failure:
-            self.failure = failure
+        """Dispatch with a bounded selector wait and let the future propagate every worker failure."""
+        while not self.stopped.is_set():
+            for key, _ in self.selector.select(0.1):
+                self.dispatch(key)
+
 
     def dispatch(self, key):
         """Preserve unmodified downstream packets and prepend metadata on the selected upstream packets."""
@@ -130,12 +130,14 @@ class UdpProxy:
         """Allocate at most 64 backend tuples and keep each alive for exactly this bounded test run."""
         if sender not in self.clients:
             assert len(self.clients) < 64, 'Unexpected client count in UDP fixture'
-            channel = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            channel.bind(('127.0.0.1', 0))
-            channel.connect(self.target)
-            channel.setblocking(False)
-            self.selector.register(channel, selectors.EVENT_READ, sender)
-            self.clients[sender] = channel
+            with ExitStack() as opening:
+                channel = opening.enter_context(socket.socket(socket.AF_INET, socket.SOCK_DGRAM))
+                channel.bind(('127.0.0.1', 0))
+                channel.connect(self.target)
+                channel.setblocking(False)
+                self.selector.register(channel, selectors.EVENT_READ, sender)
+                self.clients[sender] = channel
+                self.resources.enter_context(opening.pop_all())
         return self.clients[sender]
 
 
@@ -152,16 +154,26 @@ def reject_direct(port):
     raise AssertionError('Required PROXY metadata was bypassed by a direct UDP client')
 
 
-def check_ip_ban(process, folder, java, probe_dir, port, protocol):
+@dataclass(frozen=True)
+class NativeProbe:
+    """Identify the Java transport probe and the exact Minecraft endpoint it must exercise."""
+
+    java: str
+    directory: Path
+    port: int
+    protocol: int
+
+
+def check_ip_ban(process, folder, probe):
     """Require vanilla's IP-ban check to use the forwarded address, not the trusted loopback relay address."""
     process.stdin.write('ban-ip 192.0.2.50 Transport rejection fixture END_OF_REASON\n')
     process.stdin.flush()
     try:
         await_ban(folder / 'banned-ips.json', True)
-        classpath = os.pathsep.join(str(probe_dir.resolve() / part) for part in ('classes', 'lib/*'))
-        output = subprocess.check_output([java, '-cp', classpath,
+        classpath = os.pathsep.join(str(probe.directory.resolve() / part) for part in ('classes', 'lib/*'))
+        output = subprocess.check_output([probe.java, '-cp', classpath,
                                           'com.ishland.raknetify.common.connection.RaknetProxyProbe',
-                                          str(port), str(protocol), 'ban'], text=True, encoding='utf-8', timeout=40)
+                                          str(probe.port), str(probe.protocol), 'ban'], text=True, encoding='utf-8', timeout=40)
         assert 'BAN_REASON_OK' in output, output
         print('PASS forwarded client IP ban', flush=True)
     finally:

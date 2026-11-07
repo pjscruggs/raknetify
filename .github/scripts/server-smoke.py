@@ -8,6 +8,7 @@ Every child server is stopped before the next transport or version uses the port
 """
 
 import argparse
+from dataclasses import dataclass
 import importlib.util
 import hashlib
 import io
@@ -30,6 +31,32 @@ import shutil
 
 MAGIC = bytes.fromhex('00ffff00fefefefefdfdfdfd12345678')
 """RakNet offline-message marker used by the connection-request exchange."""
+
+@dataclass(frozen=True)
+class SmokeFeatures:
+    """Select independent compatibility witnesses and the native fixture switches they require."""
+
+    polymer: bool = False
+    krypton: bool = False
+    encryption: bool = False
+    packetfixer: bool = False
+    transfers: bool = False
+    proxy_protocol: bool = False
+    voicechat: bool = False
+
+
+@dataclass(frozen=True)
+class ServerRun:
+    """Bind an isolated installation to its runtime, listener and selected compatibility checks."""
+
+    folder: Path
+    version: str
+    native: bool
+    java: str
+    probe_dir: Path
+    features: SmokeFeatures
+    port: int = 25871
+
 
 def varint(value):
     """Encode a signed 32-bit Minecraft integer using its unsigned two's-complement bits."""
@@ -139,16 +166,18 @@ def check_polymer_http(port):
             time.sleep(1)
 
 
-def start_server(folder, log, events, java, encryption=False, packetfixer=False, transfers=False):
+def start_server(folder, log, events, java, features=None):
     """Start one isolated server and return its process and output-reader thread.
 
     Output is flushed to the log and copied into the readiness queue. The caller owns
     process shutdown and must join the reader before inspecting the complete log.
     """
-    test_flags = ['-Draknetify.test.encryption=true'] if encryption else []
-    if packetfixer:
+    if features is None:
+        features = SmokeFeatures()
+    test_flags = ['-Draknetify.test.encryption=true'] if features.encryption else []
+    if features.packetfixer:
         test_flags.append('-Draknetify.test.packetLimits=true')
-    if transfers:
+    if features.transfers:
         test_flags.append('-Draknetify.test.transfers=true')
     process = subprocess.Popen([java, '-Draknetify.saveChannelMappings=true', *test_flags, '-Xms256M', '-Xmx1G', '-jar', 'fabric-server-launch.jar', 'nogui'],
                                cwd=folder, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -246,47 +275,47 @@ def bundled_mappings(jar):
     return tables[0]
 
 
-def check_server(folder, version, native, java, probe_dir, polymer=False, krypton=False, encryption=False, packetfixer=False, port=25871, proxy_protocol=False, voicechat=False):
+def check_server(run):
     """Run one transport configuration through startup, network probes, and clean shutdown.
 
     The supplied folder is an isolated smoke-test installation. Its properties and
     EULA acceptance are written here, and native and NIO runs use different worlds.
     """
-    (folder / 'eula.txt').write_text('eula=true\n')
-    (folder / 'server.properties').write_text(
-        f'server-ip=127.0.0.1\nserver-port={port}\nenforce-secure-profile=false\n'
-        'online-mode=' + str(encryption).lower() + '\n'
+    (run.folder / 'eula.txt').write_text('eula=true\n')
+    (run.folder / 'server.properties').write_text(
+        f'server-ip=127.0.0.1\nserver-port={run.port}\nenforce-secure-profile=false\n'
+        'online-mode=' + str(run.features.encryption).lower() + '\n'
         'view-distance=2\nsimulation-distance=2\nspawn-chunk-radius=0\n'
         'level-type=minecraft:flat\nmax-players=2\n'
-        'use-native-transport=' + str(native).lower() + '\nlevel-name=world-' + str(native).lower() + '\n')
+        'use-native-transport=' + str(run.native).lower() + '\nlevel-name=world-' + str(run.native).lower() + '\n')
     proxy = proxy_fixture()
-    proxy.configure(folder, proxy_protocol)
-    log = folder / ('native.log' if native else 'nio.log')
+    proxy.configure(run.folder, run.features.proxy_protocol)
+    log = run.folder / ('native.log' if run.native else 'nio.log')
     events = queue.Queue()
-    process, reader = start_server(folder, log, events, java, encryption, packetfixer)
+    process, reader = start_server(run.folder, log, events, run.java, run.features)
     try:
         await_ready(process, events)
-        metadata = server_metadata(folder, version)
-        check_mappings(folder, metadata)
-        check_tcp_when_ready(port, metadata)
-        with proxy.transport(proxy_protocol, port, repeated=not native) as frontend:
+        metadata = server_metadata(run.folder, run.version)
+        check_mappings(run.folder, metadata)
+        check_tcp_when_ready(run.port, metadata)
+        with proxy.transport(run.features.proxy_protocol, run.port, repeated=not run.native) as frontend:
             check_udp(frontend)
-            check_connected_udp(frontend, metadata, java, probe_dir)
-            if voicechat:
-                voice_fixture().check(folder, log, port, frontend)
-            if encryption:
-                check_encryption(frontend, metadata, java, probe_dir, packetfixer)
-            if proxy_protocol:
-                proxy.check_ip_ban(process, folder, java, probe_dir, frontend, metadata['protocol_version'])
-        if polymer:
-            check_polymer_http(port)
-        transport = check_transport_threads(folder, native, java, process.pid)
+            check_connected_udp(frontend, metadata, run.java, run.probe_dir)
+            if run.features.voicechat:
+                voice_fixture().check(run.folder, log, run.port, frontend)
+            if run.features.encryption:
+                check_encryption(frontend, metadata, run.java, run.probe_dir, run.features.packetfixer)
+            if run.features.proxy_protocol:
+                proxy.check_ip_ban(process, run.folder, proxy.NativeProbe(run.java, run.probe_dir, frontend, metadata['protocol_version']))
+        if run.features.polymer:
+            check_polymer_http(run.port)
+        transport = check_transport_threads(run.folder, run.native, run.java, process.pid)
         process.stdin.write('stop\n')
         process.stdin.flush()
         assert process.wait(timeout=45) == 0
         reader.join(timeout=10)
-        check_log(log, version, krypton, packetfixer)
-        report_success(version, transport, log, polymer, krypton, encryption, packetfixer)
+        check_log(log, run.version, run.features.krypton, run.features.packetfixer)
+        report_success(run.version, transport, log, run.features)
     finally:
         stop_server(process, reader)
 
@@ -318,19 +347,19 @@ def voice_fixture():
     return module
 
 
-def report_success(version, transport, log, polymer, krypton, encryption, packetfixer):
+def report_success(version, transport, log, features):
     """Report only the checks selected for this run, including the server-side encryption witness."""
     checks = 'startup, native/proxy routing parity, TCP and connected RakNet status, shutdown'
-    if polymer:
+    if features.polymer:
         checks += ', Polymer HTTP resource-pack download'
-    if krypton:
+    if features.krypton:
         checks += ', Krypton loaded'
-    if packetfixer:
+    if features.packetfixer:
         assert 'PASS native compression above eight MiB' in log.read_text()
         assert 'PASS native frame helper ownership' in log.read_text()
         assert 'PASS native string above 32767 characters' in log.read_text()
         checks += ', PacketFixer native size limits'
-    if encryption:
+    if features.encryption:
         assert 'PASS native encrypted challenge exchange' in log.read_text()
         checks += ', native RSA and bidirectional encryption'
     print('PASS', version, transport, checks, flush=True)
@@ -477,7 +506,11 @@ def main():
         folder = prepare_server(args, version, polymer, krypton, packetfixer)
         java = select_java(args, version)
         for native in (True, False):
-            check_server(folder, version, native, java, args.probe_dir, bool(polymer), bool(krypton), bool(encryption_fixture(args, version)), bool(packetfixer), args.port, args.proxy_protocol, bool(voicechat))
+            features = SmokeFeatures(polymer=bool(polymer), krypton=bool(krypton),
+                                     encryption=bool(encryption_fixture(args, version)),
+                                     packetfixer=bool(packetfixer), proxy_protocol=args.proxy_protocol,
+                                     voicechat=bool(voicechat))
+            check_server(ServerRun(folder, version, native, java, args.probe_dir, features, args.port))
         if args.discard_runtime:
             discard_runtime(folder)
 

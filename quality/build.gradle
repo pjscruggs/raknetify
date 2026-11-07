@@ -93,6 +93,13 @@ tasks.register('checkPython', Exec) {
     commandLine pythonCommand, 'quality/check_python.py'
 }
 
+tasks.register('checkPythonPractices', Exec) {
+    workingDir projectDir.parentFile
+    commandLine([pythonCommand, '-m', 'ruff', 'check', '--ignore-noqa', '--config',
+            'quality/ruff.toml'] + ownedSources.findAll { it.name.endsWith('.py') }
+            .collect { it.absolutePath })
+}
+
 tasks.register('testPythonPolicy', Exec) {
     workingDir projectDir.parentFile
     commandLine pythonCommand, '-m', 'unittest', 'discover', '-s', 'quality', '-p', 'test_*.py'
@@ -115,4 +122,4 @@ tasks.register('testPythonPolicy', Exec) {
     }
 }
 
-tasks.named('check') { dependsOn 'checkJava', 'checkJavaPractices', 'checkJavaFormat', 'checkGroovy', 'checkPython', 'testPythonPolicy' }
+tasks.named('check') { dependsOn 'checkJava', 'checkJavaPractices', 'checkJavaFormat', 'checkGroovy', 'checkPython', 'checkPythonPractices', 'testPythonPolicy' }
