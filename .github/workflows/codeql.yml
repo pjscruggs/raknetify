@@ -58,7 +58,14 @@ jobs:
         if: matrix.language == 'java-kotlin'
         env:
           CODEQL_CLI: ${{ steps.codeql.outputs.codeql-path }}
-        run: '"$CODEQL_CLI" test run quality/codeql/tests --threads=2'
+        run: |
+          codeql_cli="$CODEQL_CLI"
+          # Fixture compilation must write to its own test database, not the completed application trace.
+          for name in "${!CODEQL_@}" "${!SEMMLE_@}"; do
+            unset "$name"
+          done
+          unset LD_PRELOAD
+          "$codeql_cli" test run quality/codeql/tests --threads=2
       - name: Reject source security and correctness findings
         run: python3 quality/check_sarif.py codeql-results
       - name: Preserve analysis results
