@@ -76,7 +76,9 @@ class SynchronizationOwnershipTest {
         EmbeddedChannel channel = transport();
         FrameData marker = marker(Unpooled.buffer().writeByte(1));
         try {
-            assertThrows(IndexOutOfBoundsException.class, () -> channel.writeInbound(marker));
+            assertThrows(
+                    io.netty.handler.codec.CorruptedFrameException.class,
+                    () -> channel.writeInbound(marker));
             assertEquals(0, marker.refCnt());
         } finally {
             channel.finishAndReleaseAll();
@@ -115,12 +117,12 @@ class SynchronizationOwnershipTest {
             channel.writeOutbound(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL);
             ((FrameData) channel.readOutbound()).release();
             ChannelPromise result = channel.newPromise();
-            channel.write(SynchronizationLayer.SYNC_REQUEST_OBJECT, result);
+            assertSame(result, channel.write(SynchronizationLayer.SYNC_REQUEST_OBJECT, result));
             assertSame(result, gate.pending);
             assertFalse(result.isDone(), "The codec must wait for the downstream write result");
             IOException failure =
                     new IOException("Fixture transport rejected the synchronization marker");
-            gate.pending.setFailure(failure);
+            java.util.Objects.requireNonNull(gate.pending).setFailure(failure);
             assertSame(failure, result.cause());
         } finally {
             channel.finishAndReleaseAll();
@@ -142,7 +144,7 @@ class SynchronizationOwnershipTest {
             channel.writeOutbound(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL);
             channel.writeOutbound(Unpooled.buffer().writeByte(1));
             assertNull(channel.readOutbound(), "Packet must wait for the marker acknowledgement");
-            gate.pending.setSuccess();
+            java.util.Objects.requireNonNull(gate.pending).setSuccess();
             channel.writeOutbound(Unpooled.buffer().writeByte(2));
             FrameData earlier = channel.readOutbound();
             FrameData later = channel.readOutbound();
@@ -175,7 +177,7 @@ class SynchronizationOwnershipTest {
             channel.writeOutbound(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL);
             var write = channel.write(payload);
             IOException failure = new IOException("Fixture negotiation write failed");
-            gate.pending.setFailure(failure);
+            java.util.Objects.requireNonNull(gate.pending).setFailure(failure);
             assertSame(failure, write.cause());
             assertNull(channel.readOutbound());
             assertEquals(0, payload.refCnt());
@@ -208,7 +210,7 @@ class SynchronizationOwnershipTest {
             assertFalse(remaining.isSuccess());
             assertEquals(0, first.refCnt());
             assertEquals(0, second.refCnt());
-            gate.pending.setSuccess();
+            java.util.Objects.requireNonNull(gate.pending).setSuccess();
             assertNull(
                     channel.readOutbound(),
                     "Removed frames cannot be forwarded by a late acknowledgement");
@@ -237,9 +239,236 @@ class SynchronizationOwnershipTest {
             channel.writeOutbound(RakNetSimpleMultiChannelCodec.SIGNAL_START_MULTICHANNEL);
             assertSame(failure, channel.write(payload).cause());
             assertEquals(0, payload.refCnt());
-            gate.pending.setSuccess();
+            java.util.Objects.requireNonNull(gate.pending).setSuccess();
         } finally {
             channel.finishAndReleaseAll();
+        }
+    }
+
+    /**
+     * A failed synchronization marker must release held application writes and close the unusable
+     * connection.
+     */
+    @Test
+    void failedResetReleasesQueuedApplicationWrites() {
+        final EmbeddedChannel channel = transport();
+        final NegotiationGate gate = new NegotiationGate();
+        channel.pipeline()
+                .addBefore(
+                        channel.pipeline().context(SynchronizationLayer.class).name(),
+                        "gate",
+                        gate);
+        final ByteBuf payload = Unpooled.buffer().writeByte(42);
+        try {
+            assertTrue(channel.write(SynchronizationLayer.SYNC_REQUEST_OBJECT).isSuccess());
+            final var pending = channel.write(payload);
+            assertFalse(pending.isDone());
+            final IOException failure = new IOException("Reset marker rejected");
+            java.util.Objects.requireNonNull(gate.pending).setFailure(failure);
+            assertSame(failure, pending.cause());
+            assertEquals(0, payload.refCnt());
+            assertFalse(channel.isOpen());
+        } finally {
+            channel.finishAndReleaseAll();
+        }
+    }
+
+    /** Removal releases held writes and a late marker acknowledgement cannot restore them. */
+    @Test
+    void removedResetCannotResumeAfterLateAcknowledgement() {
+        final EmbeddedChannel channel = transport();
+        final NegotiationGate gate = new NegotiationGate();
+        channel.pipeline()
+                .addBefore(
+                        channel.pipeline().context(SynchronizationLayer.class).name(),
+                        "gate",
+                        gate);
+        final ByteBuf payload = Unpooled.buffer().writeByte(42);
+        try {
+            assertTrue(channel.write(SynchronizationLayer.SYNC_REQUEST_OBJECT).isSuccess());
+            final var pending = channel.write(payload);
+            channel.pipeline().remove(SynchronizationLayer.class);
+            assertTrue(pending.isDone());
+            assertFalse(pending.isSuccess());
+            assertEquals(0, payload.refCnt());
+            java.util.Objects.requireNonNull(gate.pending).setSuccess();
+            assertNull(channel.readOutbound());
+        } finally {
+            channel.finishAndReleaseAll();
+        }
+    }
+
+    /** Peer-controlled lane and cursor fields are rejected without retaining their payloads. */
+    @Test
+    void invalidResetFieldsAreRejected() {
+        final int[][] invalid = {{8, 1}, {255, 1}, {1, 1}, {2, -2}, {2, 0x1000000}};
+        for (final int[] entry : invalid) {
+            final EmbeddedChannel channel = transport();
+            final FrameData packet =
+                    marker(
+                            Unpooled.buffer()
+                                    .writeByte(1)
+                                    .writeByte(entry[0])
+                                    .writeInt(entry[1])
+                                    .writeInt(3));
+            try {
+                assertThrows(
+                        io.netty.handler.codec.CorruptedFrameException.class,
+                        () -> channel.writeInbound(packet));
+                assertEquals(0, packet.refCnt());
+            } finally {
+                channel.finishAndReleaseAll();
+            }
+        }
+    }
+
+    /**
+     * A later invalid entry cannot partially advance an earlier valid lane or publish a reset
+     * event.
+     */
+    @Test
+    void malformedMarkerCannotPartiallyApply() {
+        final EmbeddedChannel channel = transport();
+        final ResetEvents events = new ResetEvents();
+        channel.pipeline().addLast(events);
+        final FrameData invalid =
+                marker(
+                        Unpooled.buffer()
+                                .writeByte(2)
+                                .writeByte(0)
+                                .writeInt(4)
+                                .writeByte(8)
+                                .writeInt(7)
+                                .writeInt(23));
+        try {
+            assertThrows(
+                    io.netty.handler.codec.CorruptedFrameException.class,
+                    () -> channel.writeInbound(invalid));
+            assertEquals(0, events.resets);
+            final ByteBuf bytes = Unpooled.buffer().writeByte(42);
+            final FrameData payload =
+                    FrameData.create(channel.alloc(), Constants.RAKNET_GAME_PACKET_ID, bytes);
+            bytes.release();
+            payload.setReliability(
+                    network.ycc.raknet.packet.FramedPacket.Reliability.RELIABLE_ORDERED);
+            payload.setOrderChannel(0);
+            final network.ycc.raknet.frame.Frame frame =
+                    network.ycc.raknet.frame.Frame.createOrdered(payload, 0, 0);
+            payload.release();
+            assertTrue(
+                    channel.writeInbound(frame),
+                    "Malformed reset must not skip the first application frame");
+            final FrameData delivered = channel.readInbound();
+            assertNotNull(delivered);
+            delivered.release();
+        } finally {
+            channel.finishAndReleaseAll();
+        }
+    }
+
+    /** A peer withholding the reset acknowledgement cannot retain unlimited application writes. */
+    @Test
+    void pendingResetCannotBypassTheWriteBudget() {
+        final EmbeddedChannel channel = transport();
+        final NegotiationGate gate = new NegotiationGate();
+        channel.pipeline()
+                .addBefore(
+                        channel.pipeline().context(SynchronizationLayer.class).name(),
+                        "gate",
+                        gate);
+        network.ycc.raknet.RakNet.config(channel).setMaxQueuedBytes(50);
+        final ByteBuf first = Unpooled.buffer().writeByte(1);
+        final ByteBuf second = Unpooled.buffer().writeByte(2);
+        final ByteBuf rejected = Unpooled.buffer().writeByte(3);
+        try {
+            assertTrue(channel.write(SynchronizationLayer.SYNC_REQUEST_OBJECT).isSuccess());
+            final var firstWrite = channel.write(first);
+            final var secondWrite = channel.write(second);
+            assertFalse(secondWrite.isDone());
+            final var failed = channel.write(rejected);
+            assertInstanceOf(io.netty.handler.codec.TooLongFrameException.class, failed.cause());
+            assertSame(failed.cause(), firstWrite.cause());
+            assertSame(failed.cause(), secondWrite.cause());
+            assertEquals(0, first.refCnt());
+            assertEquals(0, second.refCnt());
+            assertEquals(0, rejected.refCnt());
+            assertFalse(channel.isOpen());
+            java.util.Objects.requireNonNull(gate.pending).setSuccess();
+            assertNull(channel.readOutbound());
+        } finally {
+            channel.finishAndReleaseAll();
+        }
+    }
+
+    /** The application sees the phase-change event before packets made ready by the same reset. */
+    @Test
+    void resetNotifiesApplicationBeforeDeliveringQueuedPackets() {
+        final EmbeddedChannel channel = transport();
+        final ResetEvents events = new ResetEvents();
+        channel.pipeline().addLast(events);
+        final ByteBuf bytes = Unpooled.buffer().writeByte(42);
+        final FrameData payload =
+                FrameData.create(channel.alloc(), Constants.RAKNET_GAME_PACKET_ID, bytes);
+        bytes.release();
+        payload.setOrderChannel(0);
+        final network.ycc.raknet.frame.Frame future =
+                network.ycc.raknet.frame.Frame.createOrdered(payload, 6, 0);
+        payload.release();
+        try {
+            assertFalse(channel.writeInbound(future));
+            assertTrue(
+                    channel.writeInbound(
+                            marker(
+                                    Unpooled.buffer()
+                                            .writeByte(1)
+                                            .writeByte(0)
+                                            .writeInt(5)
+                                            .writeInt(23))));
+            assertEquals(1, events.resetsBeforeRead);
+            final FrameData delivered = channel.readInbound();
+            assertNotNull(delivered);
+            delivered.release();
+            assertNull(channel.readInbound());
+        } finally {
+            channel.finishAndReleaseAll();
+        }
+    }
+
+    /**
+     * Counts semantic reset notifications independently of the parser and transport cursor
+     * implementation.
+     */
+    private static final class ResetEvents extends io.netty.channel.ChannelInboundHandlerAdapter {
+        /** Number of fully accepted reset markers observed by application handlers. */
+        private int resets;
+
+        /** Reset count captured at the instant an application payload arrives. */
+        private int resetsBeforeRead;
+
+        /**
+         * Captures notification order while forwarding ownership of the application payload.
+         *
+         * @param context fixture's downstream application context
+         * @param message owned packet forwarded to the test's inbound queue
+         */
+        @Override
+        public void channelRead(final ChannelHandlerContext context, final Object message) {
+            resetsBeforeRead = resets;
+            context.fireChannelRead(message);
+        }
+
+        /**
+         * Records reset events while preserving downstream notification behavior.
+         *
+         * @param context inbound application context
+         * @param event reset marker or unrelated lifecycle notification
+         */
+        @Override
+        public void userEventTriggered(final ChannelHandlerContext context, final Object event) {
+            if (event instanceof SynchronizationLayer.SyncRequest) {
+                resets++;
+            }
+            context.fireUserEventTriggered(event);
         }
     }
 
@@ -256,7 +485,7 @@ class SynchronizationOwnershipTest {
                         new FrameJoiner(),
                         new FrameOrderIn(),
                         new FrameOrderOut(),
-                        new SynchronizationLayer(Constants.SYNC_IGNORE_CHANNELS));
+                        new SynchronizationLayer(Constants.synchronizationIgnoredChannels()));
         return channel;
     }
 
@@ -283,7 +512,7 @@ class SynchronizationOwnershipTest {
         /**
          * Pending transport completion, deliberately left unfinished until the assertion checks it.
          */
-        private ChannelPromise pending;
+        private @org.jspecify.annotations.Nullable ChannelPromise pending;
 
         /**
          * Retains the local marker's promise while allowing negotiation and ordinary frames to
@@ -296,10 +525,10 @@ class SynchronizationOwnershipTest {
         @Override
         public void write(
                 final ChannelHandlerContext ctx, final Object msg, final ChannelPromise promise) {
-            if (msg == SynchronizationLayer.SYNC_REQUEST_OBJECT) {
+            if (msg instanceof SynchronizationLayer.SyncRequest) {
                 pending = promise;
             } else {
-                ctx.write(msg, promise);
+                assertSame(promise, ctx.write(msg, promise));
             }
         }
     }
@@ -308,7 +537,7 @@ class SynchronizationOwnershipTest {
     private static final class NegotiationGate extends ChannelOutboundHandlerAdapter {
 
         /** Completion callback released explicitly after the first application write is queued. */
-        private ChannelPromise pending;
+        private @org.jspecify.annotations.Nullable ChannelPromise pending;
 
         /**
          * Holds the first control write and forwards subsequent application frames unchanged.
@@ -324,7 +553,7 @@ class SynchronizationOwnershipTest {
                 pending = promise;
                 ReferenceCountUtil.release(msg);
             } else {
-                ctx.write(msg, promise);
+                assertSame(promise, ctx.write(msg, promise));
             }
         }
     }
@@ -335,7 +564,7 @@ class SynchronizationOwnershipTest {
         /**
          * Lazy because EmbeddedChannel requests its configuration from the superclass constructor.
          */
-        private ChannelConfig transportConfig;
+        private @org.jspecify.annotations.Nullable ChannelConfig transportConfig;
 
         /**
          * Returns the transport settings expected by reliability and fragmentation handlers.

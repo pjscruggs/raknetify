@@ -24,492 +24,398 @@
 
 package com.ishland.raknetify.common.connection;
 
-import static com.ishland.raknetify.common.util.ReflectionUtil.accessible;
-
 import com.ishland.raknetify.common.Constants;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufHolder;
 import io.netty.channel.ChannelDuplexHandler;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
+import io.netty.handler.codec.CorruptedFrameException;
+import io.netty.handler.codec.TooLongFrameException;
+import io.netty.util.ReferenceCountUtil;
 
-import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
-import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.ints.IntSet;
-import it.unimi.dsi.fastutil.objects.ObjectArrayList;
-import it.unimi.dsi.fastutil.objects.ObjectIterator;
-import it.unimi.dsi.fastutil.objects.ReferenceLinkedOpenHashSet;
 
+import network.ycc.raknet.RakNet;
 import network.ycc.raknet.frame.Frame;
 import network.ycc.raknet.frame.FrameData;
-import network.ycc.raknet.packet.FrameSet;
 import network.ycc.raknet.packet.FramedPacket;
 import network.ycc.raknet.pipeline.FrameJoiner;
 import network.ycc.raknet.pipeline.FrameOrderIn;
 import network.ycc.raknet.pipeline.FrameOrderOut;
 import network.ycc.raknet.pipeline.ReliabilityHandler;
 
-import org.apache.commons.math3.util.Pair;
-
-import java.lang.reflect.Array;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.PriorityQueue;
+import java.nio.channels.ClosedChannelException;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.Objects;
 
 /**
  * Abandons obsolete ordered traffic when Minecraft changes worlds or protocol phases. A reliable
- * control frame advances the peer ordering and sequence cursors before queued new traffic resumes.
- * All mutable transport state is accessed on the owning channel event loop.
+ * marker advances peer cursors before held traffic resumes. All queue operations run on the
+ * connection event loop and every retained write has a terminal cleanup path.
  */
 public class SynchronizationLayer extends ChannelDuplexHandler {
+    /** Local outbound request and inbound notification, never serialized as application data. */
+    public static final Object SYNC_REQUEST_OBJECT = SyncRequest.INSTANCE;
 
-    // Request structure:
-    // byte: total channel count `n`
-    // next `n` groups: {
-    // byte: channel index
-    // integer: current orderIndex (or lastOrderIndex, (nextOrderIndex - 1))
-    // }
-    // integer: current seqId (or lastReceivedSeqId, (nextSendSeqId - 1))
-    //
-    // Response callback is handled using reliable transport
-
-    /** Local outbound request and inbound user event indicating an ordering resynchronization. */
-    public static final Object SYNC_REQUEST_OBJECT = new Object();
-
-    /** Transport implementation class containing one inbound ordering channel queue. */
-    static final Class<?> CLASS_QUEUE;
-
-    /** Transport implementation class retaining fragments of an incomplete frame. */
-    static final Class<?> CLASS_FRAME_JOINER_BUILDER;
-
-    /** Reflective access to the last delivered index, advanced to skip obsolete ordered packets. */
-    static final Field FIELD_QUEUE_LAST_ORDER_INDEX;
-
-    /** Transport cleanup method that releases fragments held by an abandoned frame builder. */
-    static final Method METHOD_QUEUE_BUILDER_RELEASE;
-
-    /** Resolved transport method for clearing an inbound ordered queue. */
-    static final Method METHOD_QUEUE_CLEAR;
-
-    /**
-     * Reflective access to the outgoing frame-set sequence cursor sent in a synchronization marker.
-     */
-    static final Field FIELD_RELIABILITY_NEXT_SEND_SEQ_ID;
-
-    /**
-     * Reflective access to the incoming sequence cursor advanced after a synchronization marker.
-     */
-    static final Field FIELD_RELIABILITY_LAST_RECEIVED_SEQ_ID;
-
-    /** Reflective access to queue-byte accounting repaired after dropping obsolete frames. */
-    static final Field FIELD_RELIABILITY_QUEUED_BYTES;
-
-    /** Representative fragment used to determine an incomplete frame's ordering channel. */
-    static final Field FIELD_FRAME_JOINER_BUILDER_SAMPLE_PACKET;
-
-    static {
-        try {
-            CLASS_QUEUE =
-                    Class.forName(
-                            "network.ycc.raknet.pipeline.FrameOrderIn$OrderedChannelPacketQueue");
-            CLASS_FRAME_JOINER_BUILDER =
-                    Class.forName("network.ycc.raknet.pipeline.FrameJoiner$Builder");
-
-            FIELD_QUEUE_LAST_ORDER_INDEX =
-                    accessible(CLASS_QUEUE.getDeclaredField("lastOrderIndex"));
-            FIELD_RELIABILITY_NEXT_SEND_SEQ_ID =
-                    accessible(ReliabilityHandler.class.getDeclaredField("nextSendSeqId"));
-            FIELD_RELIABILITY_LAST_RECEIVED_SEQ_ID =
-                    accessible(ReliabilityHandler.class.getDeclaredField("lastReceivedSeqId"));
-            FIELD_RELIABILITY_QUEUED_BYTES =
-                    accessible(ReliabilityHandler.class.getDeclaredField("queuedBytes"));
-            FIELD_FRAME_JOINER_BUILDER_SAMPLE_PACKET =
-                    accessible(CLASS_FRAME_JOINER_BUILDER.getDeclaredField("samplePacket"));
-
-            METHOD_QUEUE_BUILDER_RELEASE =
-                    accessible(CLASS_FRAME_JOINER_BUILDER.getDeclaredMethod("release"));
-            METHOD_QUEUE_CLEAR = accessible(CLASS_QUEUE.getDeclaredMethod("clear"));
-
-        } catch (Throwable t) {
-            throw new RuntimeException(t);
-        }
+    /** Typed local control event that cannot be confused with a payload's value equality. */
+    public enum SyncRequest {
+        /** Requests abandonment of obsolete ordered traffic before the next protocol phase. */
+        INSTANCE
     }
 
-    /** Ordering channels whose pending traffic must survive synchronization. */
-    private final IntSet channelToIgnore = new IntOpenHashSet();
+    /** Lanes whose pending traffic must survive a phase transition. */
+    private final IntSet channelsToIgnore = new IntOpenHashSet();
 
-    /** Inbound ordering handler whose per-channel cursors are updated from peer markers. */
-    private FrameOrderIn frameOrderIn;
+    /** Application writes retained until the synchronization marker is acknowledged. */
+    private final Deque<PendingWrite> writes = new ArrayDeque<>();
 
-    /** Live inbound channel queues copied as references from the transport's internal array. */
-    private Object[] frameOrderInQueues;
+    /** Owned transport references detached until the same acknowledgement. */
+    private final Deque<Frame> frames = new ArrayDeque<>();
 
-    /** Outbound ordering handler that assigns each channel's packet indices. */
-    private FrameOrderOut frameOrderOut;
-
-    /** Live transport cursor array used to describe the last index assigned to each channel. */
-    private int[] frameOrderOutNextOrderIndex;
-
-    /** Transport reliability handler owning queued and unacknowledged frame sets. */
-    private ReliabilityHandler reliabilityHandler;
-
-    /** Live outgoing priority queue drained while an ordering reset is in progress. */
-    private java.util.Queue<Frame> reliabilityHandlerFrameQueue;
-
-    /** Live unacknowledged frame sets whose obsolete ordered frames are discarded on reset. */
-    private Int2ObjectMap<FrameSet> reliabilityHandlerPendingFrameSets;
-
-    /** Inbound reassembly handler that owns incomplete fragmented packets. */
-    private FrameJoiner frameJoiner;
-
-    /** Live fragment builders inspected and released when their ordering channel is reset. */
-    private Int2ObjectOpenHashMap<?> frameJoinerPendingPackets;
-
-    /** Number of ordering channels included in each synchronization marker. */
-    private int channelsLength;
+    /** Bounds per-write bookkeeping while the peer withholds the marker acknowledgement. */
+    private static final int MAX_PENDING_WRITES = 8192;
 
     /**
-     * Whether all reflective references to this connection's transport state have been captured.
+     * Conservative payload and header bytes owned by application writes waiting for
+     * acknowledgement.
      */
-    private boolean initialized;
+    private long pendingWriteBytes;
+
+    /** Whether new writes must wait for the outstanding marker. */
+    private boolean waiting;
 
     /**
-     * Creates a synchronization handler with explicit channels exempt from packet dropping.
+     * Selects ordering lanes whose traffic remains meaningful across a phase transition.
      *
-     * @param channelsToIgnore ordering-channel indices whose traffic must remain queued across
-     *     resets
+     * @param ignoredChannels lane indices preserved by both outbound and inbound resets
+     * @throws IllegalArgumentException if a lane lies outside the eight supported ordering lanes
      */
-    public SynchronizationLayer(final int... channelsToIgnore) {
-        for (int ch : channelsToIgnore) {
-            channelToIgnore.add(ch);
-        }
-    }
-
-    /**
-     * Captures the transport state after propagating channel activation.
-     *
-     * @param ctx newly active channel context
-     * @throws Exception if activation propagation fails
-     */
-    @SuppressWarnings("unchecked")
-    @Override
-    public void channelActive(final ChannelHandlerContext ctx) throws Exception {
-        super.channelActive(ctx);
-        initializeIfNecessary(ctx);
-    }
-
-    /**
-     * Captures live transport queues and cursors once the RakNet handlers are available.
-     *
-     * @param ctx connection pipeline containing ordering, reliability, and fragment handlers
-     * @throws RuntimeException if the expected transport internals cannot be accessed
-     */
-    private void initializeIfNecessary(final ChannelHandlerContext ctx) {
-        if (initialized) {
-            return;
-        }
-        try {
-            this.frameOrderIn = ctx.pipeline().get(FrameOrderIn.class);
-            Object frameOrderInQueueArray =
-                    accessible(FrameOrderIn.class.getDeclaredField("channels"))
-                            .get(this.frameOrderIn);
-            this.frameOrderInQueues = new Object[Array.getLength(frameOrderInQueueArray)];
-            for (int i = 0; i < this.frameOrderInQueues.length; i++) {
-                this.frameOrderInQueues[i] = Array.get(frameOrderInQueueArray, i);
+    public SynchronizationLayer(final int... ignoredChannels) {
+        for (final int channel : ignoredChannels) {
+            if (channel < 0 || channel >= SynchronizationPacket.CHANNEL_COUNT) {
+                throw new IllegalArgumentException("Invalid synchronization exclusion");
             }
-
-            this.frameOrderOut = ctx.pipeline().get(FrameOrderOut.class);
-            this.frameOrderOutNextOrderIndex =
-                    (int[])
-                            accessible(FrameOrderOut.class.getDeclaredField("nextOrderIndex"))
-                                    .get(this.frameOrderOut);
-
-            this.reliabilityHandler = ctx.pipeline().get(ReliabilityHandler.class);
-            this.reliabilityHandlerFrameQueue =
-                    (PriorityQueue<Frame>)
-                            accessible(ReliabilityHandler.class.getDeclaredField("frameQueue"))
-                                    .get(this.reliabilityHandler);
-            this.reliabilityHandlerPendingFrameSets =
-                    (Int2ObjectMap<FrameSet>)
-                            accessible(
-                                            ReliabilityHandler.class.getDeclaredField(
-                                                    "pendingFrameSets"))
-                                    .get(this.reliabilityHandler);
-
-            int originalChannelsLength = this.frameOrderOutNextOrderIndex.length;
-            this.channelsLength =
-                    (int)
-                            (originalChannelsLength
-                                    - this.channelToIgnore
-                                            .intStream()
-                                            .filter(value -> value < originalChannelsLength)
-                                            .count());
-
-            this.frameJoiner = ctx.pipeline().get(FrameJoiner.class);
-            this.frameJoinerPendingPackets =
-                    (Int2ObjectOpenHashMap<?>)
-                            accessible(FrameJoiner.class.getDeclaredField("pendingPackets"))
-                                    .get(this.frameJoiner);
-
-            initialized = true;
-        } catch (Throwable t) {
-            throw new RuntimeException(t);
+            channelsToIgnore.add(channel);
         }
     }
 
     /**
-     * Consumes peer synchronization markers and advances receive cursors past abandoned traffic.
-     * Incomplete fragments on reset channels are released. Other inbound messages pass through
-     * unchanged.
+     * Validates an entire marker before notifying downstream handlers or changing transport state.
+     * Both the frame and its derived view are released even when decoding fails.
      *
-     * @param ctx inbound context used to publish the reset event and ordinary messages
-     * @param msg synchronization frame or other inbound traffic
-     * @throws Exception if transport cursors or fragment cleanup methods cannot be accessed
+     * @param ctx receiving connection context
+     * @param msg owned input frame or unrelated message transferred onward
+     * @throws Exception if ordinary pipeline processing or marker validation fails
      */
     @Override
     public void channelRead(final ChannelHandlerContext ctx, final Object msg) throws Exception {
-        initializeIfNecessary(ctx);
-        if (msg instanceof FrameData packet
-                && packet.getPacketId() == Constants.RAKNET_SYNC_PACKET_ID) {
-            // read
-            {
-                if (Constants.DEBUG) {
-                    System.out.println("Raknetify: Received sync packet");
-                }
-                ctx.fireUserEventTriggered(SYNC_REQUEST_OBJECT);
-                final ByteBuf byteBuf = packet.createData().skipBytes(1);
-                try {
-                    final byte count = byteBuf.readByte();
-                    for (int i = 0; i < count; i++) {
-                        final byte channel = byteBuf.readByte();
-                        final int orderIndex = byteBuf.readInt();
-                        if (Constants.DEBUG) {
-                            System.out.println(
-                                    "Raknetify: Channel %d: %d -> %d"
-                                            .formatted(
-                                                    channel,
-                                                    FIELD_QUEUE_LAST_ORDER_INDEX.get(
-                                                            frameOrderInQueues[channel]),
-                                                    orderIndex));
-                        }
-                        FIELD_QUEUE_LAST_ORDER_INDEX.set(frameOrderInQueues[channel], orderIndex);
-                        discardPartialFrames(channel);
-                    }
-                    final int seqId = byteBuf.readInt();
-                    if (Constants.DEBUG) {
-                        System.out.println(
-                                "Raknetify: ReliabilityHandler: %d -> %d"
-                                        .formatted(
-                                                FIELD_RELIABILITY_LAST_RECEIVED_SEQ_ID.get(
-                                                        this.reliabilityHandler),
-                                                seqId));
-                    }
-                    FIELD_RELIABILITY_LAST_RECEIVED_SEQ_ID.set(this.reliabilityHandler, seqId);
-                } finally {
-                    byteBuf.release();
-                    packet.release();
-                }
-            }
+        if (!(msg instanceof FrameData packet) || !isSynchronizationPacket(packet)) {
+            super.channelRead(ctx, msg);
             return;
         }
-        ctx.fireChannelRead(msg);
-    }
-
-    /**
-     * Releases incomplete ordered frames that belong to a channel being resynchronized.
-     *
-     * @param channel ordering channel whose old sequence has been abandoned
-     * @throws ReflectiveOperationException if the transport's fragment builder cannot be released
-     * @throws RuntimeException if the builder's retained frame cannot be read
-     */
-    private void discardPartialFrames(final int channel) throws ReflectiveOperationException {
-        final ObjectIterator<?> iterator = this.frameJoinerPendingPackets.values().iterator();
-        while (iterator.hasNext()) {
-            final Object next = iterator.next();
+        try {
+            final ByteBuf bytes = packet.createData();
             try {
-                final Frame frame = (Frame) FIELD_FRAME_JOINER_BUILDER_SAMPLE_PACKET.get(next);
-                if (frame.getReliability().isOrdered && frame.getOrderChannel() == channel) {
-                    METHOD_QUEUE_BUILDER_RELEASE.invoke(next);
-                    iterator.remove();
-                }
-            } catch (IllegalAccessException e) {
-                throw new RuntimeException(e);
+                bytes.skipBytes(1);
+                final SynchronizationPacket marker =
+                        SynchronizationPacket.read(bytes, channelsToIgnore);
+                final Transport transport = Transport.capture(ctx);
+                final ChannelHandlerContext orderingContext =
+                        Objects.requireNonNull(ctx.pipeline().context(transport.in()));
+                marker.apply(transport.in(), transport.joiner(), transport.reliability());
+                ctx.fireUserEventTriggered(SYNC_REQUEST_OBJECT);
+                transport.in().drainReadyFrames(orderingContext::fireChannelRead);
+            } finally {
+                bytes.release();
             }
+        } finally {
+            packet.release();
         }
     }
 
-    /** Outbound messages and promises held until the synchronization marker completes. */
-    private final ReferenceLinkedOpenHashSet<Pair<ChannelPromise, Object>> queue =
-            new ReferenceLinkedOpenHashSet<>();
-
     /**
-     * Surviving unreliable, unordered, or exempt-channel frames temporarily removed from transport
-     * queues.
-     */
-    private final ObjectArrayList<Frame> queuedFrames = new ObjectArrayList<>();
-
-    /** Whether a synchronization marker is outstanding and new writes must wait. */
-    private boolean isWaitingForResponse;
-
-    /**
-     * Drops obsolete queued traffic for a reset request and delays subsequent writes until its
-     * marker completes. Duplicate reset requests complete immediately while the existing reset
-     * remains outstanding.
+     * Rejects empty frames before reading their identifier and releases the rejected input
+     * reference.
      *
-     * @param ctx outbound context used to send the reliable synchronization marker
-     * @param msg local reset marker or message whose ordering must be preserved
-     * @param promise completion notification for accepting the reset or forwarding the message
-     * @throws Exception if transport sequence access or ordinary outbound forwarding fails
+     * @param packet owned frame inspected without changing valid payload ownership
+     * @return whether this frame carries a synchronization marker
+     * @throws CorruptedFrameException if the frame has no packet identifier
+     */
+    private static boolean isSynchronizationPacket(final FrameData packet) {
+        if (packet.getDataSize() == 0) {
+            packet.release();
+            throw new CorruptedFrameException("Empty framed packet");
+        }
+        return packet.getPacketId() == Constants.RAKNET_SYNC_PACKET_ID;
+    }
+
+    /**
+     * Starts a reset or retains later writes until its marker is acknowledged. A repeated request
+     * shares the active reset and does not discard newly queued traffic.
+     *
+     * @param ctx connection event loop and outbound pipeline
+     * @param msg reset event or owned application payload
+     * @param promise completion of request acceptance or application delivery
+     * @throws Exception if ordinary outbound forwarding fails
      */
     @Override
     public void write(
             final ChannelHandlerContext ctx, final Object msg, final ChannelPromise promise)
             throws Exception {
-        initializeIfNecessary(ctx);
-        if (msg == SYNC_REQUEST_OBJECT) {
-            if (isWaitingForResponse) {
-                promise.setSuccess();
-                return;
+        if (msg instanceof SyncRequest) {
+            if (!waiting) {
+                startReset(ctx);
             }
-
-            dropSenderPackets();
-
-            final ByteBuf byteBuf = ctx.alloc().buffer(1 + channelsLength * 5 + 4);
-            byteBuf.writeByte(channelsLength);
-            for (int channel = 0; channel < frameOrderOutNextOrderIndex.length; channel++) {
-                if (channelToIgnore.contains(channel)) {
-                    continue;
-                }
-                int orderOutNextOrderIndex = frameOrderOutNextOrderIndex[channel];
-                if (Constants.DEBUG) {
-                    System.out.println(
-                            "Raknetify: Writing sync packet: Channel %d: %d"
-                                    .formatted(channel, orderOutNextOrderIndex - 1));
-                }
-                byteBuf.writeByte(channel);
-                byteBuf.writeInt(orderOutNextOrderIndex - 1);
-            }
-            int seqId =
-                    (int)
-                            FIELD_RELIABILITY_NEXT_SEND_SEQ_ID.get(
-                                    this.reliabilityHandler); // TODO implementation details
-            // (probable lib bug):
-            // nextSendSeqId ==
-            // lastReceivedSeqId
-            if (Constants.DEBUG) {
-                System.out.println(
-                        "Raknetify: Writing sync packet: ReliabilityHandler: %d".formatted(seqId));
-            }
-            byteBuf.writeInt(seqId);
-
-            final FrameData frameData =
-                    FrameData.create(ctx.alloc(), Constants.RAKNET_SYNC_PACKET_ID, byteBuf);
-            frameData.setReliability(FramedPacket.Reliability.RELIABLE);
-            this.isWaitingForResponse = true;
-            ctx.write(frameData).addListener(future -> this.flushQueue(ctx));
-            byteBuf.release();
-            promise.setSuccess();
-            return;
+            promise.trySuccess();
+        } else if (waiting) {
+            retainWrite(ctx, msg, promise);
+        } else {
+            super.write(ctx, msg, promise);
         }
-        if (isWaitingForResponse) {
-            this.queue.add(Pair.create(promise, msg));
-            return;
-        }
-        super.write(ctx, msg, promise);
     }
 
     /**
-     * Reclaims obsolete ordered frames and temporarily retains traffic exempt from the reset.
-     * Discarded frame promises complete successfully because the phase transition intentionally
-     * supersedes them.
+     * Retains a later write only while both byte and entry limits permit it. Overflow fails the
+     * connection because silently dropping application traffic would break protocol ordering.
      *
-     * @throws RuntimeException if queued-byte accounting cannot be updated after the drop
+     * @param ctx connection whose transport configuration sets the byte ceiling
+     * @param message owned application payload waiting behind the synchronization marker
+     * @param promise caller completion failed if the queue cannot accept this payload
      */
-    private void dropSenderPackets() {
-        int droppedFrames = 0;
-
-        java.util.List<Frame> retainedFrameList = new ArrayList<>();
-
-        //noinspection CollectionAddAllCanBeReplacedWithConstructor
-        retainedFrameList.addAll(this.reliabilityHandlerFrameQueue);
-        this.reliabilityHandlerFrameQueue.clear();
-
-        for (FrameSet frameSet : this.reliabilityHandlerPendingFrameSets.values()) {
-            frameSet.createFrames(retainedFrameList::add);
-            frameSet.release();
+    private void retainWrite(
+            final ChannelHandlerContext ctx, final Object message, final ChannelPromise promise) {
+        final long bytes = retainedBytes(message);
+        if (writes.size() >= MAX_PENDING_WRITES
+                || pendingWriteBytes + bytes > RakNet.config(ctx).getMaxQueuedBytes()) {
+            final TooLongFrameException failure =
+                    new TooLongFrameException("Synchronization queue limit exceeded");
+            ReferenceCountUtil.release(message);
+            promise.tryFailure(failure);
+            failPending(failure);
+            ctx.close().addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
+            return;
         }
-        this.reliabilityHandlerPendingFrameSets.clear();
+        writes.addLast(new PendingWrite(promise, message, bytes));
+        pendingWriteBytes += bytes;
+    }
 
-        int byteSize = 0;
-        for (Iterator<Frame> iterator = retainedFrameList.iterator(); iterator.hasNext(); ) {
-            Frame frame = iterator.next();
-            if (frame.getReliability().isOrdered
-                    && !channelToIgnore.contains(frame.getOrderChannel())) {
-                final ChannelPromise promise1 = frame.getPromise();
-                if (promise1 != null) {
-                    promise1.trySuccess();
-                }
-                iterator.remove();
-                frame.release();
-                droppedFrames++;
-            } else {
-                byteSize += frame.getRoughPacketSize();
-            }
+    /**
+     * Includes a frame-header allowance so even empty writes consume a finite byte reservation.
+     *
+     * @param message application buffer, framed payload, or control object awaiting delivery
+     * @return measurable payload bytes plus one maximum frame header
+     */
+    private static long retainedBytes(final Object message) {
+        if (message instanceof FrameData frame) {
+            return (long) frame.getDataSize() + Frame.HEADER_SIZE;
         }
-        this.queuedFrames.addAll(retainedFrameList);
+        if (message instanceof ByteBuf bytes) {
+            return (long) bytes.readableBytes() + Frame.HEADER_SIZE;
+        }
+        if (message instanceof ByteBufHolder holder) {
+            return (long) holder.content().readableBytes() + Frame.HEADER_SIZE;
+        }
+        return Frame.HEADER_SIZE;
+    }
 
-        if (Constants.DEBUG) {
-            System.out.println("Raknetify: Dropping %d frames".formatted(droppedFrames));
-        }
+    /**
+     * Detaches obsolete transport traffic and writes the marker before any surviving data.
+     *
+     * @param ctx connection owning every detached frame and completion callback
+     */
+    private void startReset(final ChannelHandlerContext ctx) {
+        final Transport transport = Transport.capture(ctx);
+        final FrameData marker = createMarker(ctx, transport);
         try {
-            FIELD_RELIABILITY_QUEUED_BYTES.set(this.reliabilityHandler, byteSize);
-        } catch (Throwable t) {
-            throw new RuntimeException(t);
+            waiting = true;
+            retainSurvivors(transport.reliability());
+        } catch (RuntimeException exception) {
+            marker.release();
+            failPending(exception);
+            throw exception;
         }
-
-        this.reliabilityHandlerPendingFrameSets.clear();
+        ctx.write(marker)
+                .addListener(future -> {
+                    if (future.isSuccess()) {
+                        resume(ctx, transport.reliability());
+                    } else {
+                        failPending(Objects.requireNonNull(future.cause()));
+                        ctx.close().addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
+                    }
+                });
     }
 
     /**
-     * Restores surviving transport frames and drains new writes after marker completion. Callbacks
-     * arriving off the event loop are rescheduled before touching the queues.
+     * Encodes a cursor snapshot while balancing the temporary payload buffer's ownership.
      *
-     * @param ctx outbound context belonging to the synchronized connection
+     * @param ctx allocator for the control frame
+     * @param transport typed transport stages whose cursors are read on their event loop
+     * @return owned reliable marker ready for an outbound write
      */
-    private void flushQueue(final ChannelHandlerContext ctx) {
-        if (!isWaitingForResponse) {
-            if (Constants.DEBUG) {
-                System.out.println("Raknetify: Ignoring duplicate call to flushQueue()");
+    private FrameData createMarker(final ChannelHandlerContext ctx, final Transport transport) {
+        final ByteBuf bytes = ctx.alloc().buffer(45);
+        try {
+            bytes.writeByte(transport.out().channelCount() - channelsToIgnore.size());
+            for (int channel = 0; channel < transport.out().channelCount(); channel++) {
+                if (!channelsToIgnore.contains(channel)) {
+                    bytes.writeByte(channel).writeInt(transport.out().lastOrderIndex(channel));
+                }
             }
+            bytes.writeInt(transport.reliability().nextSendSequence());
+            final FrameData marker =
+                    FrameData.create(ctx.alloc(), Constants.RAKNET_SYNC_PACKET_ID, bytes);
+            marker.setReliability(FramedPacket.Reliability.RELIABLE);
+            return marker;
+        } finally {
+            bytes.release();
+        }
+    }
+
+    /**
+     * Completes superseded writes and retains exempt or unordered frames without exposing transport
+     * collections.
+     *
+     * @param reliability scheduler transferring all pending frame ownership to this reset
+     */
+    private void retainSurvivors(final ReliabilityHandler reliability) {
+        for (final Frame frame : reliability.takePendingFrames()) {
+            if (frame.getReliability().isOrdered
+                    && !channelsToIgnore.contains(frame.getOrderChannel())) {
+                final ChannelPromise promise = frame.getPromise();
+                if (promise != null) {
+                    promise.trySuccess();
+                }
+                frame.release();
+            } else {
+                frames.addLast(frame);
+            }
+        }
+    }
+
+    /**
+     * Restores surviving frames and forwards held writes only after successful marker delivery.
+     * Late callbacks after removal cannot revive released frames or closed writes.
+     *
+     * @param ctx outbound pipeline for application writes and flushing
+     * @param reliability scheduler accepting the preserved frame references
+     */
+    private void resume(final ChannelHandlerContext ctx, final ReliabilityHandler reliability) {
+        if (!waiting) {
             return;
         }
-        if (!ctx.channel().eventLoop().inEventLoop()) {
-            ctx.channel().eventLoop().execute(() -> flushQueue(ctx));
-            return;
+        waiting = false;
+        try {
+            while (!frames.isEmpty()) {
+                reliability.restorePendingFrame(frames.getFirst());
+                frames.removeFirst();
+            }
+            while (!writes.isEmpty()) {
+                final PendingWrite write = writes.removeFirst();
+                pendingWriteBytes -= write.bytes();
+                ctx.write(write.message(), write.promise())
+                        .addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
+            }
+            ctx.flush();
+        } catch (RuntimeException exception) {
+            failPending(exception);
+            ctx.fireExceptionCaught(exception);
+            ctx.close().addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
         }
+    }
 
-        this.isWaitingForResponse = false;
-
-        if (Constants.DEBUG) {
-            System.out.println(
-                    "Raknetify: Picking up %d queued frames".formatted(this.queuedFrames.size()));
+    /**
+     * Fails and releases every locally retained reference, including writes whose promises were
+     * cancelled.
+     *
+     * @param cause terminal transport or lifecycle failure reported to pending writers
+     */
+    private void failPending(final Throwable cause) {
+        waiting = false;
+        while (!frames.isEmpty()) {
+            final Frame frame = frames.removeFirst();
+            final ChannelPromise promise = frame.getPromise();
+            if (promise != null) {
+                promise.tryFailure(cause);
+            }
+            frame.release();
         }
-        this.reliabilityHandlerFrameQueue.addAll(this.queuedFrames);
-        this.queuedFrames.clear();
-
-        if (Constants.DEBUG) {
-            System.out.println(
-                    "Raknetify: Flushing %d queued packets as synchronization finished"
-                            .formatted(this.queue.size()));
+        while (!writes.isEmpty()) {
+            final PendingWrite write = writes.removeFirst();
+            pendingWriteBytes -= write.bytes();
+            write.promise().tryFailure(cause);
+            ReferenceCountUtil.release(write.message());
         }
-        while (!this.queue.isEmpty()) {
-            Pair<ChannelPromise, Object> pair = this.queue.removeFirst();
-            final ChannelPromise promise = pair.getFirst();
-            final Object msg = pair.getSecond();
-            ctx.write(msg, promise);
+    }
+
+    /**
+     * Releases paused traffic when the underlying connection closes before marker acknowledgement.
+     *
+     * @param ctx closed connection whose lifecycle event continues downstream
+     * @throws Exception if a downstream inactivity handler fails
+     */
+    @Override
+    public void channelInactive(final ChannelHandlerContext ctx) throws Exception {
+        failPending(new ClosedChannelException());
+        super.channelInactive(ctx);
+    }
+
+    /**
+     * Cleans retained traffic on explicit removal even if the surrounding channel stays open.
+     *
+     * @param ctx context being detached from the pipeline
+     * @throws Exception if superclass removal fails
+     */
+    @Override
+    public void handlerRemoved(final ChannelHandlerContext ctx) throws Exception {
+        failPending(new ClosedChannelException());
+        super.handlerRemoved(ctx);
+    }
+
+    /**
+     * Keeps a retained message paired with the promise supplied by its caller.
+     *
+     * @param promise eventual delivery or terminal failure notification
+     * @param message owned payload reference transferred onward or released on failure
+     * @param bytes retained payload and header reservation returned on delivery or release
+     */
+    private record PendingWrite(ChannelPromise promise, Object message, long bytes) {}
+
+    /**
+     * Holds typed operations rather than mutable implementation fields from the transport.
+     *
+     * @param in inbound ordering stage
+     * @param out outbound ordering stage
+     * @param joiner fragment ownership stage
+     * @param reliability datagram scheduling stage
+     */
+    private record Transport(
+            FrameOrderIn in,
+            FrameOrderOut out,
+            FrameJoiner joiner,
+            ReliabilityHandler reliability) {
+        /**
+         * Resolves required handlers only when synchronization is requested.
+         *
+         * @param ctx pipeline containing the connection's transport stages
+         * @return complete typed transport view with no nullable fields
+         * @throws NullPointerException if synchronization is installed without a required transport
+         *     stage
+         */
+        static Transport capture(final ChannelHandlerContext ctx) {
+            return new Transport(
+                    Objects.requireNonNull(
+                            ctx.pipeline().get(FrameOrderIn.class), "Missing inbound ordering"),
+                    Objects.requireNonNull(
+                            ctx.pipeline().get(FrameOrderOut.class), "Missing outbound ordering"),
+                    Objects.requireNonNull(
+                            ctx.pipeline().get(FrameJoiner.class), "Missing reassembly"),
+                    Objects.requireNonNull(
+                            ctx.pipeline().get(ReliabilityHandler.class), "Missing reliability"));
         }
     }
 }
