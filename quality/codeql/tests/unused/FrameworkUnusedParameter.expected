@@ -1,0 +1,6 @@
+| raknetify/quality/fixtures/CallbackCases.java:15:27:15:42 | unused | The parameter 'unused' is never used. |
+| raknetify/quality/fixtures/CallbackCases.java:23:41:23:59 | unused | The parameter 'unused' is never used. |
+| raknetify/quality/fixtures/CallbackCases.java:41:29:41:44 | unused | The parameter 'unused' is never used. |
+| raknetify/quality/fixtures/CallbackCases.java:58:28:58:43 | unused | The parameter 'unused' is never used. |
+| raknetify/quality/fixtures/CallbackCases.java:76:28:76:45 | first | The parameter 'first' is never used. |
+| raknetify/quality/fixtures/CallbackCases.java:76:48:76:66 | second | The parameter 'second' is never used. |

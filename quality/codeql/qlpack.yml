@@ -1,0 +1,6 @@
+name: raknetify2/java-checks
+version: 0.0.1
+extractor: java
+dependencies:
+  codeql/java-all: 9.3.4
+  codeql/java-queries: 1.12.0
