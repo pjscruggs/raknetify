@@ -36,19 +36,22 @@ import io.netty.channel.ChannelPromise;
 import net.minecraft.network.packet.c2s.common.CustomPayloadC2SPacket;
 import net.minecraft.network.packet.s2c.common.CustomPayloadS2CPacket;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Carries the outgoing packet's Java class through synchronous encoding into the frame classifier.
- * Each connection uses its own instance. The temporary capture is cleared when the write returns.
+ * Each connection uses its own instance. A nested write restores its enclosing capture when it
+ * returns.
  */
 @ChannelHandler.Sharable
 public class MultiChannellingPacketCapture extends ChannelOutboundHandlerAdapter {
 
     /** Class of the packet currently traversing the encoder, or null outside a captured write. */
-    private Class<?> packetClass;
+    private @Nullable Class<?> packetClass;
 
     /**
-     * Exposes the decoded packet class while downstream encoding runs and clears it in a finally
-     * block.
+     * Exposes the decoded packet class while downstream encoding runs. Restores the enclosing
+     * capture even when a nested write or encoder fails.
      *
      * @param ctx outbound context positioned before packet encoding in write order
      * @param msg decoded Minecraft packet being serialized
@@ -59,11 +62,12 @@ public class MultiChannellingPacketCapture extends ChannelOutboundHandlerAdapter
     public void write(
             final ChannelHandlerContext ctx, final Object msg, final ChannelPromise promise)
             throws Exception {
+        final Class<?> previous = this.packetClass;
         this.packetClass = msg.getClass();
         try {
-            ctx.write(msg, promise);
+            super.write(ctx, msg, promise);
         } finally {
-            this.packetClass = null;
+            this.packetClass = previous;
         }
     }
 
@@ -72,7 +76,7 @@ public class MultiChannellingPacketCapture extends ChannelOutboundHandlerAdapter
      *
      * @return active packet class, or null outside a captured write
      */
-    public Class<?> getPacketClass() {
+    public @Nullable Class<?> getPacketClass() {
         return this.packetClass;
     }
 
@@ -81,7 +85,7 @@ public class MultiChannellingPacketCapture extends ChannelOutboundHandlerAdapter
      *
      * @param packetClass current decoded packet class, or null to clear the capture
      */
-    public void setPacketClass(final Class<?> packetClass) {
+    public void setPacketClass(final @Nullable Class<?> packetClass) {
         this.packetClass = packetClass;
     }
 
