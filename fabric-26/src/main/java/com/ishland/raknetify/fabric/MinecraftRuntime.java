@@ -32,10 +32,8 @@ import com.ishland.raknetify.fabric.common.client.DebugHudUtil1_21_9;
 import com.ishland.raknetify.fabric.common.connection.RakNetMultiChannel;
 import com.ishland.raknetify.fabric.common.util.FieldSignatureParser;
 import com.ishland.raknetify.fabric.common.util.MinecraftVersions;
-import com.ishland.raknetify.fabric.mixin.access.IPacketCodecDispatcher;
 import com.ishland.raknetify.minecraft.ModPlatform;
 
-import io.netty.buffer.ByteBuf;
 import io.netty.util.ResourceLeakDetector;
 import io.netty.util.internal.SystemPropertyUtil;
 
@@ -47,14 +45,13 @@ import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 
 import net.minecraft.SharedConstants;
-import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.ProtocolInfo;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketType;
 import net.minecraft.network.protocol.common.CommonPacketTypes;
 import net.minecraft.network.protocol.cookie.CookiePacketTypes;
 import net.minecraft.network.protocol.game.GamePacketTypes;
 import net.minecraft.network.protocol.game.GameProtocols;
-import net.minecraft.network.protocol.game.ServerGamePacketListener;
 import net.minecraft.network.protocol.ping.PingPacketTypes;
 
 import org.objectweb.asm.Type;
@@ -132,9 +129,8 @@ public final class MinecraftRuntime {
     }
 
     /**
-     * Inspects registered play packet IDs and maps them to class-based channel policies. Codec
-     * bindings exist only to inspect registration order and must never encode or decode with their
-     * intentionally absent registry context.
+     * Reads the protocol metadata API to map actual wire IDs to class-based channel policies.
+     * Inspecting registrations requires neither bound codecs nor a player or registry context.
      */
     private static void handleMappings() {
         RakNetMultiChannel.init();
@@ -142,37 +138,9 @@ public final class MinecraftRuntime {
 
         Int2IntArrayMap s2c = new Int2IntArrayMap();
         Int2IntArrayMap c2s = new Int2IntArrayMap();
-        // Inspect registration order only: these codecs must never encode or decode with the null
-        // registry context.
-        final var c2sPacketTypes =
-                ((IPacketCodecDispatcher<
-                                        ByteBuf,
-                                        Packet<? super ServerGamePacketListener>,
-                                        PacketType<Packet<? super ServerGamePacketListener>>>)
-                                GameProtocols.SERVERBOUND_TEMPLATE
-                                        .bind(RegistryFriendlyByteBuf.decorator(null), null)
-                                        .codec())
-                        .getById().stream()
-                                .map(byteBufPacketPacketTypePacketType ->
-                                        byteBufPacketPacketTypePacketType.type())
-                                .toList();
-        final var s2cPacketTypes =
-                ((IPacketCodecDispatcher<
-                                        ByteBuf,
-                                        Packet<? super ServerGamePacketListener>,
-                                        PacketType<Packet<? super ServerGamePacketListener>>>)
-                                GameProtocols.CLIENTBOUND_TEMPLATE
-                                        .bind(RegistryFriendlyByteBuf.decorator(null))
-                                        .codec())
-                        .getById().stream()
-                                .map(byteBufPacketPacketTypePacketType ->
-                                        byteBufPacketPacketTypePacketType.type())
-                                .toList();
-
         Map<PacketType<?>, Class<?>> vanillaPacketTypes = collectPacketClasses();
-
-        recordPacketChannels(s2cPacketTypes, vanillaPacketTypes, s2c);
-        recordPacketChannels(c2sPacketTypes, vanillaPacketTypes, c2s);
+        recordPacketChannels(GameProtocols.CLIENTBOUND_TEMPLATE.details(), vanillaPacketTypes, s2c);
+        recordPacketChannels(GameProtocols.SERVERBOUND_TEMPLATE.details(), vanillaPacketTypes, c2s);
 
         if (SAVE_CHANNEL_MAPPINGS) {
             saveMappings(c2s, s2c);
@@ -271,6 +239,14 @@ public final class MinecraftRuntime {
     }
 
     /**
+     * Associates a generic packet field with the registry class that declares it.
+     *
+     * @param fieldNode bytecode field including its generic signature
+     * @param clazz registry class used to read the corresponding static packet type
+     */
+    private record FieldNodeClazzPair(FieldNode fieldNode, Class<?> clazz) {}
+
+    /**
      * Links registered packet types to implementation classes using their generic field signatures.
      *
      * @return packet-type lookup used to apply class-based channel rules in codec registration
@@ -279,14 +255,6 @@ public final class MinecraftRuntime {
      * @throws IllegalStateException if a packet signature refers to an unavailable class
      */
     private static Map<PacketType<?>, Class<?>> collectPacketClasses() {
-        /**
-         * Associates a generic packet field with the registry class that declares it.
-         *
-         * @param fieldNode bytecode field including its generic signature
-         * @param clazz registry class used to read the corresponding static packet type
-         */
-        record FieldNodeClazzPair(FieldNode fieldNode, Class<?> clazz) {}
-
         // Generic field signatures link the codec's PacketType entries to the class-based channel
         // rules.
         Map<PacketType<?>, Class<?>> vanillaPacketTypes = new Object2ObjectOpenHashMap<>();
@@ -338,25 +306,24 @@ public final class MinecraftRuntime {
     }
 
     /**
-     * Records routes by codec index, which is the packet ID placed on the Minecraft wire.
+     * Records each packet under the wire ID supplied by Minecraft's protocol metadata visitor.
      *
-     * @param packetTypes packet types in registration order for one traffic direction
+     * @param details complete protocol metadata for one traffic direction
      * @param packetClasses implementation classes recovered from the protocol registries
      * @param channels destination map updated only for packet types with a known implementation
      */
     private static void recordPacketChannels(
-            final List<? extends PacketType<?>> packetTypes,
+            final ProtocolInfo.Details details,
             final Map<PacketType<?>, Class<?>> packetClasses,
             final Int2IntArrayMap channels) {
-        for (int i = 0; i < packetTypes.size(); i++) {
-            PacketType<?> packetType = packetTypes.get(i);
+        details.listPackets((packetType, packetId) -> {
             final Class<?> clazz = packetClasses.get(packetType);
             if (clazz == null) {
                 System.out.println("Skipping unmapped packet type: " + packetType);
-                continue;
+                return;
             }
-            channels.put(i, RakNetMultiChannel.getPacketChannelOverride(clazz, false));
-        }
+            channels.put(packetId, RakNetMultiChannel.getPacketChannelOverride(clazz, false));
+        });
     }
 
     /**
@@ -389,7 +356,8 @@ public final class MinecraftRuntime {
                 Set<String> unhandled = new HashSet<>();
                 for (Object config : configs) {
                     final Set<String> unhandledTargets =
-                            (Set<String>) getUnhandledTargetsMethod.invoke(config);
+                            ((Set<?>) getUnhandledTargetsMethod.invoke(config))
+                                    .stream().map(String.class::cast).collect(Collectors.toSet());
                     unhandled.addAll(unhandledTargets);
                 }
                 for (String s : unhandled) {
@@ -398,7 +366,8 @@ public final class MinecraftRuntime {
                 }
                 for (Object config : configs) {
                     for (String unhandledTarget :
-                            (Set<String>) getUnhandledTargetsMethod.invoke(config)) {
+                            ((Set<?>) getUnhandledTargetsMethod.invoke(config))
+                                    .stream().map(String.class::cast).collect(Collectors.toSet())) {
                         auditLogger.error("{} is already classloaded", unhandledTarget);
                     }
                 }
