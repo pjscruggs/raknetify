@@ -124,13 +124,25 @@ public final class ProxyProtocolConfig {
         return trusted.stream().anyMatch(subnet -> subnet.contains(address.getAddress()));
     }
 
-    /**
-     * A binary IP prefix with no DNS lookup or implicit trust expansion.
-     *
-     * @param address bytes identifying the configured address family
-     * @param bits number of leading bits to compare
-     */
-    private record Subnet(byte[] address, int bits) {
+    /** A binary IP prefix with no DNS lookup or implicit trust expansion. */
+    private static final class Subnet {
+        /** Privately owned prefix bytes which are never returned to callers. */
+        private final byte[] address;
+
+        /** Number of leading address bits required to match. */
+        private final int bits;
+
+        /**
+         * Copies a validated prefix so later changes to a parser buffer cannot alter proxy trust.
+         *
+         * @param address binary IPv4 or IPv6 prefix
+         * @param bits validated number of prefix bits
+         */
+        private Subnet(final byte[] address, final int bits) {
+            this.address = address.clone();
+            this.bits = bits;
+        }
+
         /**
          * Accepts a literal IP and optional CIDR width, including exact IPv6 addresses.
          *

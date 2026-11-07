@@ -28,6 +28,8 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.socket.DatagramChannel;
 import io.netty.channel.socket.DatagramPacket;
 
+import org.jspecify.annotations.Nullable;
+
 import java.net.InetSocketAddress;
 import java.net.SocketException;
 import java.util.ArrayDeque;
@@ -46,10 +48,10 @@ final class VoiceHub {
     /**
      * The primary socket remains the reply path even after RakNet creates connected child sockets.
      */
-    private DatagramChannel channel;
+    private @Nullable DatagramChannel channel;
 
     /** At most one voice server may consume this listener's packets. */
-    private Inbox subscriber;
+    private @Nullable Inbox subscriber;
 
     /**
      * Records the already bound physical socket without acquiring another port or thread.
@@ -64,8 +66,12 @@ final class VoiceHub {
      * Returns the physical listener for registry matching and bounded writes.
      *
      * @return primary datagram channel
+     * @throws IllegalStateException if startup has not published a bound listener
      */
     synchronized DatagramChannel channel() {
+        if (channel == null) {
+            throw new IllegalStateException("RakNet voice listener has not started");
+        }
         return channel;
     }
 
@@ -112,19 +118,19 @@ final class VoiceHub {
      * @param inbox caller's attachment, preventing a stale socket from writing after restart
      * @param data complete Simple Voice Chat wire packet
      * @param address physical peer endpoint used by the voice authentication protocol
-     * @throws Exception if the attachment is stale, the packet is invalid or its bounded write
-     *     fails
+     * @throws InterruptedException if the voice thread is interrupted while awaiting socket
+     *     completion
      * @throws SocketException if the attachment or datagram is invalid or the write fails
      * @throws IllegalStateException if invoked from the physical socket's own event loop
      */
     void send(final Inbox inbox, final byte[] data, final InetSocketAddress address)
-            throws Exception {
+            throws InterruptedException, SocketException {
         DatagramChannel socket;
         synchronized (this) {
             if (subscriber != inbox || inbox.closed()) {
                 throw new SocketException("Voice socket closed");
             }
-            socket = channel;
+            socket = channel();
         }
         if (data.length == 0 || data.length > MAX_PACKET) {
             throw new SocketException("Invalid voice datagram");
@@ -143,14 +149,58 @@ final class VoiceHub {
         }
     }
 
-    /**
-     * Heap-owned bytes passed to the voice API without leaking a reference-counted Netty buffer.
-     *
-     * @param data complete wire datagram
-     * @param address physical sender used for replies
-     * @param timestamp arrival time in epoch milliseconds, as expected by Simple Voice Chat
-     */
-    record Received(byte[] data, InetSocketAddress address, long timestamp) {}
+    /** Owns one copied datagram until it is handed to the voice server's decoding thread. */
+    static final class Received {
+        /** Exclusive payload storage transferred from the inbox, with no retained Netty buffer. */
+        private final byte[] data;
+
+        /** Physical sender endpoint used by the voice protocol for replies. */
+        private final InetSocketAddress address;
+
+        /** Arrival time in epoch milliseconds expected by the voice API. */
+        private final long timestamp;
+
+        /**
+         * Takes exclusive ownership of a freshly copied datagram without making a second hot-path
+         * copy.
+         *
+         * @param data caller-owned bytes whose ownership is transferred to this packet
+         * @param address physical sender endpoint
+         * @param timestamp arrival time in epoch milliseconds
+         */
+        private Received(final byte[] data, final InetSocketAddress address, final long timestamp) {
+            this.data = data;
+            this.address = address;
+            this.timestamp = timestamp;
+        }
+
+        /**
+         * Returns independent bytes so a voice consumer cannot change the stored datagram.
+         *
+         * @return mutable copy owned by the caller
+         */
+        byte[] data() {
+            return data.clone();
+        }
+
+        /**
+         * Identifies the sender without performing DNS resolution.
+         *
+         * @return immutable endpoint supplied by the datagram transport
+         */
+        InetSocketAddress address() {
+            return address;
+        }
+
+        /**
+         * Supplies the arrival clock sample required by the voice API.
+         *
+         * @return epoch milliseconds recorded when the packet entered the inbox
+         */
+        long timestamp() {
+            return timestamp;
+        }
+    }
 
     /** One attachment's bounded inbox and shutdown signal, independent of later voice restarts. */
     static final class Inbox {

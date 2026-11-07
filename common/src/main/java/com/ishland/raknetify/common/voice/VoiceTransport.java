@@ -29,6 +29,8 @@ import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.socket.DatagramChannel;
 import io.netty.channel.socket.DatagramPacket;
 
+import org.jspecify.annotations.Nullable;
+
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketException;
@@ -112,11 +114,12 @@ public final class VoiceTransport {
      * @return sole matching hub or null while startup is pending
      * @throws SocketException if multiple interfaces match a wildcard request
      */
-    private static VoiceHub find(final int port, final InetAddress address) throws SocketException {
+    private static @Nullable VoiceHub find(final int port, final InetAddress address)
+            throws SocketException {
         VoiceHub result = null;
         for (VoiceHub hub : LISTENERS) {
             InetSocketAddress local = (InetSocketAddress) hub.channel().localAddress();
-            if (local.getPort() != port || !matches(address, local.getAddress())) {
+            if (local == null || local.getPort() != port || !matches(address, local.getAddress())) {
                 continue;
             }
             if (result != null) {

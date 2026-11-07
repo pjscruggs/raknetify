@@ -24,6 +24,8 @@
 
 package com.ishland.raknetify.common.proxy;
 
+import org.jspecify.annotations.Nullable;
+
 import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.Map;
@@ -62,8 +64,8 @@ final class ProxySessions {
      * @param header complete validated header, or null for a later headerless datagram
      * @return accepted binding, or null for missing, conflicting, expired or over-capacity sessions
      */
-    synchronized Session resolve(
-            final InetSocketAddress physical, final ProxyProtocolHeader header) {
+    synchronized @Nullable Session resolve(
+            final InetSocketAddress physical, final @Nullable ProxyProtocolHeader header) {
         long now = clock.getAsLong();
         Session session = sessions.get(physical);
         if (session != null && session.expired(now)) {
@@ -173,9 +175,9 @@ final class ProxySessions {
          * @param header optional repeated header
          * @return whether the packet preserves this session's endpoints
          */
-        private boolean matches(final ProxyProtocolHeader header) {
+        private boolean matches(final @Nullable ProxyProtocolHeader header) {
             return header == null
-                    || source.equals(header.source()) && destination.equals(header.destination());
+                    || (source.equals(header.source()) && destination.equals(header.destination()));
         }
 
         /**

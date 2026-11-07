@@ -129,7 +129,7 @@ class ProxySocketTest {
             }
             assertEquals(claimed, observed.poll(5, TimeUnit.SECONDS));
             assertTrue(
-                    handler.upstreamPackets > 3,
+                    handler.upstreamPackets.get() > 3,
                     "The relay must carry handshake and connected-socket traffic");
         } finally {
             close(client);
@@ -148,19 +148,11 @@ class ProxySocketTest {
      */
     private static ChannelInitializer<Channel> serverInitializer(
             final java.util.concurrent.BlockingQueue<SocketAddress> observed) {
-        return new ChannelInitializer<>() {
-            /**
-             * Installs the ordinary RakNet user-data codec and a bounded echo witness.
-             *
-             * @param channel accepted application channel
-             */
-            @Override
-            protected void initChannel(final Channel channel) {
-                ProxyProtocol.requireForwarded(channel);
-                observed.add(channel.remoteAddress());
-                channel.pipeline().addLast(new UserDataCodec(0xfe), new Echo());
-            }
-        };
+        return new com.ishland.raknetify.test.ChannelSetup(channel -> {
+            ProxyProtocol.requireForwarded(channel);
+            observed.add(channel.remoteAddress());
+            channel.pipeline().addLast(new UserDataCodec(0xfe), new Echo());
+        });
     }
 
     /**
@@ -171,34 +163,9 @@ class ProxySocketTest {
      */
     private static ChannelInitializer<Channel> clientInitializer(
             final java.util.concurrent.BlockingQueue<Integer> replies) {
-        return new ChannelInitializer<>() {
-            /**
-             * Decodes server frames before recording their exact integer payload.
-             *
-             * @param channel connected client application channel
-             */
-            @Override
-            protected void initChannel(final Channel channel) {
-                channel.pipeline()
-                        .addLast(
-                                new UserDataCodec(0xfe),
-                                new SimpleChannelInboundHandler<ByteBuf>() {
-                                    /**
-                                     * Captures the echoed value and lets Netty release the received
-                                     * frame.
-                                     *
-                                     * @param context client pipeline
-                                     * @param bytes decoded application frame
-                                     */
-                                    @Override
-                                    protected void channelRead0(
-                                            final ChannelHandlerContext context,
-                                            final ByteBuf bytes) {
-                                        replies.add(bytes.readInt());
-                                    }
-                                });
-            }
-        };
+        return new com.ishland.raknetify.test.ChannelSetup(channel -> {
+            channel.pipeline().addLast(new UserDataCodec(0xfe), new ReplyReceiver(replies));
+        });
     }
 
     /**
@@ -206,7 +173,7 @@ class ProxySocketTest {
      *
      * @param channel owned endpoint, or null before its bind/connect succeeded
      */
-    private static void close(final Channel channel) {
+    private static void close(final @org.jspecify.annotations.Nullable Channel channel) {
         if (channel != null) {
             channel.close().awaitUninterruptibly(5000);
         }
@@ -223,7 +190,8 @@ class ProxySocketTest {
          */
         @Override
         protected void channelRead0(final ChannelHandlerContext context, final ByteBuf bytes) {
-            context.writeAndFlush(bytes.retain());
+            context.writeAndFlush(bytes.retain())
+                    .addListener(io.netty.channel.ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
         }
     }
 
@@ -242,10 +210,11 @@ class ProxySocketTest {
         private final boolean repeated;
 
         /** Physical client discovered from the first incoming datagram. */
-        private InetSocketAddress client;
+        private @org.jspecify.annotations.Nullable InetSocketAddress client;
 
         /** Counts forwarded packets across event-loop and test threads. */
-        private volatile int upstreamPackets;
+        private final java.util.concurrent.atomic.AtomicInteger upstreamPackets =
+                new java.util.concurrent.atomic.AtomicInteger();
 
         /**
          * Records one backend and forwarding mode before the relay binds.
@@ -269,21 +238,54 @@ class ProxySocketTest {
          *
          * @param context relay's UDP pipeline
          * @param packet complete physical datagram
+         * @throws IllegalStateException if a backend replies before any client address is known
          */
         @Override
         protected void channelRead0(
                 final ChannelHandlerContext context, final DatagramPacket packet) {
             if (packet.sender().equals(server)) {
-                context.writeAndFlush(new DatagramPacket(packet.content().retain(), client));
+                if (client == null) {
+                    throw new IllegalStateException("Backend replied before any client packet");
+                }
+                context.writeAndFlush(new DatagramPacket(packet.content().retain(), client))
+                        .addListener(
+                                io.netty.channel.ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
                 return;
             }
             client = packet.sender();
             ByteBuf payload =
-                    repeated || upstreamPackets == 0
+                    repeated || upstreamPackets.get() == 0
                             ? ProxyProtocolTest.header(claimed).writeBytes(packet.content())
                             : packet.content().retain();
-            upstreamPackets++;
-            context.writeAndFlush(new DatagramPacket(payload, server));
+            upstreamPackets.incrementAndGet();
+            context.writeAndFlush(new DatagramPacket(payload, server))
+                    .addListener(io.netty.channel.ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
+        }
+    }
+
+    /** Captures echoed payloads independently of the server and relay implementations. */
+    private static final class ReplyReceiver extends SimpleChannelInboundHandler<ByteBuf> {
+        /** Destination owned by the probe thread and completed by its network callback. */
+        private final java.util.concurrent.BlockingQueue<Integer> replies;
+
+        /**
+         * Captures the connection's result destination before inbound packets arrive.
+         *
+         * @param replies destination used to report decoded responses
+         */
+        private ReplyReceiver(final java.util.concurrent.BlockingQueue<Integer> replies) {
+            this.replies = replies;
+        }
+
+        /**
+         * Captures the echoed value and lets Netty release the received frame.
+         *
+         * @param context client pipeline
+         * @param bytes decoded application frame
+         */
+        @Override
+        protected void channelRead0(final ChannelHandlerContext context, final ByteBuf bytes) {
+            replies.add(bytes.readInt());
         }
     }
 }

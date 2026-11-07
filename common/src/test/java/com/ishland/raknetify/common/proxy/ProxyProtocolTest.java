@@ -42,10 +42,12 @@ import java.util.zip.CRC32C;
 /** Exercises binary header boundaries, address trust, identity lifetime and reference ownership. */
 class ProxyProtocolTest {
     /** Physical proxy fixture, distinct from the claimed client address. */
-    static final InetSocketAddress PROXY = new InetSocketAddress("127.0.0.1", 40000);
+    static final InetSocketAddress PROXY =
+            new InetSocketAddress(io.netty.util.NetUtil.LOCALHOST4, 40000);
 
     /** Backend destination is deliberately different from the forwarded public destination. */
-    static final InetSocketAddress LOCAL = new InetSocketAddress("127.0.0.1", 25565);
+    static final InetSocketAddress LOCAL =
+            new InetSocketAddress(io.netty.util.NetUtil.LOCALHOST4, 25565);
 
     /**
      * Non-routable documentation address proves replies cannot go directly to the claimed identity.
@@ -230,7 +232,9 @@ class ProxyProtocolTest {
         sessions.release(PROXY, active);
         assertNull(sessions.resolve(PROXY, null));
         for (int port = 1; port <= 4096; port++) {
-            assertNotNull(sessions.resolve(new InetSocketAddress("127.0.0.1", port), header));
+            assertNotNull(
+                    sessions.resolve(
+                            new InetSocketAddress(io.netty.util.NetUtil.LOCALHOST4, port), header));
         }
         assertNull(sessions.resolve(PROXY, header));
         clock.addAndGet(TimeUnit.SECONDS.toNanos(31));

@@ -157,6 +157,9 @@ class VoiceSocketTest {
                 return false;
             } catch (SocketException closed) {
                 return true;
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new java.util.concurrent.CompletionException(interrupted);
             } catch (Exception failure) {
                 throw new RuntimeException(failure);
             }
@@ -172,7 +175,7 @@ class VoiceSocketTest {
     @Test
     void boundedInboxCopiesAndReleasesInputs() throws Exception {
         var inbox = new VoiceHub.Inbox();
-        InetSocketAddress peer = new InetSocketAddress("127.0.0.1", 12345);
+        InetSocketAddress peer = new InetSocketAddress(io.netty.util.NetUtil.LOCALHOST4, 12345);
         for (int i = 0; i < VoiceHub.MAX_QUEUED + 10; i++) {
             var bytes = Unpooled.buffer().writeByte(0xff).writeInt(i);
             var packet = new io.netty.channel.socket.DatagramPacket(bytes, peer, peer);
@@ -231,6 +234,9 @@ class VoiceSocketTest {
                         return false;
                     } catch (SocketException expected) {
                         return true;
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        throw new java.util.concurrent.CompletionException(interrupted);
                     } catch (Exception failure) {
                         throw new RuntimeException(failure);
                     }

@@ -27,6 +27,8 @@ package com.ishland.raknetify.common.voice;
 import de.maxhenkel.voicechat.api.RawUdpPacket;
 import de.maxhenkel.voicechat.api.VoicechatSocket;
 
+import org.jspecify.annotations.Nullable;
+
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -38,7 +40,7 @@ final class SharedVoiceSocket implements VoicechatSocket {
      * Publishes the listener and its inbox together so readers cannot observe half an open
      * operation.
      */
-    private volatile Attachment attachment;
+    private volatile @Nullable Attachment attachment;
 
     /** Prevents close during startup from being undone by a late listener bind. */
     private volatile boolean closed;
@@ -51,12 +53,13 @@ final class SharedVoiceSocket implements VoicechatSocket {
      *
      * @param port voice configuration port, resolved from -1 by Simple Voice Chat itself
      * @param bindAddress voice configuration interface, empty for a wildcard
-     * @throws Exception if the bind request is invalid, no listener starts or the socket was
-     *     already used
+     * @throws InterruptedException if listener startup is interrupted
+     * @throws java.net.UnknownHostException if the configured bind address cannot be resolved
      * @throws SocketException if voice closes while waiting for the game listener
      */
     @Override
-    public void open(final int port, final String bindAddress) throws Exception {
+    public void open(final int port, final String bindAddress)
+            throws InterruptedException, SocketException, java.net.UnknownHostException {
         beginOpen(port);
         InetAddress address =
                 InetAddress.getByName(bindAddress.isBlank() ? "0.0.0.0" : bindAddress);
@@ -91,10 +94,11 @@ final class SharedVoiceSocket implements VoicechatSocket {
      * Returns copied encrypted bytes for Simple Voice Chat to authenticate and decode normally.
      *
      * @return received datagram with its original arrival time and physical reply address
-     * @throws Exception if the attachment closes or its reader is interrupted
+     * @throws SocketException if the attachment is absent or closed
+     * @throws InterruptedException if the receive thread is interrupted while waiting
      */
     @Override
-    public RawUdpPacket read() throws Exception {
+    public RawUdpPacket read() throws InterruptedException, SocketException {
         VoiceHub.Received received = requireAttachment().inbox().read();
         return new Packet(received);
     }
@@ -104,11 +108,13 @@ final class SharedVoiceSocket implements VoicechatSocket {
      *
      * @param data complete encrypted voice packet
      * @param address peer address supplied by the voice server
-     * @throws Exception if the socket is closed, the address is unsupported or the write fails
+     * @throws InterruptedException if the send thread is interrupted while awaiting socket
+     *     completion
      * @throws SocketException if the destination is not a resolved UDP endpoint
      */
     @Override
-    public void send(final byte[] data, final SocketAddress address) throws Exception {
+    public void send(final byte[] data, final SocketAddress address)
+            throws InterruptedException, SocketException {
         Attachment current = requireAttachment();
         if (!(address instanceof InetSocketAddress inet) || inet.isUnresolved()) {
             throw new SocketException("Voice destination must be a resolved UDP address");

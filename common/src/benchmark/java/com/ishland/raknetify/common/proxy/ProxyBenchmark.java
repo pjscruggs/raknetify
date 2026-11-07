@@ -64,10 +64,10 @@ public class ProxyBenchmark {
                         new InetSocketAddress("192.0.2.1", 1234),
                         new InetSocketAddress("198.51.100.1", 25565),
                         28);
-        endpoint = new InetSocketAddress("127.0.0.1", 60000);
+        endpoint = new InetSocketAddress(io.netty.util.NetUtil.LOCALHOST4, 60000);
         sessions = new ProxySessions(() -> 0L);
         for (int i = 1; i <= connections; i++) {
-            var peer = new InetSocketAddress("127.0.0.1", i);
+            var peer = new InetSocketAddress(io.netty.util.NetUtil.LOCALHOST4, i);
             sessions.resolve(peer, header);
             sessions.claim(peer);
         }
